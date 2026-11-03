@@ -70,6 +70,15 @@ export type UpdateInfo = {
   notes: string
   url: string
   downloadUrl?: string
+  assetName?: string
+  assetSize?: number
+}
+
+export type DownloadProgress = {
+  percent: number
+  transferred: number
+  total: number
+  bytesPerSecond: number
 }
 
 export type AppSettings = {
@@ -84,6 +93,7 @@ export type AppSettings = {
   bssidCloaking: boolean
   bssidMaskMode: 'full' | 'partial'
   silentElevation: boolean
+  shortcuts: Record<string, string>
 }
 
 export type ElevationStatus = {
@@ -150,12 +160,28 @@ const api = {
   },
 
   checkUpdate: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('nm:check-update'),
+  downloadUpdate: (url?: string): Promise<{ success: boolean; filePath?: string; error?: string }> => ipcRenderer.invoke('nm:download-update', url),
+  installUpdate: (filePath?: string): Promise<void> => ipcRenderer.invoke('nm:install-update', filePath),
   openReleaseUrl: (url?: string): Promise<void> => ipcRenderer.invoke('nm:open-release-url', url),
   onUpdateAvailable: (cb: (info: UpdateInfo) => void): (() => void) => {
     const handler = (_: unknown, info: UpdateInfo) => cb(info)
     ipcRenderer.on('nm:update-available', handler)
     return () => {
       ipcRenderer.removeListener('nm:update-available', handler)
+    }
+  },
+  onUpdateProgress: (cb: (progress: DownloadProgress) => void): (() => void) => {
+    const handler = (_: unknown, p: DownloadProgress) => cb(p)
+    ipcRenderer.on('nm:update-progress', handler)
+    return () => {
+      ipcRenderer.removeListener('nm:update-progress', handler)
+    }
+  },
+  onUpdateDownloaded: (cb: (info: { filePath: string; version: string }) => void): (() => void) => {
+    const handler = (_: unknown, info: { filePath: string; version: string }) => cb(info)
+    ipcRenderer.on('nm:update-downloaded', handler)
+    return () => {
+      ipcRenderer.removeListener('nm:update-downloaded', handler)
     }
   }
 }

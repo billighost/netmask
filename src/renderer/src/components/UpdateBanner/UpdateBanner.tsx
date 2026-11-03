@@ -8,12 +8,29 @@ export const UpdateBanner: React.FC = () => {
   const [update, setUpdate] = useState<UpdateInfo | null>(null)
   const [dismissed, setDismissed] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
-  const { addToast } = useStore()
+  const {
+    addToast,
+    downloadProgress,
+    setDownloadProgress,
+    downloadedVersion,
+    setDownloadedVersion
+  } = useStore()
 
   useEffect(() => {
     // Listen for push notifications from main process
     const unsub = window.nm.onUpdateAvailable((info) => {
       setUpdate(info)
+    })
+
+    const unsubProgress = window.nm.onUpdateProgress((p) => {
+      setDownloadProgress(p)
+    })
+
+    const unsubDownloaded = window.nm.onUpdateDownloaded((info) => {
+      setIsUpdating(false)
+      setDownloadedVersion(info.version)
+      setDownloadProgress(null)
+      addToast(`NetMask v${info.version} downloaded!`, 'success')
     })
 
     // Check automatically on mount after a short delay
@@ -31,18 +48,42 @@ export const UpdateBanner: React.FC = () => {
     return () => {
       clearTimeout(timer)
       unsub()
+      unsubProgress()
+      unsubDownloaded()
     }
   }, [])
 
   if (!update || dismissed) return null
 
+  const isDownloaded = downloadedVersion === update.version
+
   const handleUpdate = async () => {
+    if (isDownloaded) {
+      addToast('Launching updater and restarting NetMask...', 'info')
+      try {
+        await window.nm.installUpdate()
+      } catch {
+        addToast('Failed to launch installer', 'error')
+      }
+      return
+    }
+
     setIsUpdating(true)
-    addToast(`Opening NetMask ${update.version} download...`, 'info')
+    addToast(`Downloading NetMask v${update.version}...`, 'info')
     try {
-      await window.nm.openReleaseUrl(update.downloadUrl || update.url)
+      const res = await window.nm.downloadUpdate(update.downloadUrl)
+      if (res.success) {
+        setDownloadedVersion(update.version)
+        addToast(`NetMask v${update.version} ready to install!`, 'success')
+      } else {
+        // Fallback to browser if stream download fails
+        addToast('In-app download issue; opening release download in browser...', 'info')
+        await window.nm.openReleaseUrl(update.downloadUrl || update.url)
+      }
     } catch {
-      addToast('Could not open update URL', 'error')
+      try {
+        await window.nm.openReleaseUrl(update.downloadUrl || update.url)
+      } catch {}
     } finally {
       setIsUpdating(false)
     }
@@ -66,7 +107,13 @@ export const UpdateBanner: React.FC = () => {
           <span className={styles.badge}>Update Available</span>
           <strong className={styles.version}>v{update.version}</strong>
           <span className={styles.subtext}>
-            {update.name && update.name !== update.version ? `— ${update.name}` : 'is ready to install'}
+            {downloadProgress
+              ? `Downloading ${downloadProgress.percent}% (${(downloadProgress.transferred / (1024 * 1024)).toFixed(1)} / ${(downloadProgress.total / (1024 * 1024)).toFixed(1)} MB)`
+              : isDownloaded
+              ? '— Update downloaded and ready to install!'
+              : update.name && update.name !== update.version
+              ? `— ${update.name}`
+              : 'is ready to download'}
           </span>
         </div>
       </div>
@@ -82,11 +129,19 @@ export const UpdateBanner: React.FC = () => {
         <button
           className={styles.updateBtn}
           onClick={handleUpdate}
-          disabled={isUpdating}
-          title={`Download NetMask v${update.version}`}
+          disabled={isUpdating && !downloadProgress}
+          title={isDownloaded ? 'Restart NetMask and install update' : `Download NetMask v${update.version}`}
         >
           <DownloadIcon size={13} />
-          <span>{isUpdating ? 'Opening...' : 'Update now'}</span>
+          <span>
+            {isDownloaded
+              ? 'Restart & Install'
+              : downloadProgress
+              ? `${downloadProgress.percent}%`
+              : isUpdating
+              ? 'Starting…'
+              : 'Update now'}
+          </span>
         </button>
         <button
           className={styles.closeBtn}

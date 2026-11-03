@@ -51,6 +51,7 @@ export const NetworkList: React.FC = () => {
       <div className={styles.searchWrap}>
         <SearchIcon size={14} color="var(--text-muted)" className={styles.searchIcon} />
         <input
+          id="filter-networks-input"
           className={styles.search}
           type="text"
           placeholder="Filter networks…"

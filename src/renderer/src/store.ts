@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Network, Connection, AppSettings, Toast, SpeedSample, ToastType, StreamerStatus } from './types'
+import type { Network, Connection, AppSettings, Toast, SpeedSample, ToastType, StreamerStatus, DownloadProgress } from './types'
 
 // Single persistent Float32Array(60) ring buffer for ultra-low GC pressure
 const speedRingBuffer = new Float32Array(60)
@@ -7,6 +7,25 @@ let bssidPeekTimer: ReturnType<typeof setTimeout> | null = null
 
 export function getSpeedRingBuffer(): Float32Array {
   return speedRingBuffer
+}
+
+export const DEFAULT_SHORTCUTS: Record<string, string> = {
+  refresh: 'Ctrl+R',
+  focusRename: 'Ctrl+N',
+  applyRename: 'Ctrl+Enter',
+  restoreOriginal: 'Ctrl+Shift+Z',
+  reconnectWifi: 'Ctrl+Shift+R',
+  selectNext: 'ArrowDown',
+  selectPrev: 'ArrowUp',
+  filterSearch: 'Ctrl+F',
+  viewDetails: 'Ctrl+D',
+  toggleStreamer: 'Ctrl+Shift+S',
+  peekBssid: 'Ctrl+Shift+B',
+  trimMemory: 'Ctrl+Shift+M',
+  runSpeedTest: 'Ctrl+Shift+T',
+  openSettings: 'Ctrl+,',
+  openShortcuts: 'Ctrl+/',
+  closeModals: 'Escape'
 }
 
 interface Store {
@@ -22,11 +41,14 @@ interface Store {
   adminOk: boolean
   refreshing: boolean
   settingsOpen: boolean
+  shortcutsModalOpen: boolean
   detailsModalGuid: string | null
   contextMenu: { x: number; y: number; guid: string } | null
   streamerStatus: StreamerStatus
   bssidPeek: boolean
   elevationStatus: import('./types').ElevationStatus | null
+  downloadProgress: DownloadProgress | null
+  downloadedVersion: string | null
 
   // Actions
   setNetworks: (nets: Network[]) => void
@@ -34,6 +56,8 @@ interface Store {
   selectNetwork: (guid: string | null) => void
   setSettings: (s: AppSettings) => void
   updateSetting: <K extends keyof AppSettings>(key: K, val: AppSettings[K]) => void
+  updateShortcut: (id: string, key: string) => void
+  resetAllShortcuts: () => void
   addToast: (msg: string, type?: ToastType) => string
   removeToast: (id: string) => void
   setSpeed: (s: SpeedSample) => void
@@ -41,11 +65,14 @@ interface Store {
   setAdminOk: (ok: boolean) => void
   setRefreshing: (r: boolean) => void
   setSettingsOpen: (open: boolean) => void
+  setShortcutsModalOpen: (open: boolean) => void
   setDetailsModalGuid: (guid: string | null) => void
   setContextMenu: (cm: { x: number; y: number; guid: string } | null) => void
   setStreamerStatus: (status: StreamerStatus) => void
   setElevationStatus: (status: import('./types').ElevationStatus) => void
   peekBssid: () => void
+  setDownloadProgress: (p: DownloadProgress | null) => void
+  setDownloadedVersion: (v: string | null) => void
 }
 
 let toastSeq = 0
@@ -61,7 +88,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   streamerMaskName: 'StreamSafe-Fiber-Pro',
   bssidCloaking: true,
   bssidMaskMode: 'partial',
-  silentElevation: true
+  silentElevation: true,
+  shortcuts: { ...DEFAULT_SHORTCUTS }
 }
 
 export const useStore = create<Store>((set, get) => ({
@@ -77,16 +105,24 @@ export const useStore = create<Store>((set, get) => ({
   adminOk: false,
   refreshing: false,
   settingsOpen: false,
+  shortcutsModalOpen: false,
   detailsModalGuid: null,
   contextMenu: null,
   streamerStatus: { detectedApp: null, isCloaked: false, cooldownSeconds: 0 },
   bssidPeek: false,
   elevationStatus: null,
+  downloadProgress: null,
+  downloadedVersion: null,
 
   setNetworks: (nets) => set({ networks: nets }),
   setConnection: (conn) => set({ connection: conn }),
   selectNetwork: (guid) => set({ selectedGuid: guid }),
-  setSettings: (s) => set({ settings: s }),
+  setSettings: (s) => set({
+    settings: {
+      ...s,
+      shortcuts: { ...DEFAULT_SHORTCUTS, ...(s?.shortcuts || {}) }
+    }
+  }),
 
   updateSetting: (key, val) => {
     const settings = { ...get().settings, [key]: val }
@@ -95,6 +131,24 @@ export const useStore = create<Store>((set, get) => ({
     if (key === 'theme') {
       document.documentElement.setAttribute('data-theme', val as string)
     }
+  },
+
+  updateShortcut: (id, key) => {
+    const current = get().settings.shortcuts || { ...DEFAULT_SHORTCUTS }
+    const updated = { ...current }
+    if (key) {
+      for (const [k, v] of Object.entries(updated)) {
+        if (k !== id && v && v.toLowerCase() === key.toLowerCase()) {
+          updated[k] = ''
+        }
+      }
+    }
+    updated[id] = key
+    get().updateSetting('shortcuts', updated)
+  },
+
+  resetAllShortcuts: () => {
+    get().updateSetting('shortcuts', { ...DEFAULT_SHORTCUTS })
   },
 
   addToast: (message, type = 'info') => {
@@ -128,10 +182,13 @@ export const useStore = create<Store>((set, get) => ({
   setAdminOk: (ok) => set({ adminOk: ok }),
   setRefreshing: (r) => set({ refreshing: r }),
   setSettingsOpen: (open) => set({ settingsOpen: open }),
+  setShortcutsModalOpen: (open) => set({ shortcutsModalOpen: open }),
   setDetailsModalGuid: (guid) => set({ detailsModalGuid: guid }),
   setContextMenu: (cm) => set({ contextMenu: cm }),
   setStreamerStatus: (status) => set({ streamerStatus: status }),
   setElevationStatus: (status) => set({ elevationStatus: status }),
+  setDownloadProgress: (p) => set({ downloadProgress: p }),
+  setDownloadedVersion: (v) => set({ downloadedVersion: v }),
 
   peekBssid: () => {
     if (bssidPeekTimer) clearTimeout(bssidPeekTimer)

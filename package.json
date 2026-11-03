@@ -1,11 +1,12 @@
 {
   "name": "netmask",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Cross-platform local network display name manager for Windows, macOS, and Linux",
   "main": "out/main/index.js",
   "author": {
-    "name": "NetMask Contributors",
-    "email": "billighost@users.noreply.github.com"
+    "name": "Bello Bilal",
+    "email": "bb2010ng@gmail.com",
+    "url": "https://github.com/billighost"
   },
   "license": "MIT",
   "repository": {
@@ -26,6 +27,7 @@
     "dist:linux": "npm run build && electron-builder --linux",
     "dist:all": "npm run build && electron-builder -mwl",
     "typecheck": "tsc --noEmit",
+    "test": "node scripts/test-verification.js",
     "benchmark": "npm run build && node scripts/benchmark.js"
   },
   "dependencies": {

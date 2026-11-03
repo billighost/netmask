@@ -142,6 +142,7 @@ export const ActionPanel: React.FC = () => {
 
       <div className={styles.inputWrap}>
         <input
+          id="rename-network-input"
           ref={inputRef}
           className={styles.input}
           type="text"
@@ -152,7 +153,11 @@ export const ActionPanel: React.FC = () => {
           disabled={!net}
           onChange={e => setInputVal(e.target.value)}
           onKeyDown={e => {
-            if (e.key === 'Enter') handleApply()
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              e.stopPropagation()
+              handleApply()
+            }
           }}
         />
       </div>
@@ -185,6 +190,7 @@ export const ActionPanel: React.FC = () => {
       {/* Action Buttons */}
       <div className={styles.btns}>
         <button
+          id="apply-rename-btn"
           className={`${styles.btn} ${styles.btnPrimary}`}
           disabled={disabled || applying}
           onClick={handleApply}
