@@ -438,5 +438,51 @@ export const CheckmarkCircleIcon = ({ size = 16, color = 'currentColor', classNa
   </svg>
 )
 
+export const QrCodeIcon = ({ size = 16, color = 'currentColor', className = '' }: IconProps) => (
+  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <path d="M14 14h3v3h-3zM17 17h4v4h-4zM14 20h3M20 14v3" />
+  </svg>
+)
+
+export const RadioIcon = ({ size = 16, color = 'currentColor', className = '' }: IconProps) => (
+  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="2" fill={color} />
+    <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14" />
+  </svg>
+)
+
+export const DnsIcon = ({ size = 16, color = 'currentColor', className = '' }: IconProps) => (
+  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="3" width="20" height="6" rx="2" />
+    <rect x="2" y="15" width="20" height="6" rx="2" />
+    <line x1="6" y1="6" x2="6.01" y2="6" strokeWidth="3" />
+    <line x1="6" y1="18" x2="6.01" y2="18" strokeWidth="3" />
+    <path d="M18 9v6" />
+  </svg>
+)
+
+export const GlobeIcon = ({ size = 16, color = 'currentColor', className = '' }: IconProps) => (
+  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="2" y1="12" x2="22" y2="12" />
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+  </svg>
+)
+
+export const PulseIcon = ({ size = 16, color = 'currentColor', className = '' }: IconProps) => (
+  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+  </svg>
+)
+
+
 
 

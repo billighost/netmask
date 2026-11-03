@@ -10,4 +10,10 @@ export { ContextMenu } from './ContextMenu/ContextMenu'
 export { SpeedInfoPanel } from './SpeedInfoPanel/SpeedInfoPanel'
 export { UpdateBanner } from './UpdateBanner/UpdateBanner'
 export { NetworkDetailsModal } from './NetworkDetailsModal/NetworkDetailsModal'
+export { CaptivePortalBanner } from './CaptivePortalBanner/CaptivePortalBanner'
+export { WifiShareModal } from './WifiShareModal/WifiShareModal'
+export { DnsBenchmarkModal } from './DnsBenchmarkModal/DnsBenchmarkModal'
+export { DeviceIdentityModal } from './DeviceIdentityModal/DeviceIdentityModal'
+export { RoamingTunerModal } from './RoamingTunerModal/RoamingTunerModal'
+
 

@@ -1,10 +1,15 @@
 import React, { useEffect, useRef } from 'react'
 import { useStore } from '../../store'
-import { CopyIcon, RestoreIcon, InfoIcon, ShieldIcon } from '../../icons'
+import { CopyIcon, RestoreIcon, InfoIcon, ShieldIcon, QrCodeIcon } from '../../icons'
 import styles from './ContextMenu.module.css'
 
 export const ContextMenu: React.FC = () => {
-  const { contextMenu, setContextMenu, networks, selectedGuid, selectNetwork, addToast, setNetworks, setConnection, setDetailsModalGuid, connection, settings, bssidPeek, streamerStatus } = useStore()
+  const {
+    contextMenu, setContextMenu, networks, selectedGuid, selectNetwork,
+    addToast, setNetworks, setConnection, setDetailsModalGuid,
+    connection, settings, bssidPeek, streamerStatus,
+    setWifiShareModalProfile, setPrivacyCloakModalOpen
+  } = useStore()
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -30,6 +35,16 @@ export const ContextMenu: React.FC = () => {
       label: 'Select',
       icon: null,
       action: () => selectNetwork(net.guid),
+    },
+    ...(net.type === 'wifi' ? [{
+      label: 'Share Wi-Fi (QR Code)',
+      icon: <QrCodeIcon size={13} color="#34d399" />,
+      action: () => setWifiShareModalProfile(net.name),
+    }] : []),
+    {
+      label: 'Privacy Cloak Suite',
+      icon: <ShieldIcon size={13} color="#c084fc" />,
+      action: () => setPrivacyCloakModalOpen(true),
     },
     {
       label: 'RF Diagnostics',

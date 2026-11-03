@@ -50,6 +50,17 @@ interface Store {
   downloadProgress: DownloadProgress | null
   downloadedVersion: string | null
 
+  // Hotspot Privacy Cloak, DNS, Roaming, Ping, Captive, Share
+  pingTelemetry: import('./types').PingTelemetry | null
+  deviceIdentity: import('./types').DeviceIdentity | null
+  dnsResults: import('./types').DnsResolverResult[] | null
+  roamingSettings: import('./types').RoamingSettings | null
+  captivePortal: import('./types').CaptivePortalStatus | null
+  wifiShareModalProfile: string | null
+  dnsModalOpen: boolean
+  privacyCloakModalOpen: boolean
+  roamingModalOpen: boolean
+
   // Actions
   setNetworks: (nets: Network[]) => void
   setConnection: (conn: Connection | null) => void
@@ -73,6 +84,16 @@ interface Store {
   peekBssid: () => void
   setDownloadProgress: (p: DownloadProgress | null) => void
   setDownloadedVersion: (v: string | null) => void
+
+  setPingTelemetry: (t: import('./types').PingTelemetry | null) => void
+  setDeviceIdentity: (d: import('./types').DeviceIdentity | null) => void
+  setDnsResults: (r: import('./types').DnsResolverResult[] | null) => void
+  setRoamingSettings: (s: import('./types').RoamingSettings | null) => void
+  setCaptivePortal: (cp: import('./types').CaptivePortalStatus | null) => void
+  setWifiShareModalProfile: (profile: string | null) => void
+  setDnsModalOpen: (open: boolean) => void
+  setPrivacyCloakModalOpen: (open: boolean) => void
+  setRoamingModalOpen: (open: boolean) => void
 }
 
 let toastSeq = 0
@@ -113,6 +134,15 @@ export const useStore = create<Store>((set, get) => ({
   elevationStatus: null,
   downloadProgress: null,
   downloadedVersion: null,
+  pingTelemetry: null,
+  deviceIdentity: null,
+  dnsResults: null,
+  roamingSettings: null,
+  captivePortal: null,
+  wifiShareModalProfile: null,
+  dnsModalOpen: false,
+  privacyCloakModalOpen: false,
+  roamingModalOpen: false,
 
   setNetworks: (nets) => set({ networks: nets }),
   setConnection: (conn) => set({ connection: conn }),
@@ -189,6 +219,16 @@ export const useStore = create<Store>((set, get) => ({
   setElevationStatus: (status) => set({ elevationStatus: status }),
   setDownloadProgress: (p) => set({ downloadProgress: p }),
   setDownloadedVersion: (v) => set({ downloadedVersion: v }),
+
+  setPingTelemetry: (t) => set({ pingTelemetry: t }),
+  setDeviceIdentity: (d) => set({ deviceIdentity: d }),
+  setDnsResults: (r) => set({ dnsResults: r }),
+  setRoamingSettings: (s) => set({ roamingSettings: s }),
+  setCaptivePortal: (cp) => set({ captivePortal: cp }),
+  setWifiShareModalProfile: (p) => set({ wifiShareModalProfile: p }),
+  setDnsModalOpen: (open) => set({ dnsModalOpen: open }),
+  setPrivacyCloakModalOpen: (open) => set({ privacyCloakModalOpen: open }),
+  setRoamingModalOpen: (open) => set({ roamingModalOpen: open }),
 
   peekBssid: () => {
     if (bssidPeekTimer) clearTimeout(bssidPeekTimer)

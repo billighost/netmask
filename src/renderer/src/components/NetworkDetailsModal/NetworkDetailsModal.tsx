@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { useStore } from '../../store'
 import type { NetworkDetails } from '../../types'
-import { CloseIcon, WifiIcon, CopyIcon, EyeIcon, EyeOffIcon, ShieldIcon } from '../../icons'
+import { CloseIcon, WifiIcon, CopyIcon, EyeIcon, EyeOffIcon, ShieldIcon, QrCodeIcon } from '../../icons'
 import styles from './NetworkDetailsModal.module.css'
 
-function formatBssid(bssid?: string, cloaked = true, mode: 'full' | 'partial' = 'partial', peek = false): string {
-  if (!bssid || bssid === 'Saved Profile' || bssid === 'Active Interface' || bssid === 'Saved Network') {
-    return bssid || 'Unknown'
+function formatBssid(bssid?: any, cloaked = true, mode: 'full' | 'partial' = 'partial', peek = false): string {
+  if (!bssid || typeof bssid !== 'string' || bssid === 'Saved Profile' || bssid === 'Active Interface' || bssid === 'Saved Network') {
+    return typeof bssid === 'string' ? bssid : 'Unknown'
   }
   if (!cloaked || peek) {
     return bssid.toUpperCase()
@@ -21,8 +21,27 @@ function formatBssid(bssid?: string, cloaked = true, mode: 'full' | 'partial' = 
   return 'XX:XX:XX:XX:XX:XX'
 }
 
+function safeRate(rate?: any): number {
+  if (typeof rate === 'number') return isNaN(rate) ? 0 : rate
+  if (typeof rate === 'string') {
+    const parsed = parseFloat(rate)
+    return isNaN(parsed) ? 0 : parsed
+  }
+  return 0
+}
+
 export const NetworkDetailsModal: React.FC = () => {
-  const { detailsModalGuid, setDetailsModalGuid, settings, bssidPeek, peekBssid, addToast, connection } = useStore()
+  // Unconditionally call all hooks at the very top of the component (Rules of Hooks)
+  const detailsModalGuid = useStore(s => s.detailsModalGuid)
+  const setDetailsModalGuid = useStore(s => s.setDetailsModalGuid)
+  const settings = useStore(s => s.settings)
+  const bssidPeek = useStore(s => s.bssidPeek)
+  const peekBssid = useStore(s => s.peekBssid)
+  const addToast = useStore(s => s.addToast)
+  const connection = useStore(s => s.connection)
+  const setWifiShareModalProfile = useStore(s => s.setWifiShareModalProfile)
+  const networks = useStore(s => s.networks)
+
   const [details, setDetails] = useState<NetworkDetails | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -50,14 +69,15 @@ export const NetworkDetailsModal: React.FC = () => {
     }
   }, [detailsModalGuid])
 
+  // Early return only after all hooks are declared
   if (!detailsModalGuid) return null
 
   const handleCopyBssid = () => {
     const rawBssid = details?.bssid || connection?.bssid
     if (!rawBssid) return
 
-    const isProtected = settings.bssidCloaking && !bssidPeek
-    const textToCopy = formatBssid(rawBssid, isProtected, settings.bssidMaskMode, bssidPeek)
+    const isProtected = settings?.bssidCloaking && !bssidPeek
+    const textToCopy = formatBssid(rawBssid, isProtected, settings?.bssidMaskMode, bssidPeek)
     navigator.clipboard.writeText(textToCopy)
     if (isProtected) {
       addToast(`Copied cloaked BSSID "${textToCopy}" (Streamer Safe)`, 'info')
@@ -66,7 +86,6 @@ export const NetworkDetailsModal: React.FC = () => {
     }
   }
 
-  const networks = useStore(s => s.networks)
   const targetNetwork = networks.find(n => n.guid === detailsModalGuid || n.name === detailsModalGuid)
   const isTargetLive = Boolean(
     targetNetwork ? targetNetwork.live : (
@@ -80,7 +99,7 @@ export const NetworkDetailsModal: React.FC = () => {
 
   const displayName = targetNetwork ? targetNetwork.name : (details?.guid || detailsModalGuid)
   const rawBssid = isTargetLive ? (details?.bssid || connection?.bssid) : details?.bssid
-  const displayBssid = formatBssid(rawBssid, settings.bssidCloaking, settings.bssidMaskMode, bssidPeek)
+  const displayBssid = formatBssid(rawBssid, settings?.bssidCloaking, settings?.bssidMaskMode, bssidPeek)
   const generation = isTargetLive ? (details?.generation || connection?.generation || 'Wi-Fi') : (details?.generation || 'Wi-Fi')
   const signalDbm = isTargetLive ? (details?.signalDbm ?? connection?.signalDbm) : undefined
   const snr = isTargetLive ? (details?.snr ?? connection?.snr) : undefined
@@ -88,6 +107,14 @@ export const NetworkDetailsModal: React.FC = () => {
   const band = isTargetLive ? (details?.band || connection?.band || 'Wi-Fi') : (details?.band || 'Saved Profile')
   const rxRate = isTargetLive ? (details?.rxRateMbps || connection?.rxRateMbps) : undefined
   const txRate = isTargetLive ? (details?.txRateMbps || connection?.txRateMbps) : undefined
+
+  const rxNum = safeRate(rxRate)
+  const txNum = safeRate(txRate || rxRate)
+  const linkRateDisplay = isTargetLive && rxNum > 0
+    ? `↓${rxNum.toFixed(0)} / ↑${txNum.toFixed(0)}M`
+    : isTargetLive
+    ? 'Negotiating'
+    : 'Offline'
 
   const signalClass = signalDbm !== undefined
     ? signalDbm >= -65
@@ -113,7 +140,18 @@ export const NetworkDetailsModal: React.FC = () => {
         <div className={styles.body}>
           <div className={styles.netHeader}>
             <div className={styles.netName}>{displayName}</div>
-            <span className={styles.genBadge}>{generation}</span>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <span className={styles.genBadge}>{generation}</span>
+              <button
+                type="button"
+                className={styles.shareBtn}
+                onClick={() => setWifiShareModalProfile(displayName)}
+                title="Share Wi-Fi via Encrypted QR Code"
+              >
+                <QrCodeIcon size={12} color="#34d399" />
+                <span>Share</span>
+              </button>
+            </div>
           </div>
 
           <div className={styles.grid}>
@@ -141,7 +179,7 @@ export const NetworkDetailsModal: React.FC = () => {
             <div className={styles.metricCard}>
               <div className={styles.metricLabel}>Link Rates</div>
               <div className={styles.metricValue}>
-                {isTargetLive && rxRate ? `↓${rxRate.toFixed(0)} / ↑${(txRate || rxRate).toFixed(0)}M` : isTargetLive ? 'Negotiating' : 'Offline'}
+                {linkRateDisplay}
               </div>
             </div>
 
@@ -166,7 +204,7 @@ export const NetworkDetailsModal: React.FC = () => {
                   <div className={styles.bssidValue}>{displayBssid}</div>
                 </div>
                 <div className={styles.bssidActions}>
-                  {settings.bssidCloaking && (
+                  {settings?.bssidCloaking && (
                     <button
                       type="button"
                       className={styles.actionBtn}

@@ -17,15 +17,15 @@ A high-performance, cross-platform desktop application to rename and disguise lo
 
 <br/>
 
-### ⚡ Quick Download (Latest: v2.1.1)
+### ⚡ Quick Download (Latest: v2.1.2)
 
 | Platform | Recommended Installer | Alternative Formats |
 | :--- | :--- | :--- |
-| **Windows 11 / 10** | [📥 **Download Setup (.exe)**](https://github.com/billighost/netmask/releases/latest/download/NetMask-Setup-2.1.1.exe) | [Portable (.exe)](https://github.com/billighost/netmask/releases/latest/download/NetMask-Windows-2.1.1-x64.exe) • [Zip (.zip)](https://github.com/billighost/netmask/releases/latest/download/NetMask-Windows-2.1.1-x64.zip) |
-| **macOS (Apple Silicon)** | [📥 **Download DMG (arm64)**](https://github.com/billighost/netmask/releases/latest/download/NetMask-macOS-2.1.1-arm64.dmg) | [Zip Archive](https://github.com/billighost/netmask/releases/latest/download/NetMask-macOS-2.1.1-arm64.zip) |
-| **macOS (Intel x64)** | [📥 **Download DMG (x64)**](https://github.com/billighost/netmask/releases/latest/download/NetMask-macOS-2.1.1-x64.dmg) | [Zip Archive](https://github.com/billighost/netmask/releases/latest/download/NetMask-macOS-2.1.1-x64.zip) |
-| **Linux (All Distros)** | [📥 **Download AppImage**](https://github.com/billighost/netmask/releases/latest/download/NetMask-Linux-2.1.1-x86_64.AppImage) | [Tarball (.tar.gz)](https://github.com/billighost/netmask/releases/latest/download/NetMask-Linux-2.1.1-x64.tar.gz) |
-| **Linux (Ubuntu / Debian)** | [📥 **Download Debian (.deb)**](https://github.com/billighost/netmask/releases/latest/download/NetMask-Linux-2.1.1-amd64.deb) | `sudo dpkg -i NetMask*.deb` |
+| **Windows 11 / 10** | [📥 **Download Setup (.exe)**](https://github.com/billighost/netmask/releases/latest/download/NetMask-Setup-2.1.2.exe) | [Portable (.exe)](https://github.com/billighost/netmask/releases/latest/download/NetMask-Windows-2.1.2-x64.exe) • [Zip (.zip)](https://github.com/billighost/netmask/releases/latest/download/NetMask-Windows-2.1.2-x64.zip) |
+| **macOS (Apple Silicon)** | [📥 **Download DMG (arm64)**](https://github.com/billighost/netmask/releases/latest/download/NetMask-macOS-2.1.2-arm64.dmg) | [Zip Archive](https://github.com/billighost/netmask/releases/latest/download/NetMask-macOS-2.1.2-arm64.zip) |
+| **macOS (Intel x64)** | [📥 **Download DMG (x64)**](https://github.com/billighost/netmask/releases/latest/download/NetMask-macOS-2.1.2-x64.dmg) | [Zip Archive](https://github.com/billighost/netmask/releases/latest/download/NetMask-macOS-2.1.2-x64.zip) |
+| **Linux (All Distros)** | [📥 **Download AppImage**](https://github.com/billighost/netmask/releases/latest/download/NetMask-Linux-2.1.2-x86_64.AppImage) | [Tarball (.tar.gz)](https://github.com/billighost/netmask/releases/latest/download/NetMask-Linux-2.1.2-x64.tar.gz) |
+| **Linux (Ubuntu / Debian)** | [📥 **Download Debian (.deb)**](https://github.com/billighost/netmask/releases/latest/download/NetMask-Linux-2.1.2-amd64.deb) | `sudo dpkg -i NetMask*.deb` |
 
 <br/>
 
@@ -61,6 +61,12 @@ Suddenly, everyone in the meeting sees:
 | 🪶 **Tray Standby Unloading** | Destroys renderer process on tray minimize; reinstantiates in ~150ms | Drops tray process memory to just Node event loop (**~18–25 MB**) |
 | 🚀 **Ultra-Low Memory Mode** | Settings toggle completely disabling GPU hardware acceleration | Eliminates GPU process DirectX contexts; slashes active RAM |
 | 🔐 **Cascading Silent Elevation** | Tier 1 Task Scheduler + Tier 2 Broker + Tier 3 JIT Fallback | Zero UAC prompts forever; seamless 1-click config |
+| 🕵️ **Hotspot Privacy & Identity Cloaking** | Dynamic hardware MAC address randomization & NetBIOS broadcast suppression | Prevents device hostname (`DESKTOP-XXXX`, `billighost`) & real MAC exposure on hotspot routers |
+| ⚡ **1-Click Fastest DNS Benchmarker** | Real-time concurrent socket latency testing for Cloudflare, Google, Quad9, AdGuard | Benchmark and apply the fastest resolver to your active adapter in 1 click |
+| 📶 **Gateway & Jitter Telemetry** | Real-time gateway ping, edge internet latency, and RFC 3550 jitter calculation | Immediate alert to Wi-Fi bufferbloat and gaming lag |
+| 📡 **Wi-Fi Roaming & Band Steering Tuner** | Direct tuning of NIC Preferred Band (5GHz/6GHz vs 2.4GHz) and Roaming Aggressiveness | Stops annoying Wi-Fi drops and channel-hopping during gaming or calls |
+| 📱 **Offline Wi-Fi QR Code Sharing** | Zero-dependency Galois field $GF(2^8)$ QR code generator with camera contrast toggle | Connect mobile guests instantly without exposing plaintext passwords |
+| 🌐 **Captive Portal Detection** | Automated probe of network connectivity status and captive portal redirect pages | Instant banner notification with 1-click login page launcher |
 
 ---
 

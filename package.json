@@ -1,6 +1,6 @@
 {
   "name": "netmask",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Cross-platform local network display name manager for Windows, macOS, and Linux",
   "main": "out/main/index.js",
   "author": {
