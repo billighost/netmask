@@ -1,0 +1,42 @@
+name: 💡 Feature Request
+description: Propose an idea or enhancement for NetMask
+title: "[FEAT]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We love suggestions! Pitch your ideas for new platform features, UI enhancements, or network capabilities.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Limitation
+      description: Is your feature request related to a problem or frustrating workflow?
+      placeholder: "I'm always frustrated when..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: A clear and concise description of what you want to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or workarounds you've evaluated.
+    validations:
+      false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Add any mockups, screenshots, or architectural thoughts here.
+    validations:
+      false

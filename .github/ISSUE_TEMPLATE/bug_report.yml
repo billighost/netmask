@@ -1,0 +1,73 @@
+name: 🐛 Bug Report
+description: Report a reproducible bug or unexpected behavior in NetMask
+title: "[BUG]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please provide as much detail as possible so we can diagnose and fix it quickly.
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: Which operating system are you running NetMask on?
+      options:
+        - Windows 11 (x64)
+        - Windows 10 (x64)
+        - macOS (Apple Silicon M1/M2/M3)
+        - macOS (Intel x64)
+        - Linux (Ubuntu / Debian)
+        - Linux (Arch / Fedora)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: NetMask Version
+      description: Found in Title Bar or Settings (e.g., v2.0.0)
+      placeholder: "v2.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Current Behavior
+      description: What actually happened? Include error messages or screenshot links if available.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Exact steps to reproduce the issue.
+      value: |
+        1. Open NetMask
+        2. Click on '...'
+        3. Perform '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate.
+          required: true
+        - label: I am running the latest release of NetMask.
+          required: true
