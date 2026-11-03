@@ -1,5 +1,6 @@
 import { exec } from 'child_process'
 import https from 'https'
+import { getPlatformProvider } from './platform'
 
 export interface SpeedSample {
   downMBps: number
@@ -61,84 +62,73 @@ export function getSpeedSampleAsync(): Promise<SpeedSample> {
     }
 
     isSampling = true
-    exec('netstat -e', { timeout: 1200, windowsHide: true }, (err, stdout) => {
-      isSampling = false
-      if (err || !stdout) {
-        // Decay gently on transient error
-        smoothedDownMBps *= 0.7
-        smoothedUpMBps *= 0.7
-        lastSample = makeSample(smoothedDownMBps, smoothedUpMBps, 0, 0)
-        resolve(lastSample)
-        return
-      }
+    getPlatformProvider().getRawNetworkBytes()
+      .then(({ received, sent }) => {
+        isSampling = false
+        const current: RawSample = {
+          received,
+          sent,
+          ts: Date.now()
+        }
 
-      const m = /Bytes\s+(\d+)\s+(\d+)/i.exec(stdout)
-      if (!m) {
-        smoothedDownMBps *= 0.7
-        smoothedUpMBps *= 0.7
-        lastSample = makeSample(smoothedDownMBps, smoothedUpMBps, 0, 0)
-        resolve(lastSample)
-        return
-      }
+        if (!last) {
+          last = current
+          resolve(lastSample)
+          return
+        }
 
-      const current: RawSample = {
-        received: parseInt(m[1], 10),
-        sent: parseInt(m[2], 10),
-        ts: Date.now()
-      }
+        const dt = Math.max(0.3, (current.ts - last.ts) / 1000)
 
-      if (!last) {
+        // Handle 32-bit integer wrap-around (wraps at 2^32 = 4,294,967,296 bytes)
+        let downBytes = current.received - last.received
+        if (downBytes < 0) {
+          downBytes += 4294967296
+        }
+
+        let upBytes = current.sent - last.sent
+        if (upBytes < 0) {
+          upBytes += 4294967296
+        }
+
+        // Guard against abnormal interface reset spikes (> 5 GB/s)
+        if (downBytes > 5 * 1024 * 1024 * 1024) downBytes = 0
+        if (upBytes > 5 * 1024 * 1024 * 1024) upBytes = 0
+
         last = current
+
+        // Raw instantaneous rates in MB/s
+        const instantDown = (downBytes / dt) / (1024 * 1024)
+        const instantUp = (upBytes / dt) / (1024 * 1024)
+
+        // Responsive Exponential Moving Average:
+        // When traffic surges, rise rapidly (alpha = 0.8) to track active transfers.
+        // When traffic pauses between TCP chunks/video buffers, decay smoothly (alpha = 0.45)
+        if (instantDown >= smoothedDownMBps) {
+          smoothedDownMBps = 0.8 * instantDown + 0.2 * smoothedDownMBps
+        } else {
+          smoothedDownMBps = 0.45 * instantDown + 0.55 * smoothedDownMBps
+        }
+
+        if (instantUp >= smoothedUpMBps) {
+          smoothedUpMBps = 0.8 * instantUp + 0.2 * smoothedUpMBps
+        } else {
+          smoothedUpMBps = 0.45 * instantUp + 0.55 * smoothedUpMBps
+        }
+
+        // True idle threshold (< 0.2 KB/s)
+        if (smoothedDownMBps < 0.0002) smoothedDownMBps = 0
+        if (smoothedUpMBps < 0.0002) smoothedUpMBps = 0
+
+        lastSample = makeSample(smoothedDownMBps, smoothedUpMBps, instantDown, instantUp)
         resolve(lastSample)
-        return
-      }
-
-      const dt = Math.max(0.3, (current.ts - last.ts) / 1000)
-
-      // Handle 32-bit integer wrap-around (netstat -e wraps at 2^32 = 4,294,967,296 bytes)
-      let downBytes = current.received - last.received
-      if (downBytes < 0) {
-        downBytes += 4294967296
-      }
-
-      let upBytes = current.sent - last.sent
-      if (upBytes < 0) {
-        upBytes += 4294967296
-      }
-
-      // Guard against abnormal interface reset spikes (> 5 GB/s)
-      if (downBytes > 5 * 1024 * 1024 * 1024) downBytes = 0
-      if (upBytes > 5 * 1024 * 1024 * 1024) upBytes = 0
-
-      last = current
-
-      // Raw instantaneous rates in MB/s
-      const instantDown = (downBytes / dt) / (1024 * 1024)
-      const instantUp = (upBytes / dt) / (1024 * 1024)
-
-      // Responsive Exponential Moving Average:
-      // When traffic surges, rise rapidly (alpha = 0.8) to track active transfers.
-      // When traffic pauses between TCP chunks/video buffers, decay smoothly (alpha = 0.45)
-      // to eliminate the "reading drops to 0 for some time and then jumps back up" symptom.
-      if (instantDown >= smoothedDownMBps) {
-        smoothedDownMBps = 0.8 * instantDown + 0.2 * smoothedDownMBps
-      } else {
-        smoothedDownMBps = 0.45 * instantDown + 0.55 * smoothedDownMBps
-      }
-
-      if (instantUp >= smoothedUpMBps) {
-        smoothedUpMBps = 0.8 * instantUp + 0.2 * smoothedUpMBps
-      } else {
-        smoothedUpMBps = 0.45 * instantUp + 0.55 * smoothedUpMBps
-      }
-
-      // True idle threshold (< 0.2 KB/s)
-      if (smoothedDownMBps < 0.0002) smoothedDownMBps = 0
-      if (smoothedUpMBps < 0.0002) smoothedUpMBps = 0
-
-      lastSample = makeSample(smoothedDownMBps, smoothedUpMBps, instantDown, instantUp)
-      resolve(lastSample)
-    })
+      })
+      .catch(() => {
+        isSampling = false
+        smoothedDownMBps *= 0.7
+        smoothedUpMBps *= 0.7
+        lastSample = makeSample(smoothedDownMBps, smoothedUpMBps, 0, 0)
+        resolve(lastSample)
+      })
   })
 }
 

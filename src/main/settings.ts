@@ -1,8 +1,7 @@
 import { join } from 'path'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
-import { ensureDir } from './backup'
+import { ensureDir, DATA_DIR } from './backup'
 
-const DATA_DIR = join(process.env['ProgramData'] || 'C:\\ProgramData', 'NetMask')
 const SETTINGS_FILE = join(DATA_DIR, 'settings.json')
 
 export interface WindowBounds {

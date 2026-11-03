@@ -1,10 +1,20 @@
-import { execSync } from 'child_process'
 import { join } from 'path'
+import { homedir } from 'os'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { renameNetwork } from './registry'
 
-const DATA_DIR = join(process.env['ProgramData'] || 'C:\\ProgramData', 'NetMask')
-const BACKUP_FILE = join(DATA_DIR, 'names.json')
+function getDataDir(): string {
+  if (process.platform === 'win32') {
+    return join(process.env['ProgramData'] || 'C:\\ProgramData', 'NetMask')
+  }
+  if (process.platform === 'darwin') {
+    return join(homedir(), 'Library', 'Application Support', 'NetMask')
+  }
+  return join(process.env['XDG_CONFIG_HOME'] || join(homedir(), '.config'), 'netmask')
+}
+
+export const DATA_DIR = getDataDir()
+export const BACKUP_FILE = join(DATA_DIR, 'names.json')
 
 export function ensureDir(): void {
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true })
