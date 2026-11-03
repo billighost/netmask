@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { useStore } from '../../store'
-import { SunIcon, MoonIcon, CloseIcon, RestoreIcon, LockIcon, ShieldIcon, BoltIcon } from '../../icons'
-import type { ElevationStatus } from '../../types'
+import {
+  SunIcon, MoonIcon, CloseIcon, RestoreIcon, LockIcon, ShieldIcon, BoltIcon,
+  KeyboardIcon, GithubIcon, MailIcon, ExternalLinkIcon, CheckmarkCircleIcon,
+  DownloadIcon, SparkleIcon, RefreshIcon, WifiIcon
+} from '../../icons'
+import type { UpdateInfo, DownloadProgress } from '../../types'
 import styles from './SettingsModal.module.css'
 
 const Toggle: React.FC<{ on: boolean; onChange: (v: boolean) => void; label: string; sub?: string }> = ({ on, onChange, label, sub }) => (
@@ -24,11 +28,18 @@ const Toggle: React.FC<{ on: boolean; onChange: (v: boolean) => void; label: str
 export const SettingsModal: React.FC = () => {
   const {
     settingsOpen, setSettingsOpen, settings, updateSetting,
-    networks, addToast, streamerStatus, elevationStatus, setElevationStatus
+    networks, addToast, streamerStatus, elevationStatus, setElevationStatus,
+    setShortcutsModalOpen, downloadProgress, setDownloadProgress,
+    downloadedVersion, setDownloadedVersion
   } = useStore()
 
   const [elevating, setElevating] = useState(false)
   const [trimming, setTrimming] = useState(false)
+
+  // Update checking state
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [updateResult, setUpdateResult] = useState<UpdateInfo | 'up-to-date' | 'error' | null>(null)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     if (settingsOpen) {
@@ -37,6 +48,22 @@ export const SettingsModal: React.FC = () => {
       }).catch(() => {})
     }
   }, [settingsOpen])
+
+  useEffect(() => {
+    const unsubProgress = window.nm.onUpdateProgress((p) => {
+      setDownloadProgress(p)
+    })
+    const unsubDownloaded = window.nm.onUpdateDownloaded((info) => {
+      setDownloading(false)
+      setDownloadedVersion(info.version)
+      setDownloadProgress(null)
+      addToast(`NetMask v${info.version} downloaded and ready to install!`, 'success')
+    })
+    return () => {
+      unsubProgress()
+      unsubDownloaded()
+    }
+  }, [])
 
   if (!settingsOpen) return null
 
@@ -133,6 +160,60 @@ export const SettingsModal: React.FC = () => {
     } catch { addToast('Restore all failed', 'error') }
   }
 
+  const handleCheckUpdate = async () => {
+    if (checkingUpdate) return
+    setCheckingUpdate(true)
+    setUpdateResult(null)
+    try {
+      const found = await window.nm.checkUpdate()
+      if (found) {
+        setUpdateResult(found)
+        addToast(`NetMask v${found.version} is available!`, 'info')
+      } else {
+        setUpdateResult('up-to-date')
+        addToast("You're on the latest version of NetMask", 'success')
+      }
+    } catch {
+      setUpdateResult('error')
+      addToast('Could not reach GitHub release server', 'error')
+    } finally {
+      setCheckingUpdate(false)
+    }
+  }
+
+  const handleDownloadUpdate = async (info: UpdateInfo) => {
+    if (downloading) return
+    setDownloading(true)
+    addToast(`Downloading NetMask v${info.version}...`, 'info')
+    try {
+      const res = await window.nm.downloadUpdate(info.downloadUrl)
+      if (res.success) {
+        setDownloadedVersion(info.version)
+        addToast(`NetMask v${info.version} downloaded!`, 'success')
+      } else {
+        addToast(res.error || 'Failed to download update', 'error')
+      }
+    } catch (err: any) {
+      addToast(err?.message || 'Download error', 'error')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const handleInstallUpdate = async () => {
+    try {
+      addToast('Launching updater and restarting NetMask...', 'info')
+      await window.nm.installUpdate()
+    } catch (err: any) {
+      addToast(err?.message || 'Failed to launch installer', 'error')
+    }
+  }
+
+  const handleCopyEmail = () => {
+    navigator.clipboard.writeText('bb2010ng@gmail.com')
+    addToast('Copied bb2010ng@gmail.com to clipboard!', 'success')
+  }
+
   const intervalOptions = [
     { label: '10 seconds', value: 10 },
     { label: '30 seconds', value: 30 },
@@ -158,6 +239,124 @@ export const SettingsModal: React.FC = () => {
         </div>
 
         <div className={styles.body}>
+          {/* Controls & Keyboard Mapping */}
+          <div className={styles.section}>
+            <div className={styles.sectionLabel}>Keyboard Controls & Shortcuts</div>
+            <div className={styles.actionCard}>
+              <div className={styles.actionCardHeader}>
+                <div>
+                  <div className={styles.toggleLabel}>Keyboard Shortcuts Mapping</div>
+                  <div className={styles.toggleSub}>
+                    Customize hotkeys for renaming, navigation, streamer cloak, and diagnostics
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={`${styles.elevBtn} ${styles.elevBtnPrimary}`}
+                onClick={() => setShortcutsModalOpen(true)}
+              >
+                <KeyboardIcon size={14} />
+                <span>Configure Keyboard Controls</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Software Updates */}
+          <div className={styles.section}>
+            <div className={styles.sectionLabel}>Updates & Releases</div>
+            <div className={styles.updateStatusCard}>
+              <div className={styles.updateRow}>
+                <div>
+                  <div className={styles.updateVersion}>NetMask v2.1.1</div>
+                  <div className={styles.updateSub}>
+                    {downloadedVersion
+                      ? `Version v${downloadedVersion} is downloaded and ready to install!`
+                      : updateResult && typeof updateResult === 'object'
+                      ? `New update v${updateResult.version} available`
+                      : updateResult === 'up-to-date'
+                      ? "You're running the latest release"
+                      : updateResult === 'error'
+                      ? 'Update check failed — check network'
+                      : 'Checks GitHub releases for new updates'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className={styles.elevBtn}
+                  disabled={checkingUpdate || downloading}
+                  onClick={handleCheckUpdate}
+                  title="Check GitHub for the latest release of NetMask"
+                >
+                  {checkingUpdate ? (
+                    <span className={styles.spinner} />
+                  ) : (
+                    <RefreshIcon size={13} />
+                  )}
+                  <span>{checkingUpdate ? 'Checking…' : 'Check for Updates'}</span>
+                </button>
+              </div>
+
+              {/* Progress bar during in-app update download */}
+              {downloadProgress && (
+                <div className={styles.progressBox}>
+                  <div className={styles.progressInfo}>
+                    <span>Downloading update: {downloadProgress.percent}%</span>
+                    <span>
+                      {(downloadProgress.transferred / (1024 * 1024)).toFixed(1)} MB /{' '}
+                      {(downloadProgress.total / (1024 * 1024)).toFixed(1)} MB
+                      {downloadProgress.bytesPerSecond > 0 &&
+                        ` (${(downloadProgress.bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s)`}
+                    </span>
+                  </div>
+                  <div className={styles.progressBarWrap}>
+                    <div
+                      className={styles.progressBarFill}
+                      style={{ width: `${downloadProgress.percent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Downloaded state: prompt to install */}
+              {downloadedVersion && (
+                <div className={styles.btnRow}>
+                  <button
+                    type="button"
+                    className={`${styles.elevBtn} ${styles.elevBtnPrimary}`}
+                    onClick={handleInstallUpdate}
+                  >
+                    <DownloadIcon size={13} />
+                    <span>Restart & Install v{downloadedVersion}</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Update Available Banner within Settings */}
+              {updateResult && typeof updateResult === 'object' && !downloadedVersion && (
+                <div className={styles.btnRow}>
+                  <button
+                    type="button"
+                    className={`${styles.elevBtn} ${styles.elevBtnPrimary}`}
+                    disabled={downloading}
+                    onClick={() => handleDownloadUpdate(updateResult)}
+                  >
+                    {downloading ? <span className={styles.spinner} /> : <DownloadIcon size={13} />}
+                    <span>{downloading ? 'Downloading…' : `Update to v${updateResult.version}`}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.elevBtn}
+                    onClick={() => window.nm.openReleaseUrl(updateResult.url)}
+                  >
+                    <ExternalLinkIcon size={12} />
+                    <span>View Notes</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Privilege & Cascading Elevation */}
           <div className={styles.section}>
             <div className={styles.sectionLabel}>Privilege & Elevation</div>
@@ -385,11 +584,79 @@ export const SettingsModal: React.FC = () => {
             </button>
           </div>
 
+          {/* Author & Maintainer Section */}
+          <div className={styles.section}>
+            <div className={styles.sectionLabel}>Author & Developer</div>
+            <div className={styles.authorCard}>
+              <div className={styles.authorTop}>
+                <div className={styles.authorAvatar}>BB</div>
+                <div className={styles.authorDetails}>
+                  <div className={styles.authorNameRow}>
+                    <span className={styles.authorName}>Bello Bilal</span>
+                    <span className={styles.authorBadge}>Creator & Maintainer</span>
+                  </div>
+                  <div className={styles.authorBio}>
+                    Lead creator and developer of NetMask.
+                  </div>
+                </div>
+              </div>
+
+              <div className={styles.authorLinks}>
+                <div className={styles.authorLinkItem}>
+                  <div className={styles.authorLinkLeft}>
+                    <GithubIcon size={14} color="var(--text-secondary)" />
+                    <span>GitHub: <strong>billighost</strong></span>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.authorLinkBtn}
+                    onClick={() => window.nm.openReleaseUrl('https://github.com/billighost')}
+                    title="Open Bello Bilal's GitHub profile"
+                  >
+                    <span>View Profile</span>
+                    <ExternalLinkIcon size={11} />
+                  </button>
+                </div>
+
+                <div className={styles.authorLinkItem}>
+                  <div className={styles.authorLinkLeft}>
+                    <MailIcon size={14} color="var(--text-secondary)" />
+                    <span>Email: <strong>bb2010ng@gmail.com</strong></span>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.authorLinkBtn}
+                    onClick={handleCopyEmail}
+                    title="Copy maintainer email address"
+                  >
+                    <span>Copy Email</span>
+                  </button>
+                </div>
+
+                <div className={styles.authorLinkItem}>
+                  <div className={styles.authorLinkLeft}>
+                    <WifiIcon size={14} color="var(--accent)" />
+                    <span>Repository: <strong>billighost/netmask</strong></span>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.authorLinkBtn}
+                    onClick={() => window.nm.openReleaseUrl('https://github.com/billighost/netmask')}
+                    title="Open NetMask repository on GitHub"
+                  >
+                    <span>Visit Repo</span>
+                    <ExternalLinkIcon size={11} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* About */}
           <div className={styles.section}>
             <div className={styles.sectionLabel}>About</div>
             <div className={styles.about}>
-              <div className={styles.aboutName}>NetMask <span>v2.0</span></div>
+              <div className={styles.aboutName}>NetMask <span>v2.1.1</span></div>
               <div className={styles.aboutSub}>Cross-platform network identity & RF diagnostics utility</div>
             </div>
           </div>

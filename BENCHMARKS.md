@@ -1,7 +1,7 @@
 # 📊 NetMask 2.0 Empirical Performance & Memory Footprint Report
 
 *Measured live on **win32 (x64)** via Chromium `app.getAppMetrics()` and Windows Win32 OS `Get-CimInstance`*
-*Timestamp: `2026-11-03T07:47:57.876Z`*
+*Timestamp: `2026-11-03T10:21:02.030Z`*
 
 ---
 
@@ -38,27 +38,27 @@ When measured accurately via **Private Working Set (WS-Private)**:
 
 | State | Dedicated Private RAM (WS-Private) | Private Commit Size | Total Shared Working Set | Process Count | Status & Lifecycle |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Active / Visible Window** | **118 MB** | 203.7 MB | 344.6 MB | 4 | ⚡ Real-time speed sampling & canvas active |
-| **System Tray Standby** | **90.2 MB** | 165.5 MB | 255 MB | 3 | 🌿 Renderer unloaded, GPU suspended, working set trimmed |
+| **Active / Visible Window** | **199.1 MB** | 199.1 MB | 335.8 MB | 4 | ⚡ Real-time speed sampling & canvas active |
+| **System Tray Standby** | **159.4 MB** | 159.4 MB | 250 MB | 3 | 🌿 Renderer unloaded, GPU suspended, working set trimmed |
 
 ---
 
 ### 🔍 Process Breakdown: Active Window
 | Process Type | PID | Private Working Set (WS-Private) | Private Commit (MB) | Shared Working Set (MB) | CPU % |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Browser** | `16216` | **34.3 MB** | 84.3 MB | 99.8 MB | 0.0% |
-| **GPU** | `17988` | **49.9 MB** | 68.2 MB | 105.2 MB | 0.0% |
-| **Utility** | `14796` | **5.8 MB** | 12.9 MB | 48.7 MB | 0.0% |
-| **Tab** | `11344` | **28 MB** | 38.3 MB | 90.9 MB | 0.0% |
+| **Browser** | `7128` | **79.8 MB** | 79.8 MB | 98.1 MB | 0.0% |
+| **GPU** | `16960` | **68.6 MB** | 68.6 MB | 105.2 MB | 0.0% |
+| **Utility** | `4492` | **12.7 MB** | 12.7 MB | 46.6 MB | 0.0% |
+| **Tab** | `4176` | **38 MB** | 38 MB | 85.9 MB | 0.0% |
 
 ---
 
 ### 🔍 Process Breakdown: System Tray Standby (Tray Unloading Active)
 | Process Type | PID | Private Working Set (WS-Private) | Private Commit (MB) | Shared Working Set (MB) | CPU % |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Browser** | `16216` | **34.7 MB** | 84.9 MB | 101.1 MB | 0.1% |
-| **GPU** | `17988` | **49.6 MB** | 67.7 MB | 105.2 MB | 0.6% |
-| **Utility** | `14796` | **5.9 MB** | 12.9 MB | 48.7 MB | 0.3% |
+| **Browser** | `7128` | **80.2 MB** | 80.2 MB | 99.4 MB | 0.5% |
+| **GPU** | `16960` | **66.4 MB** | 66.4 MB | 103.9 MB | 0.5% |
+| **Utility** | `4492` | **12.8 MB** | 12.8 MB | 46.7 MB | 0.0% |
 
 ---
 

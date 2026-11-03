@@ -15,7 +15,10 @@ import {
   removeTaskElevation, isTaskConfigured, triggerSilentElevation
 } from './admin'
 import { getSettings, setSetting } from './settings'
-import { setupAutoUpdater, openReleaseUrl, checkGitHubRelease } from './updater'
+import {
+  setupAutoUpdater, openReleaseUrl, checkGitHubRelease,
+  checkOnRestoreFromTray, downloadUpdate, installDownloadedUpdate
+} from './updater'
 import {
   startStreamerMonitor, stopStreamerMonitor, getStreamerStatus,
   toggleStreamerCloak, checkStreamerNow
@@ -111,6 +114,7 @@ export function showOrCreateWindow(): void {
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.show()
     mainWindow.focus()
+    checkOnRestoreFromTray(mainWindow)
   }
 }
 
@@ -241,6 +245,7 @@ function createWindow(): void {
   mainWindow.on('show', () => {
     startSpeed()
     trimMemory()
+    checkOnRestoreFromTray(mainWindow)
   })
 
   mainWindow.on('focus', () => {
@@ -309,11 +314,13 @@ function createTray(): void {
     tray.on('click', () => {
       if (!mainWindow || mainWindow.isDestroyed()) {
         createWindow()
+        checkOnRestoreFromTray(mainWindow)
       } else if (mainWindow.isVisible()) {
         destroyWindowToTray()
       } else {
         mainWindow.show()
         mainWindow.focus()
+        checkOnRestoreFromTray(mainWindow)
       }
     })
 
@@ -378,6 +385,10 @@ function registerIpc(): void {
 
   ipcMain.handle('nm:run-speed-test', () => runSpeedTest())
   ipcMain.handle('nm:check-update', () => checkGitHubRelease(mainWindow))
+  ipcMain.handle('nm:download-update', (_e, url?: string) => downloadUpdate(url))
+  ipcMain.handle('nm:install-update', (_e, filePath?: string) => {
+    installDownloadedUpdate(filePath)
+  })
   ipcMain.handle('nm:open-release-url', (_e, url?: string) => openReleaseUrl(url))
   ipcMain.on('nm:minimize', () => mainWindow?.minimize())
   ipcMain.handle('nm:maximize', () => {

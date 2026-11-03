@@ -1,74 +1,74 @@
 {
-  "timestamp": "2026-11-03T07:47:57.876Z",
+  "timestamp": "2026-11-03T10:21:02.030Z",
   "platform": "win32",
   "arch": "x64",
   "active": {
-    "privateWorkingSetMB": 118,
-    "commitMB": 203.7,
-    "totalSharedWorkingSetMB": 344.6,
+    "privateWorkingSetMB": 199.1,
+    "commitMB": 199.1,
+    "totalSharedWorkingSetMB": 335.8,
     "processes": [
       {
-        "pid": 16216,
+        "pid": 7128,
         "type": "Browser",
-        "privateWorkingSetMB": 34.3,
-        "commitMB": 84.3,
-        "workingSetMB": 99.8,
+        "privateWorkingSetMB": 79.8,
+        "commitMB": 79.8,
+        "workingSetMB": 98.1,
         "cpuPercent": 0
       },
       {
-        "pid": 17988,
+        "pid": 16960,
         "type": "GPU",
-        "privateWorkingSetMB": 49.9,
-        "commitMB": 68.2,
+        "privateWorkingSetMB": 68.6,
+        "commitMB": 68.6,
         "workingSetMB": 105.2,
         "cpuPercent": 0
       },
       {
-        "pid": 14796,
+        "pid": 4492,
         "type": "Utility",
-        "privateWorkingSetMB": 5.8,
-        "commitMB": 12.9,
-        "workingSetMB": 48.7,
+        "privateWorkingSetMB": 12.7,
+        "commitMB": 12.7,
+        "workingSetMB": 46.6,
         "cpuPercent": 0
       },
       {
-        "pid": 11344,
+        "pid": 4176,
         "type": "Tab",
-        "privateWorkingSetMB": 28,
-        "commitMB": 38.3,
-        "workingSetMB": 90.9,
+        "privateWorkingSetMB": 38,
+        "commitMB": 38,
+        "workingSetMB": 85.9,
         "cpuPercent": 0
       }
     ]
   },
   "tray": {
-    "privateWorkingSetMB": 90.2,
-    "commitMB": 165.5,
-    "totalSharedWorkingSetMB": 255,
+    "privateWorkingSetMB": 159.4,
+    "commitMB": 159.4,
+    "totalSharedWorkingSetMB": 250,
     "processes": [
       {
-        "pid": 16216,
+        "pid": 7128,
         "type": "Browser",
-        "privateWorkingSetMB": 34.7,
-        "commitMB": 84.9,
-        "workingSetMB": 101.1,
-        "cpuPercent": 0.09867435873195698
+        "privateWorkingSetMB": 80.2,
+        "commitMB": 80.2,
+        "workingSetMB": 99.4,
+        "cpuPercent": 0.46177787399791204
       },
       {
-        "pid": 17988,
+        "pid": 16960,
         "type": "GPU",
-        "privateWorkingSetMB": 49.6,
-        "commitMB": 67.7,
-        "workingSetMB": 105.2,
-        "cpuPercent": 0.6273739564583144
+        "privateWorkingSetMB": 66.4,
+        "commitMB": 66.4,
+        "workingSetMB": 103.9,
+        "cpuPercent": 0.5014437269908502
       },
       {
-        "pid": 14796,
+        "pid": 4492,
         "type": "Utility",
-        "privateWorkingSetMB": 5.9,
-        "commitMB": 12.9,
-        "workingSetMB": 48.7,
-        "cpuPercent": 0.29276775077817774
+        "privateWorkingSetMB": 12.8,
+        "commitMB": 12.8,
+        "workingSetMB": 46.7,
+        "cpuPercent": 0.029057935247782246
       }
     ]
   }

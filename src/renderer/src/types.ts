@@ -73,6 +73,7 @@ export type AppSettings = {
   bssidCloaking: boolean
   bssidMaskMode: 'full' | 'partial'
   silentElevation: boolean
+  shortcuts: Record<string, string>
 }
 
 export type ElevationStatus = {
@@ -89,6 +90,23 @@ export type UpdateInfo = {
   notes: string
   url: string
   downloadUrl?: string
+  assetName?: string
+  assetSize?: number
+}
+
+export type DownloadProgress = {
+  percent: number
+  transferred: number
+  total: number
+  bytesPerSecond: number
+}
+
+export interface ShortcutDefinition {
+  id: string
+  name: string
+  description: string
+  category: 'Network Actions' | 'Navigation' | 'Privacy & Streamer' | 'Window & General'
+  defaultKey: string
 }
 
 export type ToastType = 'success' | 'error' | 'info' | 'loading'

@@ -1,6 +1,6 @@
 appId: com.netmask.app
 productName: NetMask
-copyright: "Copyright © 2026 NetMask Contributors"
+copyright: "Copyright © 2026 Bello Bilal"
 directories:
   output: dist
   buildResources: resources
@@ -64,7 +64,7 @@ dmg:
 
 linux:
   category: Utility
-  maintainer: "NetMask Contributors <billighost@users.noreply.github.com>"
+  maintainer: "Bello Bilal <bb2010ng@gmail.com>"
   target:
     - target: AppImage
       arch:
