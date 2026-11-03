@@ -9,7 +9,14 @@ const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 
 assert.strictEqual(pkg.author.name, 'Bello Bilal', 'package.json author name must be Bello Bilal')
 assert.strictEqual(pkg.author.email, 'bb2010ng@gmail.com', 'package.json author email must be bb2010ng@gmail.com')
 assert.strictEqual(pkg.author.url, 'https://github.com/billighost', 'package.json author url must be billighost')
-console.log('✓ package.json author configuration verified')
+assert(pkg.dependencies['@tauri-apps/api'], 'package.json must declare @tauri-apps/api dependency')
+assert(pkg.devDependencies['@tauri-apps/cli'], 'package.json must declare @tauri-apps/cli devDependency')
+console.log('✓ package.json author and Tauri dependency configuration verified')
+
+const tauriConf = JSON.parse(fs.readFileSync(path.join(__dirname, '../src-tauri/tauri.conf.json'), 'utf8'))
+assert(tauriConf.app.trayIcon, 'tauri.conf.json must configure app.trayIcon')
+assert(tauriConf.app.trayIcon.iconPath, 'tauri.conf.json must configure app.trayIcon.iconPath')
+console.log('✓ tauri.conf.json trayIcon configuration verified')
 
 const builderYml = fs.readFileSync(path.join(__dirname, '../electron-builder.yml'), 'utf8')
 assert(builderYml.includes('maintainer: "Bello Bilal <bb2010ng@gmail.com>"'), 'electron-builder.yml must have maintainer email')

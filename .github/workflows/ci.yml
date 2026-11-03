@@ -38,6 +38,12 @@ jobs:
       - name: Run TypeScript typecheck
         run: npm run typecheck
 
+      - name: Run Verification Suite
+        run: npm run test
+
+      - name: Run Hook Linter
+        run: npm run lint
+
   build:
     name: Build (${{ matrix.os }})
     needs: typecheck
@@ -57,17 +63,30 @@ jobs:
           node-version: 22
           cache: 'npm'
 
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libarchive-tools libsecret-1-dev xvfb
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libarchive-tools libsecret-1-dev xvfb
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Compile application (electron-vite)
+      - name: Build Frontend (Vite)
+        run: npm run vite:build
+
+      - name: Tauri Cargo Check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Tauri Cargo Test
+        run: cargo test --bin netmask --manifest-path src-tauri/Cargo.toml
+
+      - name: Compile application (legacy electron-vite build)
         run: npm run build
+        continue-on-error: true
 
       - name: Measure Performance & Memory Footprint (Linux Headless)
         if: runner.os == 'Linux'

@@ -1,0 +1,23 @@
+[package]
+name = "netmask"
+version = "2.2.0"
+description = "Cross-platform local network display name manager"
+authors = ["Bello Bilal <bb2010ng@gmail.com>"]
+license = "MIT"
+edition = "2024"
+rust-version = "1.90"
+
+[lib]
+name = "app_lib"
+crate-type = ["lib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+regex = "1"
+tauri = { version = "2.12.5", features = ["tray-icon"] }
+tauri-plugin-log = "2"

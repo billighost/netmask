@@ -30,3 +30,6 @@ Thumbs.db
 .mesh/*.db-wal
 .mesh/*.db-shm
 .mesh/audit*
+src-tauri/target/
+src-tauri/target/
+
