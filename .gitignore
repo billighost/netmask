@@ -24,3 +24,9 @@ Thumbs.db
 .test-profile*/
 
 
+
+# Mesh Context Layer (track namespace pointer, ignore local SQLite databases)
+.mesh/*.db
+.mesh/*.db-wal
+.mesh/*.db-shm
+.mesh/audit*
