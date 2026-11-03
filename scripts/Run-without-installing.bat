@@ -1,7 +1,7 @@
 @echo off
 setlocal
 set ELECTRON_RUN_AS_NODE=
-cd /d "%~dp0"
+cd /d "%~dp0\.."
 
 :: Check for administrative rights
 net session >nul 2>&1
@@ -11,7 +11,7 @@ if %errorlevel% neq 0 (
 )
 
 if exist "dist\win-unpacked\NetMask.exe" (
-    start "" "%~dp0dist\win-unpacked\NetMask.exe"
+    start "" "%CD%\dist\win-unpacked\NetMask.exe"
     exit /b
 )
-node "%~dp0scripts\run.js"
+node "%CD%\scripts\run.js"

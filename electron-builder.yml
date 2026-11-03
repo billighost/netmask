@@ -1,5 +1,6 @@
 appId: com.netmask.app
 productName: NetMask
+copyright: "Copyright © 2026 NetMask Contributors"
 directories:
   output: dist
   buildResources: resources
@@ -9,13 +10,22 @@ files:
 extraResources:
   - from: resources
     to: resources
+
 win:
   target:
     - target: nsis
       arch:
         - x64
+    - target: portable
+      arch:
+        - x64
+    - target: zip
+      arch:
+        - x64
   icon: resources/netmask.ico
-  requestedExecutionLevel: requireAdministrator
+  artifactName: "${productName}-Windows-${version}-${arch}.${ext}"
+  requestedExecutionLevel: highestAvailable
+
 nsis:
   oneClick: false
   perMachine: false
@@ -25,7 +35,52 @@ nsis:
   shortcutName: NetMask
   installerIcon: resources/netmask.ico
   uninstallerIcon: resources/netmask.ico
+  artifactName: "${productName}-Setup-${version}.${ext}"
+
+mac:
+  category: public.app-category.utilities
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  icon: resources/icon.png
+  artifactName: "${productName}-macOS-${version}-${arch}.${ext}"
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+linux:
+  category: Utility
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+    - target: tar.gz
+      arch:
+        - x64
+  icon: resources/icon.png
+  artifactName: "${productName}-Linux-${version}-${arch}.${ext}"
+  synopsis: "Local Network Display Name Manager"
+  description: "Rename and disguise local WiFi network profile display names with instant live speed monitoring."
+
 publish:
   provider: github
-  private: true
-
+  owner: billighost
+  repo: netmask
+  releaseType: release

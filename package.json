@@ -1,15 +1,27 @@
 {
   "name": "netmask",
   "version": "2.0.0",
-  "description": "Local network display name manager for Windows",
+  "description": "Cross-platform local network display name manager for Windows, macOS, and Linux",
   "main": "out/main/index.js",
-  "author": "NetMask",
+  "author": "NetMask Contributors",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/billighost/netmask.git"
+  },
+  "homepage": "https://github.com/billighost/netmask#readme",
+  "bugs": {
+    "url": "https://github.com/billighost/netmask/issues"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "start": "npm run build && node scripts/run.js",
     "build": "electron-vite build",
     "dist": "npm run build && electron-builder --win",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:all": "npm run build && electron-builder -mwl",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
