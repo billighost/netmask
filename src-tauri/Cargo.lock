@@ -1873,6 +1873,7 @@ dependencies = [
 name = "netmask"
 version = "2.2.0"
 dependencies = [
+ "libc",
  "log",
  "regex",
  "serde",
