@@ -24,6 +24,9 @@ export interface NmApi {
   close(): void
   onMaximizeChange(cb: (isMax: boolean) => void): () => void
   onSpeed(cb: (sample: import('./types').SpeedSample) => void): () => void
+  checkUpdate(): Promise<import('./types').UpdateInfo | null>
+  openReleaseUrl(url?: string): Promise<void>
+  onUpdateAvailable(cb: (info: import('./types').UpdateInfo) => void): () => void
 }
 
 declare global {

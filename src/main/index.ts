@@ -11,6 +11,7 @@ import { restoreNetwork, restoreAll, readBackup, writeBackup } from './backup'
 import { getSpeedSampleAsync, stopSpeedMonitor, runSpeedTest } from './speed'
 import { isAdmin, elevate } from './admin'
 import { getSettings, setSetting } from './settings'
+import { setupAutoUpdater, openReleaseUrl, checkGitHubRelease } from './updater'
 
 // Enforce single instance so elevated and un-elevated never fight
 const gotLock = app.requestSingleInstanceLock()
@@ -149,6 +150,8 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  setupAutoUpdater(mainWindow)
 }
 
 function createTray(): void {
@@ -157,8 +160,8 @@ function createTray(): void {
     tray = new Tray(iconPath)
     tray.setToolTip('NetMask')
 
-    const rebuild = () => {
-      const conn = getCurrentConnection()
+    const rebuild = async () => {
+      const conn = await getCurrentConnection()
       const menu = Menu.buildFromTemplate([
         { label: 'NetMask 2.0', enabled: false },
         { type: 'separator' },
@@ -223,8 +226,8 @@ function registerIpc(): void {
   ipcMain.handle('nm:rename', async (_e, guid: string, newName: string, currentName?: string) => {
     const bk = readBackup()
     if (!bk[guid]) {
-      const nets = getNetworks(bk)
-      const net = nets.find(n => n.guid === guid)
+      const nets = await getNetworks(bk)
+      const net = nets.find((n: import('./platform/types').Network) => n.guid === guid)
       if (net) {
         bk[guid] = net.originalName
         writeBackup(bk)
@@ -258,6 +261,8 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('nm:run-speed-test', () => runSpeedTest())
+  ipcMain.handle('nm:check-update', () => checkGitHubRelease(mainWindow))
+  ipcMain.handle('nm:open-release-url', (_e, url?: string) => openReleaseUrl(url))
   ipcMain.on('nm:minimize', () => mainWindow?.minimize())
   ipcMain.handle('nm:maximize', () => {
     if (!mainWindow) return false

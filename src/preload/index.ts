@@ -43,6 +43,15 @@ export type SpeedTestResult = {
   mbPerSec: number
 }
 
+export type UpdateInfo = {
+  version: string
+  currentVersion: string
+  name: string
+  notes: string
+  url: string
+  downloadUrl?: string
+}
+
 export type AppSettings = {
   minimizeToTray: boolean
   launchOnStartup: boolean
@@ -89,6 +98,16 @@ const api = {
     ipcRenderer.on('nm:speed', handler)
     return () => {
       ipcRenderer.removeListener('nm:speed', handler)
+    }
+  },
+
+  checkUpdate: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('nm:check-update'),
+  openReleaseUrl: (url?: string): Promise<void> => ipcRenderer.invoke('nm:open-release-url', url),
+  onUpdateAvailable: (cb: (info: UpdateInfo) => void): (() => void) => {
+    const handler = (_: unknown, info: UpdateInfo) => cb(info)
+    ipcRenderer.on('nm:update-available', handler)
+    return () => {
+      ipcRenderer.removeListener('nm:update-available', handler)
     }
   }
 }

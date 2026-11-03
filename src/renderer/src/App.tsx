@@ -8,6 +8,7 @@ import { ActionPanel } from './components/ActionPanel/ActionPanel'
 import { ToastContainer } from './components/Toast/Toast'
 import { SettingsModal } from './components/SettingsModal/SettingsModal'
 import { ContextMenu } from './components/ContextMenu/ContextMenu'
+import { UpdateBanner } from './components/UpdateBanner/UpdateBanner'
 import styles from './App.module.css'
 
 export const App: React.FC = () => {
@@ -84,6 +85,7 @@ export const App: React.FC = () => {
     <div className={styles.app}>
       <TitleBar />
       <div className={styles.main}>
+        <UpdateBanner />
         <HeroCard />
         <AdminBanner />
         <NetworkList />

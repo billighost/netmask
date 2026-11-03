@@ -8,4 +8,5 @@ export { ToastContainer } from './Toast/Toast'
 export { SettingsModal } from './SettingsModal/SettingsModal'
 export { ContextMenu } from './ContextMenu/ContextMenu'
 export { SpeedInfoPanel } from './SpeedInfoPanel/SpeedInfoPanel'
+export { UpdateBanner } from './UpdateBanner/UpdateBanner'
 

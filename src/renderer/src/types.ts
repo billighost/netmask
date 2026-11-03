@@ -49,6 +49,15 @@ export type AppSettings = {
   showEthernet: boolean
 }
 
+export type UpdateInfo = {
+  version: string
+  currentVersion: string
+  name: string
+  notes: string
+  url: string
+  downloadUrl?: string
+}
+
 export type ToastType = 'success' | 'error' | 'info' | 'loading'
 
 export type Toast = {
