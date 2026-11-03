@@ -21,28 +21,32 @@ export const NetMaskLogoIcon = ({ size = 18, className = '' }: IconProps) => (
   >
     {/* Outer arc */}
     <path
-      d="M2.5 8.8a13.5 13.5 0 0 1 19 0"
+      d="M3 6.8a13 13 0 0 1 18 0"
       stroke="var(--accent)" strokeWidth="1.9" strokeLinecap="round"
     />
     {/* Middle arc */}
     <path
-      d="M5.5 12a9 9 0 0 1 13 0"
+      d="M6 10a8.5 8.5 0 0 1 12 0"
       stroke="var(--accent)" strokeWidth="1.9" strokeLinecap="round"
     />
     {/* Inner arc */}
     <path
-      d="M8.5 15.2a4.5 4.5 0 0 1 7 0"
+      d="M9 13.2a4.2 4.2 0 0 1 6 0"
       stroke="var(--accent)" strokeWidth="1.9" strokeLinecap="round"
     />
-    {/* Closed eye — top lid */}
+    {/* Eyelid contour */}
     <path
-      d="M9.6 18.4 Q12 16.6 14.4 18.4"
-      stroke="var(--text-primary)" strokeWidth="1.4" strokeLinecap="round" fill="none"
+      d="M8.2 16.5 Q12 14.5 15.8 16.5"
+      stroke="var(--accent-light, #38bdf8)" strokeWidth="1.3" strokeLinecap="round" fill="none"
     />
-    {/* Closed eye — bottom lid (flatter) */}
     <path
-      d="M9.6 18.4 Q12 19.8 14.4 18.4"
-      stroke="var(--text-primary)" strokeWidth="1.0" strokeLinecap="round" fill="none" opacity="0.5"
+      d="M8.2 16.5 Q12 18.5 15.8 16.5"
+      stroke="var(--accent-light, #38bdf8)" strokeWidth="1.3" strokeLinecap="round" fill="none"
+    />
+    {/* 5 Downward-pointing eyelashes matching the new logo */}
+    <path
+      d="M8.8 17.2 L7.5 19.8M10.4 17.8 L9.8 21M12 18 L12 21.8M13.6 17.8 L14.2 21M15.2 17.2 L16.5 19.8"
+      stroke="var(--accent-light, #38bdf8)" strokeWidth="1.2" strokeLinecap="round"
     />
   </svg>
 )
@@ -370,4 +374,21 @@ export const DownloadIcon = ({ size = 16, color = 'currentColor', className = ''
     <line x1="12" y1="15" x2="12" y2="3" />
   </svg>
 )
+
+export const EyeIcon = ({ size = 15, color = 'currentColor', className = '' }: IconProps) => (
+  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+)
+
+export const EyeOffIcon = ({ size = 15, color = 'currentColor', className = '' }: IconProps) => (
+  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
+  </svg>
+)
+
 

@@ -9,14 +9,11 @@ import { ToastContainer } from './components/Toast/Toast'
 import { SettingsModal } from './components/SettingsModal/SettingsModal'
 import { ContextMenu } from './components/ContextMenu/ContextMenu'
 import { UpdateBanner } from './components/UpdateBanner/UpdateBanner'
+import { NetworkDetailsModal } from './components/NetworkDetailsModal/NetworkDetailsModal'
 import styles from './App.module.css'
 
 export const App: React.FC = () => {
-  const {
-    setNetworks, setConnection, setAdminOk, setSpeed, setSettings,
-    settings, addToast
-  } = useStore()
-
+  const autoRefreshInterval = useStore(s => s.settings.autoRefreshInterval)
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = async () => {
@@ -25,8 +22,8 @@ export const App: React.FC = () => {
         window.nm.getNetworks(),
         window.nm.getConnection()
       ])
-      setNetworks(nets)
-      setConnection(conn)
+      useStore.getState().setNetworks(nets)
+      useStore.getState().setConnection(conn)
       // Auto-select active network (or first available)
       const store = useStore.getState()
       const guidExists = store.selectedGuid && nets.some(n => n.guid === store.selectedGuid)
@@ -42,35 +39,49 @@ export const App: React.FC = () => {
     // Initial load
     ;(async () => {
       try {
-        const [admin, s] = await Promise.all([
+        const [admin, s, streamer, elev] = await Promise.all([
           window.nm.isAdmin(),
-          window.nm.getSettings()
+          window.nm.getSettings(),
+          window.nm.getStreamerStatus(),
+          window.nm.getElevationStatus()
         ])
-        setAdminOk(admin)
-        setSettings(s)
+        const state = useStore.getState()
+        state.setAdminOk(admin)
+        state.setSettings(s)
+        state.setStreamerStatus(streamer)
+        state.setElevationStatus(elev)
         document.documentElement.setAttribute('data-theme', s.theme)
       } catch {}
       await refresh()
     })()
 
-    // Speed subscription
-    const unsub = window.nm.onSpeed(sample => setSpeed(sample))
+    // Speed subscription: updates store directly without re-rendering App component tree
+    const unsubSpeed = window.nm.onSpeed(sample => {
+      useStore.getState().setSpeed(sample)
+    })
+
+    // Streamer status subscription
+    const unsubStreamer = window.nm.onStreamerStatus(status => {
+      useStore.getState().setStreamerStatus(status)
+      refresh()
+    })
 
     return () => {
-      unsub()
+      unsubSpeed()
+      unsubStreamer()
     }
   }, [])
 
   // Auto-refresh when interval setting changes
   useEffect(() => {
     if (autoRefreshRef.current) clearInterval(autoRefreshRef.current)
-    if (settings.autoRefreshInterval > 0) {
-      autoRefreshRef.current = setInterval(refresh, settings.autoRefreshInterval * 1000)
+    if (autoRefreshInterval > 0) {
+      autoRefreshRef.current = setInterval(refresh, autoRefreshInterval * 1000)
     }
     return () => {
       if (autoRefreshRef.current) clearInterval(autoRefreshRef.current)
     }
-  }, [settings.autoRefreshInterval])
+  }, [autoRefreshInterval])
 
   // Keyboard shortcut Ctrl+R = refresh, Esc = close context menu
   useEffect(() => {
@@ -94,6 +105,7 @@ export const App: React.FC = () => {
       <ToastContainer />
       <SettingsModal />
       <ContextMenu />
+      <NetworkDetailsModal />
     </div>
   )
 }
