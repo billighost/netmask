@@ -101,6 +101,18 @@ async function main() {
         body: release.body, assets: release.assets.map(a => ({ name: a.name, size: a.size, state: a.state, url: a.browser_download_url })) }
       break
     }
+    case 'logs': {
+      const response = await fetch(`https://api.github.com${repository}/actions/jobs/${arg}/logs`, {
+        headers: { Authorization: `Bearer ${getCredential()}`, 'User-Agent': 'NetMask-release-helper' },
+        redirect: 'manual', signal: AbortSignal.timeout(30000)
+      })
+      const location = response.headers.get('location')
+      if (!location || !location.startsWith('https://')) throw new Error('GitHub did not provide a secure job log URL.')
+      const logResponse = await fetch(location, { signal: AbortSignal.timeout(30000) })
+      if (!logResponse.ok) throw new Error(`Could not fetch job log: ${logResponse.status}`)
+      result = (await logResponse.text()).split(/\r?\n/).filter(line => /error|missing|invalid|failed|package-lock|warning|could not|not found|not supported/i.test(line)).slice(-120)
+      break
+    }
     case 'release-edit': {
       const release = await api('GET', `/releases/tags/${encodeURIComponent(arg)}`)
       const updated = await api('PATCH', `/releases/${release.id}`, { body: fs.readFileSync(extra, 'utf8'), name: `NetMask ${arg}` })
@@ -108,7 +120,7 @@ async function main() {
       break
     }
     default:
-      throw new Error('Usage: github-release.cjs prs | pr-create <json-file> | pr <number> | checks <sha> | pr-merge <number> <sha> | runs [sha] | run <id> | release <tag> | release-edit <tag> <notes-file>')
+      throw new Error('Usage: github-release.cjs prs | pr-create <json-file> | pr <number> | checks <sha> | pr-merge <number> <sha> | runs [sha] | run <id> | logs <job-id> | release <tag> | release-edit <tag> <notes-file>')
   }
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
 }
