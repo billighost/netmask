@@ -83,6 +83,62 @@ export type ElevationStatus = {
   tier: 'task' | 'broker' | 'jit'
 }
 
+export type DeviceIdentity = {
+  hostname: string
+  macAddress: string
+  interfaceName: string
+  interfaceGuid: string
+  netbiosSilenced: boolean
+  macRandomization: 'disabled' | 'enabled' | 'daily' | 'unknown'
+  activeProfile: string | null
+}
+
+export type DnsResolverResult = {
+  id: string
+  name: string
+  provider: string
+  primary: string
+  secondary?: string
+  description: string
+  isDhcp?: boolean
+  latencyMs: number | null
+  isCurrent: boolean
+  isFastest?: boolean
+}
+
+export type RoamingSettings = {
+  supported: boolean
+  adapterName: string
+  preferredBand: string
+  validPreferredBands: string[]
+  roamingAggressiveness: string
+  validRoamingAggressiveness: string[]
+}
+
+export type PingTelemetry = {
+  gatewayIp: string | null
+  gatewayMs: number | null
+  internetMs: number | null
+  jitterMs: number | null
+  timestamp: number
+}
+
+export type WifiQrData = {
+  ssid: string
+  auth: string
+  password: string
+  qrString: string
+  svg: string
+  isWep: boolean
+  isOpen: boolean
+}
+
+export type CaptivePortalStatus = {
+  isCaptive: boolean
+  portalUrl: string | null
+  checkedAt: number
+}
+
 export type UpdateInfo = {
   version: string
   currentVersion: string

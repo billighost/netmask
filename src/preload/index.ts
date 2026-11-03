@@ -103,12 +103,106 @@ export type ElevationStatus = {
   tier: 'task' | 'broker' | 'jit'
 }
 
+export type DeviceIdentity = {
+  hostname: string
+  macAddress: string
+  interfaceName: string
+  interfaceGuid: string
+  netbiosSilenced: boolean
+  macRandomization: 'disabled' | 'enabled' | 'daily' | 'unknown'
+  activeProfile: string | null
+}
+
+export type DnsResolverResult = {
+  id: string
+  name: string
+  provider: string
+  primary: string
+  secondary?: string
+  description: string
+  isDhcp?: boolean
+  latencyMs: number | null
+  isCurrent: boolean
+  isFastest?: boolean
+}
+
+export type RoamingSettings = {
+  supported: boolean
+  adapterName: string
+  preferredBand: string
+  validPreferredBands: string[]
+  roamingAggressiveness: string
+  validRoamingAggressiveness: string[]
+}
+
+export type PingTelemetry = {
+  gatewayIp: string | null
+  gatewayMs: number | null
+  internetMs: number | null
+  jitterMs: number | null
+  timestamp: number
+}
+
+export type WifiQrData = {
+  ssid: string
+  auth: string
+  password: string
+  qrString: string
+  svg: string
+  isWep: boolean
+  isOpen: boolean
+}
+
+export type CaptivePortalStatus = {
+  isCaptive: boolean
+  portalUrl: string | null
+  checkedAt: number
+}
+
 const api = {
   isAdmin: (): Promise<boolean> => ipcRenderer.invoke('nm:is-admin'),
   elevate: (): Promise<void> => ipcRenderer.invoke('nm:elevate'),
   getElevationStatus: (): Promise<ElevationStatus> => ipcRenderer.invoke('nm:get-elevation-status'),
   setupSilentElevation: (): Promise<{ success: boolean; message?: string }> => ipcRenderer.invoke('nm:setup-silent-elevation'),
   removeSilentElevation: (): Promise<{ success: boolean; message?: string }> => ipcRenderer.invoke('nm:remove-silent-elevation'),
+
+  // Hotspot Device Identity & Privacy Cloak Suite
+  getDeviceIdentity: (): Promise<DeviceIdentity> => ipcRenderer.invoke('nm:get-device-identity'),
+  setMacRandomization: (profileName: string, mode: 'yes' | 'no' | 'daily'): Promise<boolean> => ipcRenderer.invoke('nm:set-mac-randomization', profileName, mode),
+  setNetbiosSilencer: (enableSilence: boolean): Promise<boolean> => ipcRenderer.invoke('nm:set-netbios-silencer', enableSilence),
+
+  // 1-Click Fastest DNS Benchmarker & Switcher
+  benchmarkDns: (): Promise<DnsResolverResult[]> => ipcRenderer.invoke('nm:benchmark-dns'),
+  getCurrentDns: (interfaceName?: string): Promise<{ primary: string; secondary?: string; isDhcp: boolean }> => ipcRenderer.invoke('nm:get-current-dns', interfaceName),
+  applyDns: (resolverId: string): Promise<boolean> => ipcRenderer.invoke('nm:apply-dns', resolverId),
+
+  // Wi-Fi Roaming & Band Steering Tuner
+  getRoamingSettings: (): Promise<RoamingSettings> => ipcRenderer.invoke('nm:get-roaming-settings'),
+  setRoamingSettings: (params: { preferredBand?: string; roamingAggressiveness?: string }): Promise<boolean> => ipcRenderer.invoke('nm:set-roaming-settings', params),
+
+  // Real-Time Gateway & Internet Latency / Jitter Monitor
+  getPingTelemetry: (): Promise<PingTelemetry> => ipcRenderer.invoke('nm:get-ping-telemetry'),
+  onPingTelemetry: (cb: (telemetry: PingTelemetry) => void): (() => void) => {
+    const handler = (_: unknown, t: PingTelemetry) => cb(t)
+    ipcRenderer.on('nm:ping-telemetry', handler)
+    return () => {
+      ipcRenderer.removeListener('nm:ping-telemetry', handler)
+    }
+  },
+
+  // Instant Wi-Fi Share via Encrypted QR Code
+  getWifiQr: (profileName: string): Promise<WifiQrData> => ipcRenderer.invoke('nm:get-wifi-qr', profileName),
+
+  // Captive Portal Detection
+  checkCaptivePortal: (): Promise<CaptivePortalStatus> => ipcRenderer.invoke('nm:check-captive-portal'),
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke('nm:open-external', url),
+  onCaptivePortalStatus: (cb: (status: CaptivePortalStatus) => void): (() => void) => {
+    const handler = (_: unknown, s: CaptivePortalStatus) => cb(s)
+    ipcRenderer.on('nm:captive-portal-status', handler)
+    return () => {
+      ipcRenderer.removeListener('nm:captive-portal-status', handler)
+    }
+  },
 
   getNetworks: (): Promise<Network[]> => ipcRenderer.invoke('nm:get-networks'),
   getConnection: (): Promise<Connection | null> => ipcRenderer.invoke('nm:get-connection'),

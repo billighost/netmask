@@ -11,6 +11,11 @@ import { KeyboardControlsModal, normalizeKeyCombination } from './components/Key
 import { ContextMenu } from './components/ContextMenu/ContextMenu'
 import { UpdateBanner } from './components/UpdateBanner/UpdateBanner'
 import { NetworkDetailsModal } from './components/NetworkDetailsModal/NetworkDetailsModal'
+import { CaptivePortalBanner } from './components/CaptivePortalBanner/CaptivePortalBanner'
+import { WifiShareModal } from './components/WifiShareModal/WifiShareModal'
+import { DnsBenchmarkModal } from './components/DnsBenchmarkModal/DnsBenchmarkModal'
+import { DeviceIdentityModal } from './components/DeviceIdentityModal/DeviceIdentityModal'
+import { RoamingTunerModal } from './components/RoamingTunerModal/RoamingTunerModal'
 import styles from './App.module.css'
 
 export const App: React.FC = () => {
@@ -52,13 +57,30 @@ export const App: React.FC = () => {
         state.setStreamerStatus(streamer)
         state.setElevationStatus(elev)
         document.documentElement.setAttribute('data-theme', s.theme)
+
+        // Initial captive portal probe
+        window.nm.checkCaptivePortal().then(status => {
+          if (status.isCaptive) {
+            useStore.getState().setCaptivePortal(status)
+          }
+        }).catch(() => {})
       } catch {}
       await refresh()
     })()
 
-    // Speed subscription: updates store directly without re-rendering App component tree
+    // Speed subscription
     const unsubSpeed = window.nm.onSpeed(sample => {
       useStore.getState().setSpeed(sample)
+    })
+
+    // Ping / Jitter telemetry subscription
+    const unsubPing = window.nm.onPingTelemetry(telemetry => {
+      useStore.getState().setPingTelemetry(telemetry)
+    })
+
+    // Captive portal subscription
+    const unsubCaptive = window.nm.onCaptivePortalStatus(status => {
+      useStore.getState().setCaptivePortal(status)
     })
 
     // Streamer status subscription
@@ -69,6 +91,8 @@ export const App: React.FC = () => {
 
     return () => {
       unsubSpeed()
+      unsubPing()
+      unsubCaptive()
       unsubStreamer()
     }
   }, [])
@@ -105,7 +129,14 @@ export const App: React.FC = () => {
       if (!matchedAction) return
 
       // If any modal is open, only allow closeModals or toggling the modal itself
-      const isAnyModalOpen = state.shortcutsModalOpen || state.settingsOpen || Boolean(state.detailsModalGuid)
+      const isAnyModalOpen =
+        state.shortcutsModalOpen ||
+        state.settingsOpen ||
+        Boolean(state.detailsModalGuid) ||
+        Boolean(state.wifiShareModalProfile) ||
+        state.dnsModalOpen ||
+        state.privacyCloakModalOpen ||
+        state.roamingModalOpen
       if (isAnyModalOpen) {
         if (matchedAction !== 'closeModals' && matchedAction !== 'openSettings' && matchedAction !== 'openShortcuts') {
           return
@@ -261,6 +292,10 @@ export const App: React.FC = () => {
           else if (state.shortcutsModalOpen) state.setShortcutsModalOpen(false)
           else if (state.settingsOpen) state.setSettingsOpen(false)
           else if (state.detailsModalGuid) state.setDetailsModalGuid(null)
+          else if (state.wifiShareModalProfile) state.setWifiShareModalProfile(null)
+          else if (state.dnsModalOpen) state.setDnsModalOpen(false)
+          else if (state.privacyCloakModalOpen) state.setPrivacyCloakModalOpen(false)
+          else if (state.roamingModalOpen) state.setRoamingModalOpen(false)
           break
         }
       }
@@ -274,6 +309,7 @@ export const App: React.FC = () => {
     <div className={styles.app}>
       <TitleBar />
       <div className={styles.main}>
+        <CaptivePortalBanner />
         <UpdateBanner />
         <HeroCard />
         <AdminBanner />
@@ -285,6 +321,10 @@ export const App: React.FC = () => {
       <KeyboardControlsModal />
       <ContextMenu />
       <NetworkDetailsModal />
+      <WifiShareModal />
+      <DnsBenchmarkModal />
+      <DeviceIdentityModal />
+      <RoamingTunerModal />
     </div>
   )
 }

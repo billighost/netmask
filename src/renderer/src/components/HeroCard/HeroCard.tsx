@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { useStore, getSpeedRingBuffer } from '../../store'
-import { WifiIcon, InfoIcon, ArrowDownIcon, ArrowUpIcon, CopyIcon, EyeIcon, EyeOffIcon, ShieldIcon } from '../../icons'
+import { WifiIcon, InfoIcon, ArrowDownIcon, ArrowUpIcon, CopyIcon, EyeIcon, EyeOffIcon, ShieldIcon, DnsIcon, RadioIcon, QrCodeIcon, PulseIcon } from '../../icons'
 import { SpeedInfoPanel } from '../SpeedInfoPanel/SpeedInfoPanel'
 import styles from './HeroCard.module.css'
 
@@ -145,6 +145,67 @@ const SpeedDisplay: React.FC<{ onToggleInfo: () => void; infoOpen: boolean }> = 
   )
 }
 
+const PingTelemetryDisplay: React.FC = () => {
+  const telemetry = useStore(s => s.pingTelemetry)
+
+  const gwMs = telemetry?.gatewayMs
+  const inetMs = telemetry?.internetMs
+  const jitter = telemetry?.jitterMs
+
+  return (
+    <div className={styles.telemetryRow}>
+      <div className={styles.telemetryItem} title="Local Gateway Hop Latency (Router ping)">
+        <span className={styles.telemetryLabel}>Router</span>
+        <span className={`${styles.telemetryValue} ${
+          gwMs === null || gwMs === undefined
+            ? styles.telemetryMuted
+            : gwMs <= 5
+            ? styles.telemetryGreen
+            : gwMs <= 20
+            ? styles.telemetryAmber
+            : styles.telemetryRed
+        }`}>
+          {gwMs !== null && gwMs !== undefined ? `${gwMs}ms` : '—'}
+        </span>
+      </div>
+
+      <div className={styles.telemetryDivider} />
+
+      <div className={styles.telemetryItem} title="Global Internet Edge Latency (1.1.1.1 RTT)">
+        <span className={styles.telemetryLabel}>Internet</span>
+        <span className={`${styles.telemetryValue} ${
+          inetMs === null || inetMs === undefined
+            ? styles.telemetryMuted
+            : inetMs <= 50
+            ? styles.telemetryGreen
+            : inetMs <= 120
+            ? styles.telemetryAmber
+            : styles.telemetryRed
+        }`}>
+          {inetMs !== null && inetMs !== undefined ? `${inetMs}ms` : '—'}
+        </span>
+      </div>
+
+      <div className={styles.telemetryDivider} />
+
+      <div className={styles.telemetryItem} title="Packet Delay Variation / Jitter">
+        <span className={styles.telemetryLabel}>Jitter</span>
+        <span className={`${styles.telemetryValue} ${
+          jitter === null || jitter === undefined
+            ? styles.telemetryMuted
+            : jitter <= 3
+            ? styles.telemetryGreen
+            : jitter <= 10
+            ? styles.telemetryAmber
+            : styles.telemetryRed
+        }`}>
+          {jitter !== null && jitter !== undefined ? `±${jitter}ms` : '—'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export const HeroCard: React.FC = () => {
   const connection = useStore(s => s.connection)
   const streamerStatus = useStore(s => s.streamerStatus)
@@ -152,6 +213,10 @@ export const HeroCard: React.FC = () => {
   const bssidPeek = useStore(s => s.bssidPeek)
   const peekBssid = useStore(s => s.peekBssid)
   const setDetailsModalGuid = useStore(s => s.setDetailsModalGuid)
+  const setPrivacyCloakModalOpen = useStore(s => s.setPrivacyCloakModalOpen)
+  const setDnsModalOpen = useStore(s => s.setDnsModalOpen)
+  const setRoamingModalOpen = useStore(s => s.setRoamingModalOpen)
+  const setWifiShareModalProfile = useStore(s => s.setWifiShareModalProfile)
   const addToast = useStore(s => s.addToast)
 
   const [infoOpen, setInfoOpen] = useState(false)
@@ -323,16 +388,62 @@ export const HeroCard: React.FC = () => {
         </div>
       )}
 
+      {/* Quick Power Tools Action Row */}
+      <div className={styles.quickToolsRow}>
+        <button
+          type="button"
+          className={styles.quickToolBtn}
+          onClick={() => setPrivacyCloakModalOpen(true)}
+          title="Hotspot Device Identity & Privacy Cloak Suite"
+        >
+          <ShieldIcon size={12} color="#c084fc" />
+          <span>Cloak</span>
+        </button>
+
+        <button
+          type="button"
+          className={styles.quickToolBtn}
+          onClick={() => setDnsModalOpen(true)}
+          title="1-Click Fastest DNS Benchmarker & Switcher"
+        >
+          <DnsIcon size={12} color="var(--accent)" />
+          <span>Fast DNS</span>
+        </button>
+
+        <button
+          type="button"
+          className={styles.quickToolBtn}
+          onClick={() => setRoamingModalOpen(true)}
+          title="Wi-Fi Roaming & Band Steering Tuner"
+        >
+          <RadioIcon size={12} color="#38bdf8" />
+          <span>Tuner</span>
+        </button>
+
+        {connection && (
+          <button
+            type="button"
+            className={styles.quickToolBtn}
+            onClick={() => setWifiShareModalProfile(connection.profile || connection.ssid || connection.name)}
+            title="Instant Wi-Fi Share via Encrypted QR Code"
+          >
+            <QrCodeIcon size={12} color="#34d399" />
+            <span>Share</span>
+          </button>
+        )}
+      </div>
+
       {/* Speed panel */}
       <div className={styles.speedPanel}>
         <div className={styles.speedHeader}>
-          <span className={styles.speedSectionTitle}>Live transfer</span>
+          <span className={styles.speedSectionTitle}>Live telemetry</span>
           {connection?.rxRateMbps && (
             <span className={styles.linkSub}>Wi-Fi Link: {connection.rxRateMbps.toFixed(0)} Mbps</span>
           )}
         </div>
 
         <SpeedDisplay onToggleInfo={() => setInfoOpen(v => !v)} infoOpen={infoOpen} />
+        <PingTelemetryDisplay />
         <Sparkline />
       </div>
 

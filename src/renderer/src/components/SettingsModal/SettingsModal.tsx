@@ -3,7 +3,7 @@ import { useStore } from '../../store'
 import {
   SunIcon, MoonIcon, CloseIcon, RestoreIcon, LockIcon, ShieldIcon, BoltIcon,
   KeyboardIcon, GithubIcon, MailIcon, ExternalLinkIcon, CheckmarkCircleIcon,
-  DownloadIcon, SparkleIcon, RefreshIcon, WifiIcon
+  DownloadIcon, SparkleIcon, RefreshIcon, WifiIcon, DnsIcon, RadioIcon
 } from '../../icons'
 import type { UpdateInfo, DownloadProgress } from '../../types'
 import styles from './SettingsModal.module.css'
@@ -30,7 +30,8 @@ export const SettingsModal: React.FC = () => {
     settingsOpen, setSettingsOpen, settings, updateSetting,
     networks, addToast, streamerStatus, elevationStatus, setElevationStatus,
     setShortcutsModalOpen, downloadProgress, setDownloadProgress,
-    downloadedVersion, setDownloadedVersion
+    downloadedVersion, setDownloadedVersion,
+    setPrivacyCloakModalOpen, setDnsModalOpen, setRoamingModalOpen
   } = useStore()
 
   const [elevating, setElevating] = useState(false)
@@ -262,13 +263,75 @@ export const SettingsModal: React.FC = () => {
             </div>
           </div>
 
+          {/* Advanced Network & Identity Tools */}
+          <div className={styles.section}>
+            <div className={styles.sectionLabel}>Advanced Network & Privacy Tools</div>
+
+            <div className={styles.actionCard} style={{ marginBottom: '8px' }}>
+              <div className={styles.actionCardHeader}>
+                <div>
+                  <div className={styles.toggleLabel}>Hotspot Device Identity & Privacy Cloak</div>
+                  <div className={styles.toggleSub}>
+                    Control hardware MAC address randomization and silence NetBIOS UDP 137 broadcasts
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={`${styles.elevBtn} ${styles.elevBtnPrimary}`}
+                onClick={() => setPrivacyCloakModalOpen(true)}
+              >
+                <ShieldIcon size={14} />
+                <span>Open Privacy Cloak Suite</span>
+              </button>
+            </div>
+
+            <div className={styles.actionCard} style={{ marginBottom: '8px' }}>
+              <div className={styles.actionCardHeader}>
+                <div>
+                  <div className={styles.toggleLabel}>Fastest DNS Benchmarker & Switcher</div>
+                  <div className={styles.toggleSub}>
+                    Benchmark live latency to Cloudflare, Google, Quad9, and AdGuard, then apply in 1 click
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={styles.elevBtn}
+                onClick={() => setDnsModalOpen(true)}
+              >
+                <DnsIcon size={14} />
+                <span>Benchmark DNS Resolvers</span>
+              </button>
+            </div>
+
+            <div className={styles.actionCard}>
+              <div className={styles.actionCardHeader}>
+                <div>
+                  <div className={styles.toggleLabel}>Wi-Fi Roaming & Band Steering Tuner</div>
+                  <div className={styles.toggleSub}>
+                    Eliminate in-game ping spikes by tuning Preferred Band and Roaming Aggressiveness
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={styles.elevBtn}
+                onClick={() => setRoamingModalOpen(true)}
+              >
+                <RadioIcon size={14} />
+                <span>Tune Roaming & Band Steering</span>
+              </button>
+            </div>
+          </div>
+
           {/* Software Updates */}
           <div className={styles.section}>
             <div className={styles.sectionLabel}>Updates & Releases</div>
             <div className={styles.updateStatusCard}>
               <div className={styles.updateRow}>
                 <div>
-                  <div className={styles.updateVersion}>NetMask v2.1.1</div>
+                  <div className={styles.updateVersion}>NetMask v2.1.2</div>
                   <div className={styles.updateSub}>
                     {downloadedVersion
                       ? `Version v${downloadedVersion} is downloaded and ready to install!`
@@ -656,7 +719,7 @@ export const SettingsModal: React.FC = () => {
           <div className={styles.section}>
             <div className={styles.sectionLabel}>About</div>
             <div className={styles.about}>
-              <div className={styles.aboutName}>NetMask <span>v2.1.1</span></div>
+              <div className={styles.aboutName}>NetMask <span>v2.1.2</span></div>
               <div className={styles.aboutSub}>Cross-platform network identity & RF diagnostics utility</div>
             </div>
           </div>

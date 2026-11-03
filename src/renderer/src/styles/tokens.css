@@ -7,11 +7,13 @@
   --bg-surface-2: #161C28;
   --bg-surface-3: #1C2333;
   --bg-surface-hover: #19202E;
+  --surface-card: #111620;
 
   /* Borders */
   --border: #222B3A;
   --border-bright: #2E3D52;
   --border-focus: rgba(79, 142, 247, 0.6);
+  --border-color: #222B3A;
 
   /* Text */
   --text-primary: #E8ECF4;
@@ -83,10 +85,12 @@
   --bg-surface-2: #F0F3FA;
   --bg-surface-3: #E4E9F5;
   --bg-surface-hover: #F5F7FC;
+  --surface-card: #FFFFFF;
 
   --border: #D4DAE8;
   --border-bright: #B8C2D8;
   --border-focus: rgba(43, 111, 222, 0.55);
+  --border-color: #D4DAE8;
 
   --text-primary: #0C0F14;
   --text-secondary: #5A6478;

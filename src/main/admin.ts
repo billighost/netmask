@@ -228,3 +228,50 @@ export function triggerSilentElevation(): Promise<boolean> {
     })
   })
 }
+
+/**
+ * Runs a PowerShell script or shell command with elevated administrative privileges.
+ * If NetMask is already running as Administrator, executes directly.
+ * Otherwise, dispatches via RunAs or scheduled task.
+ */
+export function runElevatedCommand(script: string, timeout = 25000): Promise<{ success: boolean; output: string; error?: string }> {
+  return new Promise((resolve) => {
+    if (process.platform === 'win32') {
+      if (isAdmin()) {
+        execFile(
+          'powershell.exe',
+          ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+          { windowsHide: true, timeout },
+          (err, stdout, stderr) => {
+            if (err) {
+              resolve({ success: false, output: stdout || '', error: stderr || err.message })
+            } else {
+              resolve({ success: true, output: stdout || '' })
+            }
+          }
+        )
+      } else {
+        const b64 = Buffer.from(script, 'utf16le').toString('base64')
+        const elevatedCmd = `$p = Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -EncodedCommand ${b64}' -Verb RunAs -Wait -WindowStyle Hidden -PassThru; exit $p.ExitCode`
+        const outerB64 = Buffer.from(elevatedCmd, 'utf16le').toString('base64')
+        exec(`powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${outerB64}`, { timeout }, (err, stdout, stderr) => {
+          if (err) {
+            resolve({ success: false, output: stdout || '', error: stderr || err.message })
+          } else {
+            resolve({ success: true, output: stdout || '' })
+          }
+        })
+      }
+    } else if (process.platform === 'darwin') {
+      const escaped = script.replace(/"/g, '\\"')
+      exec(`osascript -e 'do shell script "${escaped}" with administrator privileges'`, { timeout }, (err, stdout, stderr) => {
+        resolve({ success: !err, output: stdout || '', error: stderr || (err ? err.message : undefined) })
+      })
+    } else {
+      exec(`pkexec bash -c "${script.replace(/"/g, '\\"')}"`, { timeout }, (err, stdout, stderr) => {
+        resolve({ success: !err, output: stdout || '', error: stderr || (err ? err.message : undefined) })
+      })
+    }
+  })
+}
+

@@ -1,6 +1,6 @@
 delete process.env.ELECTRON_RUN_AS_NODE
 
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen } from 'electron'
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, shell } from 'electron'
 import { join } from 'path'
 import { existsSync, writeFileSync } from 'fs'
 import { execFile } from 'child_process'
@@ -23,6 +23,12 @@ import {
   startStreamerMonitor, stopStreamerMonitor, getStreamerStatus,
   toggleStreamerCloak, checkStreamerNow
 } from './streamer'
+import { getDeviceIdentity, setMacRandomization, setNetbiosSilencer } from './privacy'
+import { benchmarkDns, getCurrentDns, applyDns } from './dns'
+import { getRoamingSettings, setRoamingSettings } from './roaming'
+import { getPingTelemetry } from './ping-monitor'
+import { getWifiQrData } from './wifi-qr'
+import { checkCaptivePortal } from './captive-portal'
 
 // --- Ultra-Low RAM & Performance Optimization: Chromium / V8 Flags ---
 // Enforce strict memory budget and prune overhead to target <35-45MB active and 18-25MB in tray
@@ -414,7 +420,37 @@ function registerIpc(): void {
   ipcMain.handle('nm:get-elevation-status', () => getElevationStatus())
   ipcMain.handle('nm:setup-silent-elevation', () => setupTaskElevation())
   ipcMain.handle('nm:remove-silent-elevation', () => removeTaskElevation())
+
+  // Hotspot Device Identity & Privacy Cloak Suite
+  ipcMain.handle('nm:get-device-identity', () => getDeviceIdentity())
+  ipcMain.handle('nm:set-mac-randomization', (_e, profileName: string, mode: 'yes' | 'no' | 'daily') => setMacRandomization(profileName, mode))
+  ipcMain.handle('nm:set-netbios-silencer', (_e, enableSilence: boolean) => setNetbiosSilencer(enableSilence))
+
+  // 1-Click Fastest DNS Benchmarker & Switcher
+  ipcMain.handle('nm:benchmark-dns', () => benchmarkDns())
+  ipcMain.handle('nm:get-current-dns', (_e, interfaceName?: string) => getCurrentDns(interfaceName))
+  ipcMain.handle('nm:apply-dns', (_e, resolverId: string) => applyDns(resolverId))
+
+  // Wi-Fi Roaming & Band Steering Tuner
+  ipcMain.handle('nm:get-roaming-settings', () => getRoamingSettings())
+  ipcMain.handle('nm:set-roaming-settings', (_e, params: { preferredBand?: string; roamingAggressiveness?: string }) => setRoamingSettings(params))
+
+  // Real-Time Gateway & Internet Latency / Jitter Monitor
+  ipcMain.handle('nm:get-ping-telemetry', () => getPingTelemetry())
+
+  // Instant Wi-Fi Share via Encrypted QR Code
+  ipcMain.handle('nm:get-wifi-qr', (_e, profileName: string) => getWifiQrData(profileName))
+
+  // Captive Portal Detection
+  ipcMain.handle('nm:check-captive-portal', () => checkCaptivePortal())
+  ipcMain.handle('nm:open-external', (_e, url: string) => {
+    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+      shell.openExternal(url)
+    }
+  })
 }
+
+let pingCycle = 0
 
 function startSpeed(): void {
   if (speedInterval) return
@@ -426,6 +462,15 @@ function startSpeed(): void {
     const sample = await getSpeedSampleAsync()
     if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized()) {
       mainWindow.webContents.send('nm:speed', sample)
+    }
+
+    pingCycle++
+    if (pingCycle % 2 === 0) {
+      getPingTelemetry().then((telemetry) => {
+        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized()) {
+          mainWindow.webContents.send('nm:ping-telemetry', telemetry)
+        }
+      }).catch(() => {})
     }
   }, 1000)
 }
