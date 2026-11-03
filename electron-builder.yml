@@ -64,6 +64,7 @@ dmg:
 
 linux:
   category: Utility
+  maintainer: "NetMask Contributors <billighost@users.noreply.github.com>"
   target:
     - target: AppImage
       arch:
