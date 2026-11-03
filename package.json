@@ -4,6 +4,7 @@
   "description": "Local network display name manager for Windows",
   "main": "out/main/index.js",
   "author": "NetMask",
+  "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",
     "start": "npm run build && node scripts/run.js",
