@@ -41,6 +41,16 @@ export const SettingsModal: React.FC = () => {
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updateResult, setUpdateResult] = useState<UpdateInfo | 'up-to-date' | 'error' | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [appVersion, setAppVersion] = useState('2.1.2')
+
+  useEffect(() => {
+    window.nm.getVersion?.().then(setAppVersion).catch(() => {})
+    window.nm.getUpdateStatus?.().then((status) => {
+      if (!status) return
+      if (status.downloadedVersion) setDownloadedVersion(status.downloadedVersion)
+      if (status.progress) setDownloadProgress(status.progress)
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (settingsOpen) {
@@ -189,15 +199,24 @@ export const SettingsModal: React.FC = () => {
     try {
       const res = await window.nm.downloadUpdate(info.downloadUrl)
       if (res.success) {
-        setDownloadedVersion(info.version)
-        addToast(`NetMask v${info.version} downloaded!`, 'success')
+        if (res.alreadyDownloaded || (res.filePath && !res.inProgress)) {
+          setDownloadedVersion(info.version)
+          addToast(`NetMask v${info.version} downloaded and ready to install!`, 'success')
+        } else if (res.inProgress) {
+          addToast(`Downloading NetMask v${info.version}...`, 'info')
+        } else {
+          setDownloadedVersion(info.version)
+          addToast(`NetMask v${info.version} downloaded!`, 'success')
+        }
       } else {
         addToast(res.error || 'Failed to download update', 'error')
       }
     } catch (err: any) {
       addToast(err?.message || 'Download error', 'error')
     } finally {
-      setDownloading(false)
+      if (!downloadProgress) {
+        setDownloading(false)
+      }
     }
   }
 
@@ -331,7 +350,7 @@ export const SettingsModal: React.FC = () => {
             <div className={styles.updateStatusCard}>
               <div className={styles.updateRow}>
                 <div>
-                  <div className={styles.updateVersion}>NetMask v2.1.2</div>
+                  <div className={styles.updateVersion}>NetMask v{appVersion}</div>
                   <div className={styles.updateSub}>
                     {downloadedVersion
                       ? `Version v${downloadedVersion} is downloaded and ready to install!`
@@ -719,7 +738,7 @@ export const SettingsModal: React.FC = () => {
           <div className={styles.section}>
             <div className={styles.sectionLabel}>About</div>
             <div className={styles.about}>
-              <div className={styles.aboutName}>NetMask <span>v2.1.2</span></div>
+              <div className={styles.aboutName}>NetMask <span>v{appVersion}</span></div>
               <div className={styles.aboutSub}>Cross-platform network identity & RF diagnostics utility</div>
             </div>
           </div>

@@ -29,11 +29,24 @@
   flex-shrink: 0;
 }
 
+
 .title {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.2px;
   color: var(--text-primary);
+}
+
+.versionBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(79, 142, 247, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(79, 142, 247, 0.28);
+  letter-spacing: 0.02em;
+  user-select: none;
 }
 
 .controls {

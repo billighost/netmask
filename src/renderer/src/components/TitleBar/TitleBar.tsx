@@ -6,8 +6,10 @@ import styles from './TitleBar.module.css'
 export const TitleBar: React.FC = () => {
   const { setSettingsOpen } = useStore()
   const [isMax, setIsMax] = useState(false)
+  const [appVersion, setAppVersion] = useState('2.1.2')
 
   useEffect(() => {
+    window.nm.getVersion?.().then(setAppVersion).catch(() => {})
     window.nm.isMaximized().then(setIsMax).catch(() => {})
     const unsub = window.nm.onMaximizeChange(setIsMax)
     return () => unsub()
@@ -26,6 +28,7 @@ export const TitleBar: React.FC = () => {
       <div className={styles.left}>
         <NetMaskLogoIcon size={18} className={styles.logo} />
         <span className={styles.title}>NetMask</span>
+        <span className={styles.versionBadge}>v{appVersion}</span>
       </div>
       <div className={styles.controls}>
         <button
@@ -58,10 +61,9 @@ export const TitleBar: React.FC = () => {
           onMouseDown={e => e.stopPropagation()}
           onClick={handleClose}
         >
-          <WindowCloseIcon size={11} />
+          <WindowCloseIcon size={12} />
         </button>
       </div>
     </div>
   )
 }
-

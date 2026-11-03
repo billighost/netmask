@@ -33,6 +33,15 @@ export const UpdateBanner: React.FC = () => {
       addToast(`NetMask v${info.version} downloaded!`, 'success')
     })
 
+    // Synchronize existing update / download status immediately
+    window.nm.getUpdateStatus?.().then((status) => {
+      if (!status) return
+      if (status.availableUpdate) setUpdate(status.availableUpdate)
+      if (status.downloadedVersion) setDownloadedVersion(status.downloadedVersion)
+      if (status.progress) setDownloadProgress(status.progress)
+      if (status.isDownloading) setIsUpdating(true)
+    }).catch(() => {})
+
     // Check automatically on mount after a short delay
     const timer = setTimeout(async () => {
       try {
@@ -73,10 +82,19 @@ export const UpdateBanner: React.FC = () => {
     try {
       const res = await window.nm.downloadUpdate(update.downloadUrl)
       if (res.success) {
-        setDownloadedVersion(update.version)
-        addToast(`NetMask v${update.version} ready to install!`, 'success')
+        if (res.alreadyDownloaded || (res.filePath && !res.inProgress)) {
+          setDownloadedVersion(update.version)
+          setIsUpdating(false)
+          addToast(`NetMask v${update.version} ready to install!`, 'success')
+        } else if (res.inProgress) {
+          setIsUpdating(true)
+        } else {
+          setDownloadedVersion(update.version)
+          setIsUpdating(false)
+          addToast(`NetMask v${update.version} ready to install!`, 'success')
+        }
       } else {
-        // Fallback to browser if stream download fails
+        // Fallback to browser only if stream download actually failed
         addToast('In-app download issue; opening release download in browser...', 'info')
         await window.nm.openReleaseUrl(update.downloadUrl || update.url)
       }
@@ -85,7 +103,9 @@ export const UpdateBanner: React.FC = () => {
         await window.nm.openReleaseUrl(update.downloadUrl || update.url)
       } catch {}
     } finally {
-      setIsUpdating(false)
+      if (!downloadProgress) {
+        setIsUpdating(false)
+      }
     }
   }
 

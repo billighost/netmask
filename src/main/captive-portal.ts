@@ -1,4 +1,5 @@
 import http from 'http'
+import { app } from 'electron'
 
 export interface CaptivePortalStatus {
   isCaptive: boolean
@@ -8,7 +9,7 @@ export interface CaptivePortalStatus {
 
 function probeUrl(url: string, timeoutMs = 4000): Promise<{ statusCode: number; location: string | null; body: string }> {
   return new Promise((resolve, reject) => {
-    const req = http.get(url, { timeout: timeoutMs, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetMask/2.1' } }, (res) => {
+    const req = http.get(url, { timeout: timeoutMs, headers: { 'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetMask/${app.getVersion()}` } }, (res) => {
       const statusCode = res.statusCode || 0
       const location = (res.headers.location as string) || null
 

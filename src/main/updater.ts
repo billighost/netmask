@@ -30,6 +30,7 @@ let windowGetter: (() => BrowserWindow | null) | null = null
 let lastUpdateInfo: UpdateInfo | null = null
 let downloadedFilePath: string | null = null
 let isDownloading = false
+let currentProgress: DownloadProgress | null = null
 let lastTrayCheckTime = 0
 
 function compareSemver(v1: string, v2: string): number {
@@ -251,9 +252,81 @@ function downloadStream(
   })
 }
 
-export async function downloadUpdate(url?: string): Promise<{ success: boolean; filePath?: string; error?: string }> {
+export function isUpdateDownloading(): boolean {
+  return isDownloading
+}
+
+export function getDownloadedVersion(): string | null {
+  if (downloadedFilePath && existsSync(downloadedFilePath)) {
+    return lastUpdateInfo?.version || null
+  }
+  return null
+}
+
+export function getUpdateStatus(): {
+  isDownloading: boolean
+  progress: DownloadProgress | null
+  downloadedVersion: string | null
+  downloadedFilePath: string | null
+  availableUpdate: UpdateInfo | null
+} {
+  const isDownloaded = Boolean(downloadedFilePath && existsSync(downloadedFilePath))
+  return {
+    isDownloading,
+    progress: currentProgress,
+    downloadedVersion: isDownloaded ? (lastUpdateInfo?.version || null) : null,
+    downloadedFilePath: isDownloaded ? downloadedFilePath : null,
+    availableUpdate: lastUpdateInfo
+  }
+}
+
+export function syncWindowUpdateState(win: BrowserWindow): void {
+  if (!win || win.isDestroyed()) return
+
+  if (lastUpdateInfo) {
+    win.webContents.send('nm:update-available', lastUpdateInfo)
+  }
+
+  if (downloadedFilePath && existsSync(downloadedFilePath)) {
+    win.webContents.send('nm:update-downloaded', {
+      filePath: downloadedFilePath,
+      version: lastUpdateInfo?.version || app.getVersion()
+    })
+  } else if (isDownloading && currentProgress) {
+    win.webContents.send('nm:update-progress', currentProgress)
+  }
+}
+
+export async function downloadUpdate(url?: string): Promise<{
+  success: boolean
+  filePath?: string
+  error?: string
+  inProgress?: boolean
+  alreadyDownloaded?: boolean
+}> {
+  // If update is already downloaded and ready to install on disk
+  if (downloadedFilePath && existsSync(downloadedFilePath)) {
+    const win = windowGetter ? windowGetter() : null
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('nm:update-downloaded', {
+        filePath: downloadedFilePath,
+        version: lastUpdateInfo?.version || app.getVersion()
+      })
+    }
+    return {
+      success: true,
+      filePath: downloadedFilePath,
+      alreadyDownloaded: true
+    }
+  }
+
+  // If an update is already actively streaming in background
   if (isDownloading) {
-    return { success: false, error: 'Download already in progress' }
+    const win = windowGetter ? windowGetter() : null
+    if (win && !win.isDestroyed() && currentProgress) {
+      win.webContents.send('nm:update-progress', currentProgress)
+    }
+    return { success: true, inProgress: true }
   }
 
   const targetUrl = url || lastUpdateInfo?.downloadUrl
@@ -262,15 +335,16 @@ export async function downloadUpdate(url?: string): Promise<{ success: boolean; 
   }
 
   isDownloading = true
+  currentProgress = { percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 }
   const version = lastUpdateInfo?.version || 'latest'
   const ext = process.platform === 'darwin' ? '.dmg' : process.platform === 'linux' ? '.AppImage' : '.exe'
   const filename = lastUpdateInfo?.assetName || `NetMask-Setup-${version}${ext}`
   const destPath = join(app.getPath('temp'), filename)
 
-  const win = windowGetter ? windowGetter() : null
-
   try {
     const downloadedPath = await downloadStream(targetUrl, destPath, (p) => {
+      currentProgress = p
+      const win = windowGetter ? windowGetter() : null
       if (win && !win.isDestroyed()) {
         win.webContents.send('nm:update-progress', p)
       }
@@ -278,7 +352,9 @@ export async function downloadUpdate(url?: string): Promise<{ success: boolean; 
 
     downloadedFilePath = downloadedPath
     isDownloading = false
+    currentProgress = null
 
+    const win = windowGetter ? windowGetter() : null
     if (win && !win.isDestroyed()) {
       win.webContents.send('nm:update-downloaded', {
         filePath: downloadedPath,
@@ -289,6 +365,7 @@ export async function downloadUpdate(url?: string): Promise<{ success: boolean; 
     return { success: true, filePath: downloadedPath }
   } catch (err: any) {
     isDownloading = false
+    currentProgress = null
     return { success: false, error: err?.message || 'Download failed' }
   }
 }

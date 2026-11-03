@@ -157,6 +157,14 @@ export type DownloadProgress = {
   bytesPerSecond: number
 }
 
+export type UpdateStatus = {
+  isDownloading: boolean
+  progress: DownloadProgress | null
+  downloadedVersion: string | null
+  downloadedFilePath: string | null
+  availableUpdate: UpdateInfo | null
+}
+
 export interface ShortcutDefinition {
   id: string
   name: string

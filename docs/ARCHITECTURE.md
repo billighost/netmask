@@ -1,6 +1,6 @@
 # 🏛️ NetMask System Architecture Documentation
 
-Welcome to the internal architectural documentation of **NetMask 2.0**. This document details the engineering specifications, cross-platform subsystems, security & privilege tiers, IPC schemas, and memory management lifecycle.
+Welcome to the internal architectural documentation of **NetMask v2.1.2**. This document details the engineering specifications, cross-platform subsystems, security & privilege tiers, IPC schemas, and memory management lifecycle.
 
 ---
 

@@ -38,7 +38,7 @@ child.on('close', (code) => {
     try {
       const data = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
 
-      const markdown = `# 📊 NetMask 2.0 Empirical Performance & Memory Footprint Report
+      const markdown = `# 📊 NetMask v2.1.2 Empirical Performance & Memory Footprint Report
 
 *Measured live on **${data.platform} (${data.arch})** via Chromium \`app.getAppMetrics()\` and Windows Win32 OS \`Get-CimInstance\`*
 *Timestamp: \`${data.timestamp}\`*
