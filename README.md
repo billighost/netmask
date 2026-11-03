@@ -1,21 +1,35 @@
 <div align="center">
 
+<img src="resources/icon.png" width="120" height="120" alt="NetMask Logo" style="border-radius: 26px; box-shadow: 0 10px 30px rgba(0,0,0,0.35);" />
+
 # 🎭 NetMask 2.0
 
 ### *Cloak your networks. Master your bandwidth. Present with total confidence.*
 
 A cross-platform desktop application to rename and disguise local Wi-Fi and Ethernet display names across your system, paired with sub-second throughput diagnostics and streaming intelligence.
 
+[![Latest Release](https://img.shields.io/github/v/release/billighost/netmask?style=flat&label=Latest%20Release&color=3DD68C)](https://github.com/billighost/netmask/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/billighost/netmask/total?color=4F8EF7&label=Downloads)](https://github.com/billighost/netmask/releases)
 [![CI & Code Quality](https://github.com/billighost/netmask/actions/workflows/ci.yml/badge.svg)](https://github.com/billighost/netmask/actions/workflows/ci.yml)
 [![Release](https://github.com/billighost/netmask/actions/workflows/release.yml/badge.svg)](https://github.com/billighost/netmask/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Windows | macOS | Linux](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-4F8EF7.svg)](#-cross-platform-matrix)
-[![Electron: 31+](https://img.shields.io/badge/Electron-31.4.0-47848F.svg)](https://electronjs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.5.4-3178C6.svg)](https://typescriptlang.org)
 
 <br/>
 
-[**Download Latest Release**](https://github.com/billighost/netmask/releases/latest) • [**Report Bug**](https://github.com/billighost/netmask/issues/new?template=bug_report.yml) • [**Request Feature**](https://github.com/billighost/netmask/issues/new?template=feature_request.yml) • [**Contributing**](CONTRIBUTING.md)
+### ⚡ Quick Download (Latest: v2.0.0)
+
+| Platform | Recommended Installer | Alternative Formats |
+| :--- | :--- | :--- |
+| **Windows 11 / 10** | [📥 **Download Setup (.exe)**](https://github.com/billighost/netmask/releases/latest/download/NetMask-Setup-2.0.0.exe) | [Portable (.exe)](https://github.com/billighost/netmask/releases/latest/download/NetMask-Windows-2.0.0-x64.exe) • [Zip (.zip)](https://github.com/billighost/netmask/releases/latest/download/NetMask-Windows-2.0.0-x64.zip) |
+| **macOS (Apple Silicon)** | [📥 **Download DMG (arm64)**](https://github.com/billighost/netmask/releases/latest/download/NetMask-macOS-2.0.0-arm64.dmg) | [Zip Archive](https://github.com/billighost/netmask/releases/latest/download/NetMask-macOS-2.0.0-arm64.zip) |
+| **macOS (Intel x64)** | [📥 **Download DMG (x64)**](https://github.com/billighost/netmask/releases/latest/download/NetMask-macOS-2.0.0-x64.dmg) | [Zip Archive](https://github.com/billighost/netmask/releases/latest/download/NetMask-macOS-2.0.0-x64.zip) |
+| **Linux (All Distros)** | [📥 **Download AppImage**](https://github.com/billighost/netmask/releases/latest/download/NetMask-Linux-2.0.0-x86_64.AppImage) | [Tarball (.tar.gz)](https://github.com/billighost/netmask/releases/latest/download/NetMask-Linux-2.0.0-x64.tar.gz) |
+| **Linux (Ubuntu / Debian)** | [📥 **Download Debian (.deb)**](https://github.com/billighost/netmask/releases/latest/download/NetMask-Linux-2.0.0-amd64.deb) | `sudo dpkg -i NetMask*.deb` |
+
+<br/>
+
+[**All Releases & Changelog**](https://github.com/billighost/netmask/releases) • [**Report Bug**](https://github.com/billighost/netmask/issues/new?template=bug_report.yml) • [**Request Feature**](https://github.com/billighost/netmask/issues/new?template=feature_request.yml) • [**Contributing**](CONTRIBUTING.md)
 
 </div>
 
@@ -65,23 +79,25 @@ NetMask features native platform abstraction drivers for every major operating s
 
 ```mermaid
 flowchart TD
-    subgraph UI ["Renderer (React 18 + Zustand)"]
-        A[User Renames Network] --> B[TitleBar / ActionPanel]
-        U[In-App Update Banner] <--> G[GitHub Releases API]
+    subgraph UI ["Renderer Layer (React 18 + Zustand)"]
+        direction TB
+        A["User Renames Network"] --> B["ActionPanel & TitleBar"]
+        U["Update Banner Alert"] <--> G["GitHub Releases API"]
+        V["Live Speedometer & Sparkline"]
     end
 
-    subgraph Bridge ["Preload Isolated Context Bridge"]
-        B -->|IPC Invocation| C[window.nm.rename]
+    subgraph Bridge ["Context Isolation Bridge"]
+        B -->|"IPC nm:rename"| C["Preload window.nm Bridge"]
     end
 
     subgraph Core ["Electron Main Process"]
-        C --> D{Platform Dispatcher}
-        D -->|Windows| E[Dual Registry + WlanSvc XML]
-        D -->|macOS| F[networksetup + System Keychain]
-        D -->|Linux| L[NetworkManager nmcli]
+        C --> D{"Platform Dispatcher"}
+        D -->|"Windows"| E["Dual Registry & WlanSvc XML"]
+        D -->|"macOS"| F["networksetup & Airport Driver"]
+        D -->|"Linux"| L["NetworkManager nmcli"]
         
-        M[Local Backup Store] <--> E & F & L
-        S[Throughput Engine] -->|Speed Stream (1000ms)| UI
+        M["Local JSON Backup"] <--> E & F & L
+        S["Native Bandwidth Sampler"] -->|"Live Speed Delta (1000ms)"| V
     end
 ```
 
@@ -125,8 +141,8 @@ Download the latest installer or portable executable from [GitHub Releases](http
 - Drag and drop `NetMask.app` into your `/Applications` folder.
 
 ### Linux
-- **AppImage**: `NetMask-Linux-2.0.0-x64.AppImage` (Make executable: `chmod +x *.AppImage` and run)
-- **Debian / Ubuntu Package**: `NetMask-Linux-2.0.0-x64.deb` (`sudo dpkg -i NetMask*.deb`)
+- **AppImage**: `NetMask-Linux-2.0.0-x86_64.AppImage` (Make executable: `chmod +x *.AppImage` and run)
+- **Debian / Ubuntu Package**: `NetMask-Linux-2.0.0-amd64.deb` (`sudo dpkg -i NetMask*.deb`)
 - **Tarball**: `NetMask-Linux-2.0.0-x64.tar.gz`
 
 ---
@@ -142,7 +158,20 @@ Download the latest installer or portable executable from [GitHub Releases](http
 
 ---
 
-## 🛡️ Security, Code Signing & SmartScreen
+## 🛡️ Security, Code Signing & Checksums
+
+### Verification & SHA-256 Checksums (v2.0.0)
+
+| File | SHA-256 Checksum |
+| :--- | :--- |
+| `NetMask-Setup-2.0.0.exe` | `97B17E94350912FB911CE27951FF9C43B256B9E8B7DFD9A73BF1489AFE5D8B6C` |
+| `NetMask-Windows-2.0.0-x64.exe` | `9C675ADBAD50782CED477C57FAB7BD047E12A77EE95A0DA4D06602F9005FD4C7` |
+| `NetMask-Windows-2.0.0-x64.zip` | `EB46D35AEAC3CF9EF8F2459653AE3E55B0474D96AE3B6C73C78AEFA7CBBC2E1A` |
+
+Verify checksum in PowerShell:
+```powershell
+Get-FileHash .\NetMask-Setup-2.0.0.exe -Algorithm SHA256
+```
 
 <details>
 <summary><b>Why does Windows SmartScreen display "Unknown Publisher"? (Click to expand)</b></summary>
@@ -150,13 +179,6 @@ Download the latest installer or portable executable from [GitHub Releases](http
 When running open-source software on Windows, Microsoft Defender SmartScreen displays a warning for newly released binaries:
 1. **Download Reputation**: SmartScreen relies on aggregate user download volume. New versions have a trust score of 0 until several hundred users have installed them.
 2. **EV Hardware Certificates**: Microsoft requires Extended Validation (EV) certificates stored on physical USB cryptographic tokens costing \$300–\$600 per year, which is impractical for non-commercial open-source contributors.
-
-**Verifying Your Download:**
-Every release includes a cryptographic SHA-256 hash. You can verify it in PowerShell:
-```powershell
-Get-FileHash .\NetMask-Setup-2.0.0.exe -Algorithm SHA256
-```
-Compare the output against the hash listed in the release notes.
 
 We are currently onboarding NetMask to **[SignPath.io](https://about.signpath.io/)**, a trusted non-profit code signing service for open-source projects, to provide automated signing in future releases.
 </details>
