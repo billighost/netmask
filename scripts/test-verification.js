@@ -301,5 +301,41 @@ assert(captiveCss.includes('.loginBtn'), 'CaptivePortalBanner.module.css must co
 
 console.log('✓ All 5 new UI feature CSS modules verified')
 
+
+// 15. Verify React Rules of Hooks AST Scanner (Zero hooks after return, zero hooks in conditionals)
+const { scanFile } = require('./lint-hooks')
+const rendererDir = path.join(__dirname, '../src/renderer/src')
+function getAllTsx(dir, list = []) {
+  for (const item of fs.readdirSync(dir)) {
+    const full = path.join(dir, item)
+    if (fs.statSync(full).isDirectory()) getAllTsx(full, list)
+    else if (full.endsWith('.tsx')) list.push(full)
+  }
+  return list
+}
+const allTsx = getAllTsx(rendererDir)
+let hookViolations = 0
+for (const file of allTsx) {
+  const violations = scanFile(file)
+  hookViolations += violations.length
+}
+assert.strictEqual(hookViolations, 0, 'Found React Rules of Hooks violations in renderer components!')
+
+// Verify that the AST scanner correctly catches synthetic hook violations
+const tmpBadFile = path.join(__dirname, 'tmp-bad-test.tsx')
+fs.writeFileSync(tmpBadFile, `
+import React, { useState } from 'react'
+export function BadComponent({ isHidden }) {
+  if (isHidden) return null
+  const [val, setVal] = useState(0)
+  return <div>{val}</div>
+}
+`, 'utf8')
+const detectedBad = scanFile(tmpBadFile)
+fs.unlinkSync(tmpBadFile)
+assert(detectedBad.length > 0, 'AST scanner must catch hook called after early return!')
+assert(detectedBad[0].reason.includes('AFTER a return statement'), 'AST scanner reason must identify return statement')
+console.log('✓ React Rules of Hooks AST Static Analyzer passed across all components')
+
 console.log('--- ALL VERIFICATION CHECKS PASSED SUCCESSFULLY ---')
 
