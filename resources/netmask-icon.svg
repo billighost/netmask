@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <!-- Background gradient -->
+    <radialGradient id="bg" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#1A2540"/>
+      <stop offset="100%" stop-color="#080C14"/>
+    </radialGradient>
+    <!-- Arc glow filter -->
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <!-- Subtle arc gradient -->
+    <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6EADFF"/>
+      <stop offset="50%" stop-color="#4F8EF7"/>
+      <stop offset="100%" stop-color="#6EADFF"/>
+    </linearGradient>
+    <!-- Eye glow -->
+    <filter id="eyeGlow" x="-50%" y="-100%" width="200%" height="300%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <!-- Clip for rounded square -->
+    <clipPath id="roundedSq">
+      <rect x="0" y="0" width="256" height="256" rx="54" ry="54"/>
+    </clipPath>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect x="0" y="0" width="256" height="256" rx="54" ry="54" fill="url(#bg)"/>
+
+  <!-- Subtle inner highlight (top-left light source) -->
+  <rect x="0" y="0" width="256" height="256" rx="54" ry="54"
+    fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.5"/>
+
+  <!-- Clip everything to rounded square -->
+  <g clip-path="url(#roundedSq)">
+    <!-- Noise grain overlay via pattern -->
+    <filter id="noise">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="4" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feBlend in="SourceGraphic" mode="overlay" result="blend"/>
+      <feComposite in="blend" in2="SourceGraphic" operator="in"/>
+    </filter>
+    <rect x="0" y="0" width="256" height="256" rx="54" fill="white" opacity="0.025" filter="url(#noise)"/>
+  </g>
+
+  <!-- ═══ Wi-Fi arcs (centered at x=128, apex y=75) ═══ -->
+
+  <!-- Outer arc — glow layer -->
+  <path d="M 44 120 A 90 90 0 0 1 212 120"
+    fill="none" stroke="#4F8EF7" stroke-width="28"
+    stroke-linecap="round" opacity="0.18"/>
+
+  <!-- Outer arc -->
+  <path d="M 44 120 A 90 90 0 0 1 212 120"
+    fill="none" stroke="url(#arcGrad)" stroke-width="14"
+    stroke-linecap="round" filter="url(#glow)"/>
+
+  <!-- Middle arc — glow layer -->
+  <path d="M 72 120 A 60 60 0 0 1 184 120"
+    fill="none" stroke="#4F8EF7" stroke-width="22"
+    stroke-linecap="round" opacity="0.18"/>
+
+  <!-- Middle arc -->
+  <path d="M 72 120 A 60 60 0 0 1 184 120"
+    fill="none" stroke="url(#arcGrad)" stroke-width="11"
+    stroke-linecap="round" filter="url(#glow)"/>
+
+  <!-- Inner arc — glow layer -->
+  <path d="M 100 120 A 30 30 0 0 1 156 120"
+    fill="none" stroke="#4F8EF7" stroke-width="16"
+    stroke-linecap="round" opacity="0.18"/>
+
+  <!-- Inner arc -->
+  <path d="M 100 120 A 30 30 0 0 1 156 120"
+    fill="none" stroke="url(#arcGrad)" stroke-width="8"
+    stroke-linecap="round" filter="url(#glow)"/>
+
+  <!-- ═══ Closed Eye (replaces the usual Wi-Fi dot) ═══ -->
+
+  <!-- Eye glow layer -->
+  <ellipse cx="128" cy="148" rx="26" ry="7"
+    fill="#4F8EF7" opacity="0.25" filter="url(#eyeGlow)"/>
+
+  <!-- Eye shape: top curved eyelid -->
+  <path d="M 102 148 Q 115 136 128 135 Q 141 136 154 148"
+    fill="none" stroke="#E8ECF4" stroke-width="4.5"
+    stroke-linecap="round"/>
+
+  <!-- Eye shape: bottom eyelid (flatter) -->
+  <path d="M 102 148 Q 115 156 128 157 Q 141 156 154 148"
+    fill="none" stroke="#E8ECF4" stroke-width="3.5"
+    stroke-linecap="round" opacity="0.7"/>
+
+  <!-- Eyelash left (tiny tick) -->
+  <line x1="104" y1="147" x2="100" y2="142"
+    stroke="#E8ECF4" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+
+  <!-- Eyelash right -->
+  <line x1="152" y1="147" x2="156" y2="142"
+    stroke="#E8ECF4" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+
+  <!-- Iris/pupil hint (very subtle, a small closed-lid highlight) -->
+  <ellipse cx="128" cy="147" rx="5" ry="1.5"
+    fill="#E8ECF4" opacity="0.35"/>
+
+</svg>
