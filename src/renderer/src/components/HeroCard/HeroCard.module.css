@@ -1,0 +1,202 @@
+.card {
+  position: relative;
+  flex: none;
+  flex-shrink: 0;
+  padding: 16px 18px 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: linear-gradient(160deg, var(--bg-surface-3) 0%, var(--bg-surface-1) 70%);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.04) inset,
+    var(--shadow-md);
+  overflow: hidden;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotLive {
+  background: var(--green);
+  animation: pulse-ring 2.5s ease infinite;
+}
+
+.dotOff {
+  background: var(--text-muted);
+}
+
+.statusText { flex: 1; }
+
+.metaBadges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.band {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-dim);
+  color: var(--accent);
+  letter-spacing: 0.2px;
+}
+
+.linkRate {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  letter-spacing: 0.2px;
+}
+
+.netName {
+  font-size: 26px;
+  font-weight: 300;
+  letter-spacing: -0.5px;
+  margin: 10px 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.realName {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+
+.realName strong {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.shieldBadge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* Speed section */
+.speedPanel {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.speedHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.speedSectionTitle {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+
+.linkSub {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.speedRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.speedItem {
+  flex: 1;
+}
+
+.speedLabel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-bottom: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.speedValue {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+}
+
+.speedNum {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.speedUnit {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.speedDivider {
+  width: 1px;
+  height: 36px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.infoBtn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--t-fast);
+  flex-shrink: 0;
+}
+
+.infoBtn:hover {
+  background: var(--accent-dim);
+}
+
+.sparkline {
+  width: 100%;
+  height: 40px;
+  display: block;
+  border-radius: var(--radius-sm);
+}

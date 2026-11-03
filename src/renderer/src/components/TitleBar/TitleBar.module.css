@@ -1,0 +1,72 @@
+.bar {
+  position: relative;
+  height: 46px;
+  flex: none;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  app-region: drag;
+  user-select: none;
+}
+
+.dragRegion {
+  position: absolute;
+  inset: 0;
+  -webkit-app-region: drag;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  z-index: 1;
+}
+
+.logo {
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--text-primary);
+}
+
+.controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  z-index: 1;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.ctrlBtn {
+  width: 30px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+.ctrlBtn:hover {
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+}
+
+.closeBtn:hover {
+  background: var(--red-dim);
+  color: var(--red);
+}
+
