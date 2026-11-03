@@ -1,4 +1,4 @@
-# 📊 NetMask 2.0 Empirical Performance & Memory Footprint Report
+# 📊 NetMask v2.1.2 Empirical Performance & Memory Footprint Report
 
 *Measured live on **win32 (x64)** via Chromium `app.getAppMetrics()` and Windows Win32 OS `Get-CimInstance`*
 *Timestamp: `2026-11-03T10:21:02.030Z`*

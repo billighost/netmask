@@ -17,7 +17,8 @@ import {
 import { getSettings, setSetting } from './settings'
 import {
   setupAutoUpdater, openReleaseUrl, checkGitHubRelease,
-  checkOnRestoreFromTray, downloadUpdate, installDownloadedUpdate
+  checkOnRestoreFromTray, downloadUpdate, installDownloadedUpdate,
+  isUpdateDownloading, getUpdateStatus, syncWindowUpdateState
 } from './updater'
 import {
   startStreamerMonitor, stopStreamerMonitor, getStreamerStatus,
@@ -97,6 +98,15 @@ try {
  * lightweight Node/Electron main event loop (~18–25 MB WS-Private).
  */
 export function destroyWindowToTray(): void {
+  if (isUpdateDownloading()) {
+    // If an update is actively downloading, do not destroy the renderer window;
+    // hide it instead so that the download stream, network sockets, and React state
+    // remain completely uninterrupted.
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.hide()
+    }
+    return
+  }
   stopSpeed()
   if (mainWindow && !mainWindow.isDestroyed()) {
     const win = mainWindow
@@ -120,6 +130,7 @@ export function showOrCreateWindow(): void {
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.show()
     mainWindow.focus()
+    syncWindowUpdateState(mainWindow)
     checkOnRestoreFromTray(mainWindow)
   }
 }
@@ -275,6 +286,12 @@ function createWindow(): void {
     mainWindow = null
   })
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      syncWindowUpdateState(mainWindow)
+    }
+  })
+
   if (isDev() && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -291,7 +308,7 @@ function createTray(): void {
     const rebuild = async () => {
       const conn = await getCurrentConnection()
       const menu = Menu.buildFromTemplate([
-        { label: 'NetMask 2.0', enabled: false },
+        { label: `NetMask v${app.getVersion()}`, enabled: false },
         { type: 'separator' },
         {
           label: conn ? `Connected: ${conn.name}` : 'Not connected',
@@ -390,6 +407,8 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('nm:run-speed-test', () => runSpeedTest())
+  ipcMain.handle('nm:get-version', () => app.getVersion())
+  ipcMain.handle('nm:get-update-status', () => getUpdateStatus())
   ipcMain.handle('nm:check-update', () => checkGitHubRelease(mainWindow))
   ipcMain.handle('nm:download-update', (_e, url?: string) => downloadUpdate(url))
   ipcMain.handle('nm:install-update', (_e, filePath?: string) => {

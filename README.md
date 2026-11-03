@@ -2,7 +2,7 @@
 
 <img src="resources/netmask-icon.svg" width="128" height="128" alt="NetMask Transparent Emblem (Wi-Fi Arcs & Cloaked Eyelash Eye)" style="filter: drop-shadow(0 0 24px rgba(0, 212, 255, 0.5));" />
 
-# 🎭 NetMask 2.0
+# 🎭 NetMask v2.1.2
 
 ### *Cloak your networks. Master your bandwidth. Present with total confidence.*
 

@@ -81,6 +81,14 @@ export type DownloadProgress = {
   bytesPerSecond: number
 }
 
+export type UpdateStatus = {
+  isDownloading: boolean
+  progress: DownloadProgress | null
+  downloadedVersion: string | null
+  downloadedFilePath: string | null
+  availableUpdate: UpdateInfo | null
+}
+
 export type AppSettings = {
   minimizeToTray: boolean
   launchOnStartup: boolean
@@ -253,8 +261,10 @@ const api = {
     }
   },
 
+  getVersion: (): Promise<string> => ipcRenderer.invoke('nm:get-version'),
+  getUpdateStatus: (): Promise<UpdateStatus> => ipcRenderer.invoke('nm:get-update-status'),
   checkUpdate: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('nm:check-update'),
-  downloadUpdate: (url?: string): Promise<{ success: boolean; filePath?: string; error?: string }> => ipcRenderer.invoke('nm:download-update', url),
+  downloadUpdate: (url?: string): Promise<{ success: boolean; filePath?: string; error?: string; inProgress?: boolean; alreadyDownloaded?: boolean }> => ipcRenderer.invoke('nm:download-update', url),
   installUpdate: (filePath?: string): Promise<void> => ipcRenderer.invoke('nm:install-update', filePath),
   openReleaseUrl: (url?: string): Promise<void> => ipcRenderer.invoke('nm:open-release-url', url),
   onUpdateAvailable: (cb: (info: UpdateInfo) => void): (() => void) => {
