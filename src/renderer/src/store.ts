@@ -1,5 +1,13 @@
 import { create } from 'zustand'
-import type { Network, Connection, AppSettings, Toast, SpeedSample, ToastType } from './types'
+import type { Network, Connection, AppSettings, Toast, SpeedSample, ToastType, StreamerStatus } from './types'
+
+// Single persistent Float32Array(60) ring buffer for ultra-low GC pressure
+const speedRingBuffer = new Float32Array(60)
+let bssidPeekTimer: ReturnType<typeof setTimeout> | null = null
+
+export function getSpeedRingBuffer(): Float32Array {
+  return speedRingBuffer
+}
 
 interface Store {
   networks: Network[]
@@ -8,13 +16,17 @@ interface Store {
   settings: AppSettings
   toasts: Toast[]
   speed: SpeedSample
-  speedHistory: number[]  // last 60 downMBps samples
+  speedTick: number
   peakDownMBps: number
   testedSpeed: { mbps: number; mbPerSec: number } | null
   adminOk: boolean
   refreshing: boolean
   settingsOpen: boolean
+  detailsModalGuid: string | null
   contextMenu: { x: number; y: number; guid: string } | null
+  streamerStatus: StreamerStatus
+  bssidPeek: boolean
+  elevationStatus: import('./types').ElevationStatus | null
 
   // Actions
   setNetworks: (nets: Network[]) => void
@@ -29,7 +41,11 @@ interface Store {
   setAdminOk: (ok: boolean) => void
   setRefreshing: (r: boolean) => void
   setSettingsOpen: (open: boolean) => void
+  setDetailsModalGuid: (guid: string | null) => void
   setContextMenu: (cm: { x: number; y: number; guid: string } | null) => void
+  setStreamerStatus: (status: StreamerStatus) => void
+  setElevationStatus: (status: import('./types').ElevationStatus) => void
+  peekBssid: () => void
 }
 
 let toastSeq = 0
@@ -39,7 +55,13 @@ const DEFAULT_SETTINGS: AppSettings = {
   launchOnStartup: false,
   autoRefreshInterval: 30,
   theme: 'dark',
-  showEthernet: true
+  showEthernet: true,
+  ultraLowMemory: false,
+  autoCloakStreamer: true,
+  streamerMaskName: 'StreamSafe-Fiber-Pro',
+  bssidCloaking: true,
+  bssidMaskMode: 'partial',
+  silentElevation: true
 }
 
 export const useStore = create<Store>((set, get) => ({
@@ -49,13 +71,17 @@ export const useStore = create<Store>((set, get) => ({
   settings: DEFAULT_SETTINGS,
   toasts: [],
   speed: { downMBps: 0, upMBps: 0, downKbps: 0, upKbps: 0 },
-  speedHistory: Array(60).fill(0),
+  speedTick: 0,
   peakDownMBps: 0,
   testedSpeed: null,
   adminOk: false,
   refreshing: false,
   settingsOpen: false,
+  detailsModalGuid: null,
   contextMenu: null,
+  streamerStatus: { detectedApp: null, isCloaked: false, cooldownSeconds: 0 },
+  bssidPeek: false,
+  elevationStatus: null,
 
   setNetworks: (nets) => set({ networks: nets }),
   setConnection: (conn) => set({ connection: conn }),
@@ -82,11 +108,17 @@ export const useStore = create<Store>((set, get) => ({
 
   removeToast: (id) => set(s => ({ toasts: s.toasts.filter(t => t.id !== id) })),
 
-  setSpeed: (speed) => set(s => ({
-    speed,
-    peakDownMBps: Math.max(s.peakDownMBps, speed.downMBps),
-    speedHistory: [...s.speedHistory.slice(1), speed.downMBps]
-  })),
+  setSpeed: (speed) => {
+    // Push into fixed Float32Array ring buffer without creating temporary arrays
+    speedRingBuffer.copyWithin(0, 1)
+    speedRingBuffer[59] = speed.downMBps
+
+    set(s => ({
+      speed,
+      speedTick: (s.speedTick + 1) % 1000000,
+      peakDownMBps: Math.max(s.peakDownMBps, speed.downMBps)
+    }))
+  },
 
   setTestedSpeed: (ts) => set(s => ({
     testedSpeed: ts,
@@ -96,6 +128,19 @@ export const useStore = create<Store>((set, get) => ({
   setAdminOk: (ok) => set({ adminOk: ok }),
   setRefreshing: (r) => set({ refreshing: r }),
   setSettingsOpen: (open) => set({ settingsOpen: open }),
-  setContextMenu: (cm) => set({ contextMenu: cm })
+  setDetailsModalGuid: (guid) => set({ detailsModalGuid: guid }),
+  setContextMenu: (cm) => set({ contextMenu: cm }),
+  setStreamerStatus: (status) => set({ streamerStatus: status }),
+  setElevationStatus: (status) => set({ elevationStatus: status }),
+
+  peekBssid: () => {
+    if (bssidPeekTimer) clearTimeout(bssidPeekTimer)
+    set({ bssidPeek: true })
+    bssidPeekTimer = setTimeout(() => {
+      set({ bssidPeek: false })
+      bssidPeekTimer = null
+    }, 3000)
+  }
 }))
+
 

@@ -15,19 +15,103 @@ function getActiveWifiInterface(): string {
   return m ? m[1].trim() : 'en0'
 }
 
+interface DarwinAirportInfo {
+  bssid?: string
+  rssi?: number
+  noise?: number
+  channel?: number
+  lastTxRate?: number
+  maxRate?: number
+  phyMode?: string
+  ssid?: string
+}
+
+function getAirportInfo(): DarwinAirportInfo | null {
+  const airportPath = '/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport'
+  const out = run(`${airportPath} -I`)
+  if (!out || !out.includes('agrCtlRSSI')) return null
+
+  const rssiM = /agrCtlRSSI:\s*(-?\d+)/.exec(out)
+  const noiseM = /agrCtlNoise:\s*(-?\d+)/.exec(out)
+  const bssidM = /BSSID:\s*([0-9a-fA-F:]+)/.exec(out)
+  const chanM = /channel:\s*(\d+)/.exec(out)
+  const txM = /lastTxRate:\s*(\d+)/.exec(out)
+  const maxM = /maxRate:\s*(\d+)/.exec(out)
+  const ssidM = /^\s*SSID:\s*(.+)$/m.exec(out)
+  const phyM = /PHY Mode:\s*(.+)$/m.exec(out)
+
+  return {
+    rssi: rssiM ? parseInt(rssiM[1], 10) : undefined,
+    noise: noiseM ? parseInt(noiseM[1], 10) : undefined,
+    bssid: bssidM ? bssidM[1].trim() : undefined,
+    channel: chanM ? parseInt(chanM[1], 10) : undefined,
+    lastTxRate: txM ? parseFloat(txM[1]) : undefined,
+    maxRate: maxM ? parseFloat(maxM[1]) : undefined,
+    ssid: ssidM ? ssidM[1].trim() : undefined,
+    phyMode: phyM ? phyM[1].trim() : undefined
+  }
+}
+
+function getDarwinProfileInfo(): DarwinAirportInfo | null {
+  const info = getAirportInfo()
+  if (info) return info
+
+  try {
+    const out = run('system_profiler SPAirPortDataType', 3000)
+    if (!out) return null
+
+    const bssidM = /BSSID:\s*([0-9a-fA-F:]+)/i.exec(out)
+    const chanM = /Channel:\s*(\d+)/i.exec(out)
+    const rssiM = /Signal \/ Noise:\s*(-?\d+)\s*dBm\s*\/\s*(-?\d+)\s*dBm/i.exec(out)
+    const rateM = /Transmit Rate:\s*(\d+)/i.exec(out)
+    const phyM = /PHY Mode:\s*(.+)$/m.exec(out)
+    const ssidM = /Current Network Information:\s*\n\s*([^:]+):/i.exec(out)
+
+    return {
+      bssid: bssidM ? bssidM[1].trim() : undefined,
+      channel: chanM ? parseInt(chanM[1], 10) : undefined,
+      rssi: rssiM ? parseInt(rssiM[1], 10) : undefined,
+      noise: rssiM ? parseInt(rssiM[2], 10) : undefined,
+      lastTxRate: rateM ? parseFloat(rateM[1]) : undefined,
+      maxRate: rateM ? parseFloat(rateM[1]) : undefined,
+      phyMode: phyM ? phyM[1].trim() : undefined,
+      ssid: ssidM ? ssidM[1].trim() : undefined
+    }
+  } catch {
+    return null
+  }
+}
+
 export function getCurrentConnection(): Connection | null {
+  const ap = getDarwinProfileInfo()
   const iface = getActiveWifiInterface()
   const out = run(`networksetup -getairportnetwork ${iface}`)
   const m = /Current Wi-Fi Network:\s*(.+)$/m.exec(out)
-  if (!m) return null
-  const ssid = m[1].trim()
+  const ssid = ap?.ssid || (m ? m[1].trim() : null)
+  if (!ssid) return null
+
+  const signalDbm = ap?.rssi ?? -55
+  const noiseDbm = ap?.noise ?? -92
+  const snr = ap?.rssi && ap?.noise ? Math.max(0, ap.rssi - ap.noise) : Math.max(0, signalDbm + 95)
+  const signal = Math.min(100, Math.max(0, Math.round((signalDbm + 100) * 2)))
+  const channel = ap?.channel ?? 36
+  const band = channel > 14 ? '5 GHz' : '2.4 GHz'
+  const generation = ap?.phyMode?.includes('ax') ? 'Wi-Fi 6' : ap?.phyMode?.includes('ac') ? 'Wi-Fi 5' : channel > 14 ? 'Wi-Fi 5' : 'Wi-Fi 4'
 
   return {
     ssid,
     profile: ssid,
-    signal: 90,
-    band: '5 GHz',
-    name: ssid
+    signal,
+    signalDbm,
+    snr,
+    channel,
+    frequency: channel > 14 ? `5.${channel} GHz (Ch ${channel})` : `2.4 GHz (Ch ${channel})`,
+    band,
+    generation,
+    bssid: ap?.bssid,
+    name: ssid,
+    rxRateMbps: ap?.lastTxRate,
+    txRateMbps: ap?.maxRate
   }
 }
 
@@ -73,11 +157,16 @@ export function getNetworkDetails(guidOrName: string): NetworkDetails {
 
   return {
     guid: guidOrName,
-    bssid: isCurrent ? 'Active Interface' : 'Saved Profile',
-    channel: 36,
+    bssid: isCurrent && conn?.bssid ? conn.bssid : (isCurrent ? 'Active Interface' : 'Saved Profile'),
+    channel: isCurrent && conn?.channel ? conn.channel : 36,
     auth: 'WPA2/WPA3 Personal',
-    band: '5 GHz',
-    frequency: '5.0 GHz',
+    band: isCurrent && conn?.band ? conn.band : '5 GHz',
+    frequency: isCurrent && conn?.frequency ? conn.frequency : '5.0 GHz',
+    generation: isCurrent ? conn?.generation : undefined,
+    signalDbm: isCurrent ? conn?.signalDbm : undefined,
+    snr: isCurrent ? conn?.snr : undefined,
+    rxRateMbps: isCurrent ? conn?.rxRateMbps : undefined,
+    txRateMbps: isCurrent ? conn?.txRateMbps : undefined,
     lastConnected: isCurrent ? 'Active now' : 'Previously connected'
   }
 }

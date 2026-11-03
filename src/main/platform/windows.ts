@@ -1,4 +1,4 @@
-import { exec, execSync, execFileSync } from 'child_process'
+import { exec, execSync, execFileSync, execFile } from 'child_process'
 import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -6,11 +6,42 @@ import type { Network, Connection, NetworkDetails, NetworkPlatformProvider } fro
 
 const BASE = 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList\\Profiles'
 
+export function mapRadioToGeneration(radio: string, band: string): string {
+  const r = (radio || '').toLowerCase()
+  const b = (band || '').toLowerCase()
+  if (r.includes('802.11be')) return 'Wi-Fi 7'
+  if (r.includes('802.11ax')) {
+    return b.includes('6') ? 'Wi-Fi 6E' : 'Wi-Fi 6'
+  }
+  if (r.includes('802.11ac')) return 'Wi-Fi 5'
+  if (r.includes('802.11n')) return 'Wi-Fi 4'
+  if (r.includes('802.11g') || r.includes('802.11a') || r.includes('802.11b')) return 'Wi-Fi 3'
+  return 'Wi-Fi'
+}
+
+export function getChannelFrequency(channel: number, band: string): string {
+  if (channel <= 0) return band || 'Wi-Fi'
+  if (channel >= 1 && channel <= 14) {
+    const mhz = 2407 + channel * 5
+    return `${(mhz / 1000).toFixed(3)} GHz (Ch ${channel})`
+  }
+  if (channel >= 32 && channel <= 177) {
+    const mhz = 5000 + channel * 5
+    return `${(mhz / 1000).toFixed(3)} GHz (Ch ${channel})`
+  }
+  if (band.includes('6')) {
+    const mhz = 5950 + channel * 5
+    return `${(mhz / 1000).toFixed(3)} GHz (Ch ${channel})`
+  }
+  return `${band} (Ch ${channel})`
+}
+
 function run(cmd: string, timeout = 3000): string {
   try {
     return execSync(cmd, {
       encoding: 'utf8',
       windowsHide: true,
+      stdio: ['ignore', 'pipe', 'ignore'],
       timeout
     }).toString()
   } catch {
@@ -22,6 +53,7 @@ function runStrict(cmd: string, timeout = 5000): string {
   return execSync(cmd, {
     encoding: 'utf8',
     windowsHide: true,
+    stdio: ['ignore', 'pipe', 'ignore'],
     timeout
   }).toString()
 }
@@ -33,9 +65,11 @@ export function getCurrentConnection(): Connection | null {
 
   const ssid = ssidM[1].trim()
   const profM = /^\s*Profile\s*:\s*(.+)$/m.exec(out)
+  const bssidM = /^\s*BSSID\s*:\s*(.+)$/m.exec(out)
   const sigM = /^\s*Signal\s*:\s*(\d+)%/m.exec(out)
   const radioM = /^\s*Radio type\s*:\s*(.+)$/m.exec(out)
   const bandM = /^\s*Band\s*:\s*(.+)$/m.exec(out)
+  const chanM = /^\s*Channel\s*:\s*(\d+)/m.exec(out)
 
   const signal = sigM ? parseInt(sigM[1], 10) : 0
   const radio = radioM ? radioM[1].trim() : ''
@@ -45,6 +79,13 @@ export function getCurrentConnection(): Connection | null {
       ? '5 GHz' : radio.includes('802.11g') || radio.includes('802.11n')
       ? '2.4 GHz' : 'Wi-Fi'
   }
+
+  const channel = chanM ? parseInt(chanM[1], 10) : undefined
+  const bssid = bssidM ? bssidM[1].trim() : undefined
+  const signalDbm = Math.round(signal / 2 - 100)
+  const snr = Math.max(0, signalDbm + 95)
+  const generation = mapRadioToGeneration(radio, band)
+  const frequency = channel ? getChannelFrequency(channel, band) : band
 
   const rxM = /^\s*Receive rate \(Mbps\)\s*:\s*([\d.]+)/m.exec(out)
   const txM = /^\s*Transmit rate \(Mbps\)\s*:\s*([\d.]+)/m.exec(out)
@@ -57,7 +98,14 @@ export function getCurrentConnection(): Connection | null {
     ssid,
     profile,
     signal,
+    signalDbm,
+    snr,
+    channel,
+    frequency,
     band,
+    generation,
+    radioType: radio,
+    bssid,
     name: profile || ssid,
     rxRateMbps,
     txRateMbps
@@ -183,7 +231,7 @@ if (-not $renamed) { exit 1; }
 
     exec(`powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${outerB64}`, { timeout: 30000 }, (err) => {
       if (err) {
-        reject(new Error('Administrator permission was cancelled or elevation failed.'))
+        reject(new Error('Rename canceled. Administrator privileges were not granted.'))
       } else {
         resolve()
       }
@@ -449,37 +497,80 @@ export async function reconnectNetwork(profileName?: string): Promise<boolean> {
 }
 
 export function getNetworkDetails(guidOrName: string): NetworkDetails {
-  const out = run('netsh wlan show interfaces', 2500)
-  const bssidM = /^\s*BSSID\s*:\s*(.+)$/m.exec(out)
-  const chanM = /^\s*Channel\s*:\s*(\d+)/m.exec(out)
-  const authM = /^\s*Authentication\s*:\s*(.+)$/m.exec(out)
-  const radioM = /^\s*Radio type\s*:\s*(.+)$/m.exec(out)
-  const bandM = /^\s*Band\s*:\s*(.+)$/m.exec(out)
-
-  const radio = radioM ? radioM[1].trim() : ''
-  let band = bandM ? bandM[1].trim() : ''
-  if (!band) {
-    band = radio.includes('802.11ax') || radio.includes('802.11ac') ? '5 GHz' : '2.4 GHz'
-  }
-  const freq = band === '5 GHz' ? '5.0 GHz' : '2.4 GHz'
-
   const conn = getCurrentConnection()
-  const isCurrent = conn && (conn.profile === guidOrName || conn.name === guidOrName || conn.ssid === guidOrName)
+  let isCurrent = false
+
+  if (conn) {
+    const target = (guidOrName || '').toLowerCase().trim()
+    if (
+      conn.profile.toLowerCase().trim() === target ||
+      conn.name.toLowerCase().trim() === target ||
+      conn.ssid.toLowerCase().trim() === target
+    ) {
+      isCurrent = true
+    } else if (guidOrName.startsWith('{')) {
+      try {
+        const q = run(`reg query "${BASE}\\${guidOrName}" /v ProfileName`, 2000)
+        const qm = /ProfileName\s+REG_SZ\s+(.+)$/m.exec(q)
+        if (qm) {
+          const pn = qm[1].trim().toLowerCase()
+          if (
+            pn === conn.profile.toLowerCase().trim() ||
+            pn === conn.name.toLowerCase().trim() ||
+            pn === conn.ssid.toLowerCase().trim()
+          ) {
+            isCurrent = true
+          }
+        }
+      } catch {}
+    }
+  }
+
+  if (isCurrent && conn) {
+    return {
+      guid: guidOrName,
+      bssid: conn.bssid || 'Connected',
+      channel: conn.channel || 0,
+      auth: 'WPA2/WPA3 Personal',
+      band: conn.band || 'Wi-Fi',
+      frequency: conn.frequency || conn.band || 'Wi-Fi',
+      generation: conn.generation,
+      signalDbm: conn.signalDbm,
+      snr: conn.snr,
+      radioType: conn.radioType,
+      rxRateMbps: conn.rxRateMbps,
+      txRateMbps: conn.txRateMbps,
+      lastConnected: 'Active now'
+    }
+  }
+
+  // Saved profile fallback
+  let auth = 'WPA2-Personal'
+  let radioType: string | undefined
+  try {
+    const profOut = run(`netsh wlan show profile name="${guidOrName.replace(/"/g, '')}"`, 2500)
+    const am = /Authentication\s*:\s*(.+)$/m.exec(profOut)
+    if (am) auth = am[1].trim()
+    const rm = /Radio type\s*:\s*(.+)$/m.exec(profOut)
+    if (rm && !rm[1].includes('Any')) radioType = rm[1].trim()
+  } catch {}
 
   return {
     guid: guidOrName,
-    bssid: isCurrent && bssidM ? bssidM[1].trim() : 'Saved Profile',
-    channel: isCurrent && chanM ? parseInt(chanM[1], 10) : 0,
-    auth: isCurrent && authM ? authM[1].trim() : 'WPA2-Personal',
-    band,
-    frequency: freq,
-    lastConnected: isCurrent ? 'Active now' : 'Previously connected'
+    bssid: 'Saved Profile',
+    channel: 0,
+    auth,
+    band: 'Saved Profile',
+    frequency: 'Saved Profile',
+    radioType,
+    lastConnected: 'Previously connected'
   }
 }
 
 export function getRawNetworkBytesWindows(): Promise<{ received: number; sent: number }> {
   return new Promise((resolve, reject) => {
-    exec('netstat -e', { timeout: 1500, windowsHide: true }, (err, stdout) => {
+    // Directly invoke netstat.exe without spawning cmd.exe to eliminate process churn
+    execFile('netstat.exe', ['-e'], { timeout: 1500, windowsHide: true }, (err, stdout) => {
       if (err) return reject(err)
       const lines = stdout.split('\n')
       for (const line of lines) {
@@ -507,3 +598,4 @@ export const windowsProvider: NetworkPlatformProvider = {
   reconnectNetwork,
   getRawNetworkBytes: getRawNetworkBytesWindows
 }
+

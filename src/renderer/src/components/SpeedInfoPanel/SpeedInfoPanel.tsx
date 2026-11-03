@@ -4,7 +4,7 @@ import { CheckIcon, CloseIcon, BoltIcon } from '../../icons'
 import styles from './SpeedInfoPanel.module.css'
 
 interface Props {
-  downMBps: number
+  downMBps?: number
   onClose: () => void
 }
 
@@ -44,7 +44,9 @@ function getTier(mbps: number): string {
   return 'Ultra Fast'
 }
 
-export const SpeedInfoPanel: React.FC<Props> = ({ downMBps, onClose }) => {
+export const SpeedInfoPanel: React.FC<Props> = ({ downMBps: propDownMBps, onClose }) => {
+  const storeDownMBps = useStore(s => s.speed.downMBps)
+  const downMBps = propDownMBps ?? storeDownMBps
   const { connection, testedSpeed, setTestedSpeed, peakDownMBps, addToast } = useStore()
   const [testing, setTesting] = useState(false)
 

@@ -13,7 +13,14 @@ export type Connection = {
   ssid: string
   profile: string
   signal: number
+  signalDbm?: number
+  snr?: number
+  channel?: number
+  frequency?: string
   band: string
+  generation?: string
+  radioType?: string
+  bssid?: string
   name: string
   rxRateMbps?: number
   txRateMbps?: number
@@ -22,11 +29,24 @@ export type Connection = {
 export type NetworkDetails = {
   guid: string
   bssid: string
+  maskedBssid?: string
   channel: number
   auth: string
   band: string
   frequency: string
+  generation?: string
+  signalDbm?: number
+  snr?: number
+  radioType?: string
+  rxRateMbps?: number
+  txRateMbps?: number
   lastConnected: string
+}
+
+export type StreamerStatus = {
+  detectedApp: string | null
+  isCloaked: boolean
+  cooldownSeconds: number
 }
 
 export type SpeedSample = {
@@ -58,11 +78,27 @@ export type AppSettings = {
   autoRefreshInterval: number
   theme: 'dark' | 'light'
   showEthernet: boolean
+  ultraLowMemory: boolean
+  autoCloakStreamer: boolean
+  streamerMaskName: string
+  bssidCloaking: boolean
+  bssidMaskMode: 'full' | 'partial'
+  silentElevation: boolean
+}
+
+export type ElevationStatus = {
+  isElevated: boolean
+  silentElevationEnabled: boolean
+  taskConfigured: boolean
+  tier: 'task' | 'broker' | 'jit'
 }
 
 const api = {
   isAdmin: (): Promise<boolean> => ipcRenderer.invoke('nm:is-admin'),
   elevate: (): Promise<void> => ipcRenderer.invoke('nm:elevate'),
+  getElevationStatus: (): Promise<ElevationStatus> => ipcRenderer.invoke('nm:get-elevation-status'),
+  setupSilentElevation: (): Promise<{ success: boolean; message?: string }> => ipcRenderer.invoke('nm:setup-silent-elevation'),
+  removeSilentElevation: (): Promise<{ success: boolean; message?: string }> => ipcRenderer.invoke('nm:remove-silent-elevation'),
 
   getNetworks: (): Promise<Network[]> => ipcRenderer.invoke('nm:get-networks'),
   getConnection: (): Promise<Connection | null> => ipcRenderer.invoke('nm:get-connection'),
@@ -84,6 +120,18 @@ const api = {
   maximize: (): Promise<boolean> => ipcRenderer.invoke('nm:maximize'),
   isMaximized: (): Promise<boolean> => ipcRenderer.invoke('nm:is-maximized'),
   close: (): void => ipcRenderer.send('nm:close'),
+
+  trimMemory: (): Promise<void> => ipcRenderer.invoke('nm:trim-memory'),
+
+  getStreamerStatus: (): Promise<StreamerStatus> => ipcRenderer.invoke('nm:get-streamer-status'),
+  toggleStreamerCloak: (): Promise<StreamerStatus> => ipcRenderer.invoke('nm:toggle-streamer-cloak'),
+  onStreamerStatus: (cb: (status: StreamerStatus) => void): (() => void) => {
+    const handler = (_: unknown, status: StreamerStatus) => cb(status)
+    ipcRenderer.on('nm:streamer-status', handler)
+    return () => {
+      ipcRenderer.removeListener('nm:streamer-status', handler)
+    }
+  },
 
   onMaximizeChange: (cb: (isMax: boolean) => void): (() => void) => {
     const handler = (_: unknown, val: boolean) => cb(val)

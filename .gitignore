@@ -19,3 +19,8 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Benchmarks temp
+.benchmark-profile*/
+.test-profile*/
+
+

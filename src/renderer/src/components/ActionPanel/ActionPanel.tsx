@@ -63,8 +63,8 @@ export const ActionPanel: React.FC = () => {
       }
     } catch (err: any) {
       const msg = err?.message || ''
-      if (msg.includes('cancelled')) {
-        addToast('Administrator permission was cancelled', 'info')
+      if (msg.includes('cancel') || msg.includes('cancelled') || msg.includes('canceled')) {
+        addToast('Rename canceled. Administrator privileges were not granted.', 'info')
       } else if (msg.includes('Access is denied') || msg.includes('denied')) {
         addToast('Administrator permission required to rename networks in Windows', 'error')
       } else {

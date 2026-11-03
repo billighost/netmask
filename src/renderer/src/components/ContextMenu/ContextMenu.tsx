@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from 'react'
 import { useStore } from '../../store'
-import { CopyIcon, RestoreIcon } from '../../icons'
+import { CopyIcon, RestoreIcon, InfoIcon, ShieldIcon } from '../../icons'
 import styles from './ContextMenu.module.css'
 
 export const ContextMenu: React.FC = () => {
-  const { contextMenu, setContextMenu, networks, selectedGuid, selectNetwork, addToast, setNetworks, setConnection } = useStore()
+  const { contextMenu, setContextMenu, networks, selectedGuid, selectNetwork, addToast, setNetworks, setConnection, setDetailsModalGuid, connection, settings, bssidPeek, streamerStatus } = useStore()
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -32,6 +32,23 @@ export const ContextMenu: React.FC = () => {
       action: () => selectNetwork(net.guid),
     },
     {
+      label: 'RF Diagnostics',
+      icon: <InfoIcon size={13} />,
+      action: () => setDetailsModalGuid(net.guid),
+    },
+    ...(net.live ? [{
+      label: streamerStatus.isCloaked ? 'Deactivate Stream Safe' : 'Cloak with Stream Safe',
+      icon: <ShieldIcon size={13} color="#c084fc" />,
+      action: async () => {
+        try {
+          const s = await window.nm.toggleStreamerCloak()
+          useStore.getState().setStreamerStatus(s)
+          await refresh()
+          addToast(s.isCloaked ? 'Stream Safe Cloak Activated' : 'Stream Safe Cloak Deactivated', 'info')
+        } catch {}
+      }
+    }] : []),
+    {
       label: 'Copy name',
       icon: <CopyIcon size={13} />,
       action: () => { navigator.clipboard.writeText(net.name); addToast('Copied to clipboard', 'info') },
@@ -41,6 +58,21 @@ export const ContextMenu: React.FC = () => {
       icon: <CopyIcon size={13} />,
       action: () => { navigator.clipboard.writeText(net.guid); addToast('GUID copied', 'info') },
     },
+    ...(net.live && connection?.bssid ? [{
+      label: settings.bssidCloaking && !bssidPeek ? 'Copy BSSID (Masked)' : 'Copy BSSID',
+      icon: <CopyIcon size={13} />,
+      action: () => {
+        const masked = settings.bssidCloaking && !bssidPeek
+        const parts = connection.bssid!.trim().split(/[:-]/)
+        const val = masked
+          ? (settings.bssidMaskMode === 'full'
+              ? 'XX:XX:XX:XX:XX:XX'
+              : `${parts[0].toUpperCase()}:${parts[1].toUpperCase()}:${parts[2].toUpperCase()}:••:••:••`)
+          : connection.bssid!.toUpperCase()
+        navigator.clipboard.writeText(val)
+        addToast(masked ? 'Copied cloaked BSSID (Stream Safe)' : 'Copied real BSSID', 'info')
+      }
+    }] : []),
     ...(net.renamed ? [{
       label: 'Restore original',
       icon: <RestoreIcon size={13} />,
@@ -51,9 +83,9 @@ export const ContextMenu: React.FC = () => {
     }] : []),
   ]
 
-  // Clamp position to viewport
-  const x = Math.min(contextMenu.x, window.innerWidth - 180)
-  const y = Math.min(contextMenu.y, window.innerHeight - (items.length * 34 + 16))
+  // Clamp position to viewport to avoid offscreen positioning
+  const x = Math.max(8, Math.min(contextMenu.x, window.innerWidth - 190))
+  const y = Math.max(8, Math.min(contextMenu.y, window.innerHeight - (items.length * 34 + 24)))
 
   return (
     <div

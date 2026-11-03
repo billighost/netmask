@@ -18,6 +18,12 @@ export interface AppSettings {
   autoRefreshInterval: number
   theme: 'dark' | 'light'
   showEthernet: boolean
+  ultraLowMemory: boolean
+  autoCloakStreamer: boolean
+  streamerMaskName: string
+  bssidCloaking: boolean
+  bssidMaskMode: 'full' | 'partial'
+  silentElevation: boolean
   windowBounds?: WindowBounds
 }
 
@@ -26,7 +32,13 @@ const DEFAULTS: AppSettings = {
   launchOnStartup: false,
   autoRefreshInterval: 30,
   theme: 'dark',
-  showEthernet: true
+  showEthernet: true,
+  ultraLowMemory: false,
+  autoCloakStreamer: true,
+  streamerMaskName: 'StreamSafe-Fiber-Pro',
+  bssidCloaking: true,
+  bssidMaskMode: 'partial',
+  silentElevation: true
 }
 
 export function getSettings(): AppSettings {

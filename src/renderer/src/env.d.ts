@@ -6,6 +6,9 @@ import type { AppSettings } from './types'
 export interface NmApi {
   isAdmin(): Promise<boolean>
   elevate(): Promise<void>
+  getElevationStatus(): Promise<import('./types').ElevationStatus>
+  setupSilentElevation(): Promise<{ success: boolean; message?: string }>
+  removeSilentElevation(): Promise<{ success: boolean; message?: string }>
   getNetworks(): Promise<import('./types').Network[]>
   getConnection(): Promise<import('./types').Connection | null>
   getDetails(guid: string): Promise<import('./types').NetworkDetails>
@@ -22,6 +25,10 @@ export interface NmApi {
   maximize(): Promise<boolean>
   isMaximized(): Promise<boolean>
   close(): void
+  trimMemory(): Promise<void>
+  getStreamerStatus(): Promise<import('./types').StreamerStatus>
+  toggleStreamerCloak(): Promise<import('./types').StreamerStatus>
+  onStreamerStatus(cb: (status: import('./types').StreamerStatus) => void): () => void
   onMaximizeChange(cb: (isMax: boolean) => void): () => void
   onSpeed(cb: (sample: import('./types').SpeedSample) => void): () => void
   checkUpdate(): Promise<import('./types').UpdateInfo | null>

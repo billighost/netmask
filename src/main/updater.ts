@@ -91,12 +91,20 @@ export function checkGitHubRelease(win?: BrowserWindow | null): Promise<UpdateIn
   })
 }
 
-export function setupAutoUpdater(win: BrowserWindow | null): void {
+let windowGetter: (() => BrowserWindow | null) | null = null
+
+export function setupAutoUpdater(target: BrowserWindow | null | (() => BrowserWindow | null)): void {
+  if (typeof target === 'function') {
+    windowGetter = target
+  } else {
+    windowGetter = () => target
+  }
   // Configure electron-updater
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
 
   autoUpdater.on('update-available', (info) => {
+    const win = windowGetter ? windowGetter() : null
     if (win && !win.isDestroyed()) {
       win.webContents.send('nm:update-available', {
         version: info.version,
@@ -110,6 +118,7 @@ export function setupAutoUpdater(win: BrowserWindow | null): void {
 
   // Initial check after 4 seconds
   setTimeout(() => {
+    const win = windowGetter ? windowGetter() : null
     checkGitHubRelease(win)
     if (app.isPackaged) {
       try { autoUpdater.checkForUpdates().catch(() => {}) } catch {}
@@ -119,6 +128,7 @@ export function setupAutoUpdater(win: BrowserWindow | null): void {
   // Periodic check every 4 hours
   if (updateCheckTimer) clearInterval(updateCheckTimer)
   updateCheckTimer = setInterval(() => {
+    const win = windowGetter ? windowGetter() : null
     checkGitHubRelease(win)
     if (app.isPackaged) {
       try { autoUpdater.checkForUpdates().catch(() => {}) } catch {}
