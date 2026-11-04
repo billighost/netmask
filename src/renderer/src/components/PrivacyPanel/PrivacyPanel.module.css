@@ -1,0 +1,12 @@
+.root { border-top: 1px solid var(--border); padding-top: 16px; min-width: 0; }
+.main { display: flex; align-items: center; gap: 10px; }
+.main > svg { color: var(--accent); }
+.copy { flex: 1; min-width: 0; }
+.copy h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 11px; font-weight: 600; }
+.copy p { margin-top: 4px; font-size: 10px; color: var(--text-secondary); line-height: 1.6; }
+.address { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 17px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 9px; color: var(--text-secondary); }
+.address > span { display: inline-flex; align-items: center; gap: 6px; }
+.address code { color: var(--text-primary); font: 10px var(--font-mono); overflow-wrap: anywhere; }
+.actions { display: flex; gap: 2px; margin-left: auto; }
+.actions button { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 3px; color: var(--text-muted); }
+.actions button:hover { color: var(--accent); background: var(--accent-dim); }

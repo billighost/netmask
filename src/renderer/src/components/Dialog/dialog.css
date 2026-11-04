@@ -1,0 +1,36 @@
+/* One scroll container per dialog keeps headers and actions reachable even when
+   the app is resized to its minimum height. Existing component styling remains. */
+.nm-dialog-scrim {
+  padding: 8px !important;
+  z-index: 1100 !important;
+  min-width: 0;
+}
+.nm-dialog {
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  display: block !important;
+  scrollbar-gutter: stable;
+}
+.nm-dialog > * { flex-shrink: 0; min-width: 0; }
+.nm-dialog > [class*="body"] { max-height: none !important; overflow: visible !important; }
+.nm-dialog [class*="titleGroup"], .nm-dialog [class*="headerTitleGroup"] { min-width: 0; }
+.nm-dialog [class*="closeBtn"] { flex-shrink: 0; }
+.nm-dialog [class*="Value"], .nm-dialog [class*="value"], .nm-dialog [class*="Sub"], .nm-dialog [class*="sub"] { overflow-wrap: anywhere; }
+.nm-dialog button:disabled { cursor: default; opacity: .5; }
+.nm-error { color: var(--red); padding: 10px 0; user-select: text; }
+@media (max-width: 380px) {
+  .nm-dialog [class*="topBar"], .nm-dialog [class*="topActions"],
+  .nm-dialog [class*="actionCard"], .nm-dialog [class*="actionRow"],
+  .nm-dialog [class*="updateRow"], .nm-dialog [class*="progressInfo"],
+  .nm-dialog [class*="netHeader"], .nm-dialog [class*="authorLinkItem"],
+  .nm-dialog [class*="btnRow"], .nm-dialog [class*="footer"] { flex-wrap: wrap; gap: 8px; }
+  .nm-dialog [class*="shortcutRow"] { flex-direction: column; align-items: flex-start; }
+  .nm-dialog [class*="grid"] { grid-template-columns: minmax(0, 1fr); }
+  .nm-dialog [class*="itemLeft"] { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

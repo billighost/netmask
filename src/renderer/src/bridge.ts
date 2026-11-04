@@ -1,10 +1,10 @@
-import { invoke, isTauri } from '@tauri-apps/api/core'
+import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import type {
   Network, Connection, NetworkDetails, StreamerStatus, SpeedSample, SpeedTestResult,
   UpdateInfo, DownloadProgress, UpdateStatus, AppSettings, ElevationStatus,
   DeviceIdentity, DnsResolverResult, RoamingSettings, PingTelemetry, WifiQrData,
-  CaptivePortalStatus
+  CaptivePortalStatus, PlatformCapabilities, NetworkSnapshot
 } from './types'
 
 function createListener<T>(eventName: string) {
@@ -29,6 +29,7 @@ export const tauriApi = {
   isAdmin: (): Promise<boolean> => invoke('nm_is_admin'),
   elevate: (): Promise<void> => invoke('nm_elevate'),
   getElevationStatus: (): Promise<ElevationStatus> => invoke('nm_get_elevation_status'),
+  getCapabilities: (): Promise<PlatformCapabilities> => invoke('nm_get_capabilities'),
   setupSilentElevation: (): Promise<{ success: boolean; message?: string }> => invoke('nm_setup_silent_elevation'),
   removeSilentElevation: (): Promise<{ success: boolean; message?: string }> => invoke('nm_remove_silent_elevation'),
 
@@ -54,7 +55,7 @@ export const tauriApi = {
   getPingTelemetry: (): Promise<PingTelemetry> => invoke('nm_get_ping_telemetry'),
   onPingTelemetry: createListener<PingTelemetry>('nm:ping-telemetry'),
 
-  // Instant Wi-Fi Share via Encrypted QR Code
+  // Wi-Fi QR codes contain credentials; sharing requires an explicit user action.
   getWifiQr: (profileName: string): Promise<WifiQrData> => invoke('nm_get_wifi_qr', { profileName }),
 
   // Captive Portal Detection
@@ -63,6 +64,7 @@ export const tauriApi = {
   onCaptivePortalStatus: createListener<CaptivePortalStatus>('nm:captive-portal-status'),
 
   getNetworks: (): Promise<Network[]> => invoke('nm_get_networks'),
+  getNetworkSnapshot: (): Promise<NetworkSnapshot> => invoke('nm_get_network_snapshot'),
   getConnection: (): Promise<Connection | null> => invoke('nm_get_connection'),
   getDetails: (guid: string): Promise<NetworkDetails> => invoke('nm_get_details', { guid }),
 
@@ -81,10 +83,10 @@ export const tauriApi = {
   setSetting: (key: string, value: unknown): Promise<void> =>
     invoke('nm_set_setting', { key, value }),
 
-  minimize: (): void => { invoke('nm_minimize').catch(() => {}) },
+  minimize: (): Promise<void> => invoke('nm_minimize'),
   maximize: (): Promise<boolean> => invoke('nm_maximize'),
   isMaximized: (): Promise<boolean> => invoke('nm_is_maximized'),
-  close: (): void => { invoke('nm_close').catch(() => {}) },
+  close: (): Promise<void> => invoke('nm_close'),
 
   trimMemory: (): Promise<void> => invoke('nm_trim_memory'),
 
@@ -93,6 +95,7 @@ export const tauriApi = {
   onStreamerStatus: createListener<StreamerStatus>('nm:streamer-status'),
 
   onMaximizeChange: createListener<boolean>('nm:maximize-change'),
+  onVisibility: createListener<boolean>('nm:visibility'),
   onSpeed: createListener<SpeedSample>('nm:speed'),
 
   getVersion: (): Promise<string> => invoke('nm_get_version'),
@@ -107,8 +110,5 @@ export const tauriApi = {
   onUpdateDownloaded: createListener<{ filePath: string; version: string }>('nm:update-downloaded')
 }
 
-// In Tauri environment (or webview), populate window.nm with Tauri API if not already provided
-if (typeof window !== 'undefined' && (!window.nm || isTauri())) {
-  window.nm = tauriApi as unknown as typeof window.nm
-}
+if (typeof window !== 'undefined') window.nm = tauriApi
 

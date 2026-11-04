@@ -3,7 +3,6 @@ node_modules/
 
 # Build artifacts
 dist/
-out/
 
 # Logs & temp
 *.log
@@ -19,17 +18,14 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Benchmarks temp
-.benchmark-profile*/
-.test-profile*/
-
-
-
 # Mesh Context Layer (track namespace pointer, ignore local SQLite databases)
 .mesh/*.db
 .mesh/*.db-wal
 .mesh/*.db-shm
 .mesh/audit*
 src-tauri/target/
-src-tauri/target/
+.tmp/
+.benchmark-profile/
+artifacts/
+release-assets/
 

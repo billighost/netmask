@@ -1,199 +1,139 @@
-# 🚀 NetMask AI & Developer Release Protocol
+# NetMask release protocol
 
-> **Target Audience:** AI Coding Assistants (Antigravity, Cursor, Copilot, Claude, etc.) & Maintainers.  
-> **Repository:** `billighost/netmask`  
-> **Author & Lead Maintainer:** Bello Bilal ([@billighost](https://github.com/billighost) • `bb2010ng@gmail.com`)
+Repository: [billighost/netmask](https://github.com/billighost/netmask). Maintainer: **Bello Bilal**, `bb2010ng@gmail.com`.
 
----
+Follow these seven steps in order. Releases use the Tauri host, pass local and multi-platform verification, merge through a pull request, and tag the merged commit on `main`. Never push changes directly to protected `main` or tag an unmerged feature commit.
 
-## 🧭 Overview & Core Principles
+## 1. Set the version and prepare notes
 
-NetMask uses a strict CI/CD, branch protection, and verification architecture. When shipping a release, every step must be executed in order. Bypassing tests, breaking React hook rules, or attempting direct pushes to protected branches will break production.
+Choose a stable semantic version and synchronize every manifest and lockfile:
 
----
-
-## 📋 The 7-Step Release Checklist
-
-```mermaid
-flowchart TD
-    S1["1. Version Bump (package.json & README.md)"] --> S2["2. Local Verification (Lint, Typecheck, Test, Build)"]
-    S2 --> S3["3. Branch & Push (release/vX.Y.Z)"]
-    S3 --> S4["4. Open & Merge PR via GitHub API"]
-    S4 --> S5["5. Tag & Push vX.Y.Z on main"]
-    S5 --> S6["6. Monitor GitHub Actions (18 Multi-OS Assets)"]
-    S6 --> S7["7. Patch Release Notes & Verify"]
+```sh
+npm run version:set -- X.Y.Z
 ```
 
----
+The helper updates `package.json`, `package-lock.json`, `src-tauri/tauri.conf.json`, both Rust package manifests, and the two workspace package versions in `Cargo.lock`.
 
-### Step 1: Version Bumps
+Update the latest version and all direct downloads in `README.md`. Write `docs/releases/vX.Y.Z.md` with concrete changes, supported architectures, direct downloads, and remaining platform limitations. Preserve the maintainer attribution and license.
 
-Update the semantic version in the following files:
+The title bar, settings, tray, and updater read the Rust package version at runtime. Do not hardcode the release version into UI components.
 
-1. **`package.json`**:
-   ```json
-   "version": "X.Y.Z"
-   ```
-2. **`README.md`**:
-   * Update header: `# 🎭 NetMask vX.Y.Z`
-   * Update download table links from previous version to `X.Y.Z`.
-   * Update Quick Download header: `### ⚡ Quick Download (Latest: vX.Y.Z)`
+## 2. Complete local verification
 
-> [!NOTE]  
-> All UI components (TitleBar, SettingsModal, Tray menu, Captive portal probes) pull the version dynamically at runtime via `app.getVersion()` and `window.nm.getVersion()`. You do **not** need to edit UI components for a version bump.
+Run the mandatory frontend checks in this order:
 
----
-
-### Step 2: The Mandatory 4-Tier Verification Pipeline
-
-Before creating a release branch, run all 4 validation suites in sequence:
-
-```bash
-# 1. React Rules of Hooks AST Static Analyzer (Zero hooks after returns or in conditionals)
+```sh
 npm run lint
-
-# 2. Complete TypeScript Typecheck (0 errors)
 npm run typecheck
-
-# 3. Comprehensive 16-point Test Verification Suite
 npm test
-
-# 4. Production Bundle Compilation (Main, Preload, and Renderer)
 npm run build
 ```
 
-> [!IMPORTANT]  
-> Never commit or push if any of the above commands fail. Fix all errors before proceeding.
+For interface changes, also run `npm run test:ui` after the frontend build. The browser fixture checks the implemented app and design studies at small and large sizes without changing a real network. It uses installed Edge on Windows or Playwright Chromium; `npx playwright install chromium` installs the latter when needed. CI runs this check and uploads screenshots.
 
----
+Then verify the native workspace:
 
-### Step 3: Branch & Commit (Never Push Directly to `main`)
-
-`main` has **branch protection enabled** on GitHub. Direct pushes (`git push origin main`) are rejected by remote policy.
-
-1. Create a release branch:
-   ```bash
-   git checkout -b release/vX.Y.Z
-   ```
-2. Stage and commit:
-   ```bash
-   git add package.json README.md
-   git commit -m "chore(release): vX.Y.Z - <Summary of Changes>"
-   ```
-3. Push to remote:
-   ```bash
-   git push -u origin release/vX.Y.Z
-   ```
-
----
-
-### Step 4: Open & Merge Pull Request via Local Git Credentials
-
-To authenticate with GitHub's REST API without exposing tokens or requiring environment secrets, use the machine's Git Credential Manager:
-
-```javascript
-// Node.js PR creation and squash-merge pattern:
-const { execSync } = require('child_process');
-const https = require('https');
-
-// Extract token securely from local credential helper
-const out = execSync('git credential fill', { input: 'protocol=https\nhost=github.com\n\n' }).toString();
-const token = out.match(/password=(.+)/)[1].trim();
-
-// 1. Create PR
-const prBody = JSON.stringify({
-  title: 'chore(release): vX.Y.Z - <Release Title>',
-  head: 'release/vX.Y.Z',
-  base: 'main',
-  body: '## Release vX.Y.Z\n<Changelog details>'
-});
-
-// POST https://api.github.com/repos/billighost/netmask/pulls
-// ...
-
-// 2. Squash merge PR
-const mergeBody = JSON.stringify({
-  commit_title: 'Merge pull request #<PR_NUM> from billighost/release/vX.Y.Z',
-  merge_method: 'squash'
-});
-// PUT https://api.github.com/repos/billighost/netmask/pulls/<PR_NUM>/merge
+```sh
+npm run format:native
+npm run check:native
+npm run test:native
 ```
 
----
+Fix failures before committing or pushing. The hook scanner detects unsafe hook ordering; Node tests exercise actual frontend actions, persistence queues, and release-package validation. Native core tests use isolated storage, socket fixtures, and subprocess fixtures rather than changing a real network.
 
-### Step 5: Tag & Push on `main`
+A missing system linker, webview development package, or platform runtime is an environment limitation, not a passing check. Document it and obtain a successful native check and core test result on the corresponding CI runner before merging. OS permission prompts, Wi-Fi reconnects, DNS mutations, and driver settings need a separate manual check on real hardware.
 
-Once the pull request has merged:
+For native changes, also build the host installers with `npm run dist:win`, `npm run dist:mac`, or `npm run dist:linux` where the relevant build toolchain is installed. Installer compilation on all four release runners is mandatory before publication.
 
-1. Switch back to `main` and pull the latest squash commit:
-   ```bash
-   git checkout main
-   git pull origin main
-   git branch -d release/vX.Y.Z
-   ```
-2. Create and push the annotated release tag:
-   ```bash
-   git tag -a vX.Y.Z -m "Release vX.Y.Z - <Release Title>"
-   git push origin vX.Y.Z
-   ```
+## 3. Create and push the release branch
 
----
+After verification:
 
-### Step 6: GitHub Actions Multi-OS Build Pipeline
-
-Pushing tag `vX.Y.Z` automatically triggers `.github/workflows/release.yml`. This workflow runs a matrix build producing **18 multi-platform assets**:
-
-| Runner Platform | Compiled Distributable Assets |
-| :--- | :--- |
-| **`windows-latest`** | `NetMask-Setup-X.Y.Z.exe`, `NetMask-Windows-X.Y.Z-x64.exe` (portable), `NetMask-Windows-X.Y.Z-x64.zip`, `.blockmap`, `latest.yml` |
-| **`macos-latest`** | `NetMask-macOS-X.Y.Z-arm64.dmg`, `NetMask-macOS-X.Y.Z-x64.dmg`, `.zip` archives, `.blockmap`, `latest-mac.yml` |
-| **`ubuntu-latest`** | `NetMask-Linux-X.Y.Z-x86_64.AppImage`, `NetMask-Linux-X.Y.Z-amd64.deb`, `NetMask-Linux-X.Y.Z-x64.tar.gz`, `latest-linux.yml` |
-
-#### How to Monitor the Workflow:
-Query the GitHub Actions API:
-```bash
-GET https://api.github.com/repos/billighost/netmask/actions/runs?per_page=3
+```sh
+git switch -c release/vX.Y.Z
+git add <reviewed source, tests, docs, manifests, and assets>
+git commit -m "chore(release): vX.Y.Z - <summary>"
+git push -u origin release/vX.Y.Z
 ```
-Wait until status is `completed` and conclusion is `success`.
 
----
+Review `git diff --cached` first. Do not commit installers, the native target directory, dependencies, local data, authentication material, or temporary browser artifacts.
 
-### Step 7: Patch Release Notes
+## 4. Open, verify, and merge the pull request
 
-Once the GitHub Release object is created by GitHub Actions:
-1. Fetch release ID via:
-   ```bash
-   GET https://api.github.com/repos/billighost/netmask/releases/tags/vX.Y.Z
-   ```
-2. Send a `PATCH` request to `https://api.github.com/repos/billighost/netmask/releases/<RELEASE_ID>` with detailed Markdown notes, feature highlights, and direct platform download links.
+Use GitHub CLI or `scripts/github-release.cjs`. The helper authenticates through `GH_TOKEN`, `GITHUB_TOKEN`, or Git Credential Manager without printing or saving credentials.
 
----
+Create a temporary JSON file containing `title`, `head`, `base: "main"`, and a Markdown `body` that explains behavior, validation, and platform limits:
 
-## 🧠 Critical Architectural Facts & Lessons Learned
+```sh
+node scripts/github-release.cjs pr-create .tmp/release-pr.json
+node scripts/github-release.cjs checks <exact-head-sha>
+node scripts/github-release.cjs pr <pr-number>
+```
 
-### 1. React Rules of Hooks
-* **The Invariant:** In React components, hooks (`useState`, `useEffect`, `useStore`, `useCallback`) **must be declared unconditionally at the very top of the component body**.
-* **The Bug:** Placing an early return (e.g. `if (!guid) return null;`) above subsequent `useStore(...)` calls violates React's fiber linked-list indexing. When condition state toggles from false to true, React encounters *more hooks than during the previous render* and unmounts the entire app into a blank screen.
-* **The Enforcement:** [`scripts/lint-hooks.js`](file:///c:/Users/bb201/desktop/netmask/scripts/lint-hooks.js) parses the TypeScript AST of every `.tsx` file. Always run `npm run lint` before releasing.
+Wait for **TypeScript Check** and every **Build** check on the current PR head to finish successfully. Native CI covers Windows, Apple silicon, Intel macOS, and Linux. Do not rely on checks from an older commit or merge while checks are pending.
 
-### 2. Standby Unloading vs In-App Update Downloads
-* **The Invariant:** When minimizing to the tray, NetMask unloads the Chromium renderer process to drop RAM to ~18–25 MB.
-* **The Rule:** If an update is actively downloading (`isUpdateDownloading()`), `destroyWindowToTray()` **must not** destroy the window; it must only hide it (`mainWindow.hide()`). Destroying the window during download wipes the renderer's download progress state and causes reconnect errors upon restore.
-* **Updater State Sync:** `window.nm.getUpdateStatus()` syncs active download percent, ready-to-install status, and downloaded installer file path to any newly mounted window.
+```sh
+node scripts/github-release.cjs pr-merge <pr-number> <verified-head-sha>
+```
 
-### 3. Windows Line Endings (`.gitattributes`)
-* Text files must use LF line endings on commit (`* text=auto eol=lf` in `.gitattributes`).
-* Without this, Windows CRLF conversions create false-positive unstaged changes in Git (`git diff` shows 0 code lines changed, but git status shows modified).
+The required SHA guards against merging changes that arrived after review. Squash merge only after all required checks pass.
 
-### 4. Silent Elevation Engine
-* Windows network profile renaming and adapter DNS configuration require administrator privileges.
-* NetMask avoids annoying UAC prompts via a 3-tier elevation cascade:
-  1. **Tier 1:** Highest-privilege Task Scheduler task `NetMask_Elevated` (`schtasks.exe /run /tn NetMask_Elevated`).
-  2. **Tier 2:** NetMask Elevation Broker service fallback.
-  3. **Tier 3:** JIT PowerShell `Start-Process -Verb RunAs` elevation prompt fallback.
+## 5. Tag the merged commit
 
-### 5. Author Attribution
-* Maintainer & Lead Creator: **Bello Bilal**
-* Email: `bb2010ng@gmail.com`
-* GitHub: [`https://github.com/billighost`](https://github.com/billighost)
-* Attribution in `package.json`, `electron-builder.yml`, `SettingsModal.tsx`, and `LICENSE` must always be preserved.
+Fetch the result, verify the PR's returned merge SHA, and advance local `main` with a fast-forward:
+
+```sh
+git fetch origin main
+git switch main
+git merge --ff-only origin/main
+git tag -a vX.Y.Z -m "Release vX.Y.Z - <summary>"
+git push origin vX.Y.Z
+```
+
+Before pushing, verify that the tag resolves to the merged commit and that `package.json` at that commit has version `X.Y.Z`.
+
+## 6. Monitor native installer builds
+
+The tag triggers `.github/workflows/release.yml`. Its first job checks the tag, package version, release notes, and ancestry on `origin/main`. Manual workflow dispatch must specify an existing version tag; it checks out that tag rather than the branch used to launch the workflow.
+
+| Runner | Published native packages |
+| --- | --- |
+| `windows-latest` | `NetMask_X.Y.Z_x64-setup.exe`, `NetMask_X.Y.Z_x64_en-US.msi` |
+| `macos-latest` | `NetMask_X.Y.Z_aarch64.dmg` |
+| `macos-15-intel` | `NetMask_X.Y.Z_x64.dmg` |
+| `ubuntu-latest` | `NetMask_X.Y.Z_amd64.deb`, `NetMask_X.Y.Z_amd64.AppImage` |
+
+Each runner checks formatting, compiles the workspace, runs native core tests, and builds its installers. The publish job runs only after every runner succeeds. It requires exactly six non-empty native packages, rejects unexpected or duplicate files, and generates `checksums.txt`.
+
+```sh
+node scripts/github-release.cjs runs <merged-sha>
+node scripts/github-release.cjs run <release-run-id>
+node scripts/github-release.cjs logs <failed-job-id>
+```
+
+Wait for `completed` / `success`. If a release build fails, repair it through a new PR. Do not silently move a published tag to different code. A manual rerun is appropriate for a transient service failure when the tagged source remains unchanged.
+
+## 7. Verify the release and download links
+
+```sh
+node scripts/github-release.cjs release vX.Y.Z
+```
+
+Check that the release is published, targets the merged tag, includes every package and `checksums.txt`, and contains the prepared release notes. Open or fetch the README's direct downloads and verify the exact filenames and architectures. The native updater selects the current platform's package and requires GitHub's SHA-256 asset digest before offering an in-app verified download; releases without a digest remain accessible from their release page.
+
+The workflow publishes `docs/releases/vX.Y.Z.md` automatically. If notes need correcting:
+
+```sh
+node scripts/github-release.cjs release-edit vX.Y.Z docs/releases/vX.Y.Z.md
+```
+
+Historical compatibility-asset cleanup uses an exact reviewed plan:
+
+```sh
+node scripts/github-release.cjs release-asset-plan v2.2.0
+node scripts/github-release.cjs release-asset-cleanup v2.2.0 .tmp/reviewed-assets.json
+```
+
+The helper requires all five original v2.2.0 native packages before deleting recognized compatibility assets. It compares the current IDs, names, and sizes with the reviewed JSON. File size alone must never decide what to delete: the native Linux AppImage is larger because it bundles dependencies.
+
+Record the PR, merge SHA, tag, build results, and published asset verification in the audit notes or persistent project memory. Report what was actually verified and any remaining hardware checks.

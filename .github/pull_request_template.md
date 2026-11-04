@@ -1,26 +1,14 @@
-## Description
-<!-- Provide a brief summary of the changes introduced by this pull request. -->
+## Change
 
-## Type of Change
-- [ ] 🐛 Bug fix (non-breaking change fixing an issue)
-- [ ] ✨ New feature (non-breaking change adding functionality)
-- [ ] 🎨 UI / Polish improvement
-- [ ] ⚡ Performance optimization
-- [ ] 📝 Documentation update
-- [ ] 🔧 Platform integration (Windows / macOS / Linux)
+Describe the problem and the resulting behavior. Link an issue if relevant.
 
-## Related Issue
-<!-- Link the issue resolved by this PR (e.g. Closes #12) -->
-Closes #
+## Validation
 
-## Tested Platforms
-- [ ] Windows 11 / 10
-- [ ] macOS (Apple Silicon / Intel)
-- [ ] Linux (Ubuntu / Fedora / Arch)
+- [ ] `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`
+- [ ] Native formatting, workspace check, and core tests for native changes
+- [ ] Actual OS or hardware checks described, or limitations recorded
+- [ ] `npm run test:ui` passes for interface changes
+- [ ] UI remains usable at 320 × 200 when interface behavior changes
+- [ ] Documentation, versions, recovery behavior, and maintainer attribution are correct
 
-## Checklist
-- [ ] My code adheres to the style guidelines of this project
-- [ ] I have executed `npm run typecheck` with zero errors
-- [ ] I have verified `npm run build` succeeds locally
-- [ ] I have preserved documentation integrity and added relevant comments
-- [ ] All new and existing tests/checks pass
+List the checks you actually ran and any remaining manual validation.

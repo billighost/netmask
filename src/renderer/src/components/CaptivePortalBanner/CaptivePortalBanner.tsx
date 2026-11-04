@@ -1,77 +1,31 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useStore } from '../../store'
 import { GlobeIcon, CloseIcon, ExternalLinkIcon, RefreshIcon } from '../../icons'
+import { HelpTip } from '../Controls/HelpTip'
+import { errorMessage } from '../../network-state'
 import styles from './CaptivePortalBanner.module.css'
 
 export const CaptivePortalBanner: React.FC = () => {
-  const captivePortal = useStore(s => s.captivePortal)
-  const setCaptivePortal = useStore(s => s.setCaptivePortal)
-  const addToast = useStore(s => s.addToast)
-
-  if (!captivePortal || !captivePortal.isCaptive) return null
-
-  const handleOpenLogin = () => {
-    const url = captivePortal.portalUrl || 'http://www.msftconnecttest.com/connecttest.txt'
-    window.nm.openExternal(url).catch(() => {})
-    addToast('Opening captive portal web login in browser...', 'info')
+  const portal = useStore(state => state.captivePortal)
+  const [checking, setChecking] = useState(false)
+  const state = useStore.getState()
+  if (!portal?.isCaptive) return null
+  const openLogin = async () => {
+    try { await window.nm.openExternal(portal.portalUrl || 'http://www.msftconnecttest.com/connecttest.txt'); state.addToast('Sign-in page opened in your browser.', 'info') }
+    catch (error) { state.addToast(errorMessage(error, 'The sign-in page could not be opened'), 'error') }
   }
-
-  const handleRecheck = async () => {
-    try {
-      const status = await window.nm.checkCaptivePortal()
-      setCaptivePortal(status)
-      if (!status.isCaptive) {
-        addToast('Internet access verified! Captive portal resolved.', 'success')
-      } else {
-        addToast('Captive portal still active. Please log in.', 'info')
-      }
-    } catch {
-      addToast('Error checking network access', 'error')
-    }
+  const recheck = async () => {
+    if (checking) return
+    setChecking(true)
+    try { const status = await window.nm.checkCaptivePortal(); state.setCaptivePortal(status); state.addToast(status.isCaptive ? 'This network still needs a sign-in.' : 'No Wi-Fi sign-in page detected.', 'info') }
+    catch (error) { state.addToast(errorMessage(error, 'The connection check could not finish'), 'error') }
+    finally { setChecking(false) }
   }
-
-  return (
-    <div className={styles.banner}>
-      <div className={styles.left}>
-        <div className={styles.iconWrap}>
-          <GlobeIcon size={16} color="#fbbf24" />
-        </div>
-        <div className={styles.textWrap}>
-          <div className={styles.title}>Wi-Fi Web Login Required</div>
-          <div className={styles.sub}>
-            A captive portal was detected on this network. Log in to activate full internet access.
-          </div>
-        </div>
-      </div>
-
-      <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.loginBtn}
-          onClick={handleOpenLogin}
-          title="Open Wi-Fi login portal page in your default web browser"
-        >
-          <span>Open Login Portal</span>
-          <ExternalLinkIcon size={12} />
-        </button>
-        <button
-          type="button"
-          className={styles.recheckBtn}
-          onClick={handleRecheck}
-          title="Re-check internet connectivity"
-        >
-          <RefreshIcon size={13} />
-        </button>
-        <button
-          type="button"
-          className={styles.closeBtn}
-          onClick={() => setCaptivePortal(null)}
-          title="Dismiss notification"
-        >
-          <CloseIcon size={13} />
-        </button>
-      </div>
+  return <section className={styles.banner} aria-label="Wi-Fi sign-in"><div className={styles.left}><GlobeIcon size={17} /><div><h2>This Wi-Fi needs a sign-in.<HelpTip label="Wi-Fi sign-in">Some hotel, guest, and public networks need a web sign-in before they allow internet access. Open the sign-in page, then check again.</HelpTip></h2><p>Open the network's sign-in page, then check again.</p></div></div>
+    <div className={styles.actions}><button type="button" className={styles.loginButton} onClick={() => void openLogin()}>Open sign-in page<ExternalLinkIcon size={12} /></button>
+      <button type="button" className={styles.iconButton} aria-label="Check Wi-Fi sign-in again" disabled={checking} onClick={() => void recheck()}><RefreshIcon size={13} /></button>
+      <button type="button" className={styles.iconButton} aria-label="Dismiss Wi-Fi sign-in notice" onClick={() => state.setCaptivePortal(null)}><CloseIcon size={13} /></button>
     </div>
-  )
+  </section>
 }
 

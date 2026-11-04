@@ -1,0 +1,8 @@
+{
+  "id": "showcase",
+  "number": 1,
+  "name": "Showcase",
+  "selectedOn": "2026-11-04",
+  "source": "01-showcase.md",
+  "target": "../../README.md"
+}

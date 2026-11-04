@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-  app_lib::run();
+    app_lib::run();
 }
 
 #[cfg(test)]
@@ -20,8 +20,15 @@ mod tests {
             is_dhcp: false,
         };
         let json = serde_json::to_string(&res).expect("serialization failed");
-        assert!(json.contains("\"isDhcp\":false"), "JSON must contain camelCase isDhcp, got: {}", json);
-        assert!(!json.contains("is_dhcp"), "JSON must NOT contain snake_case is_dhcp");
+        assert!(
+            json.contains("\"isDhcp\":false"),
+            "JSON must contain camelCase isDhcp, got: {}",
+            json
+        );
+        assert!(
+            !json.contains("is_dhcp"),
+            "JSON must NOT contain snake_case is_dhcp"
+        );
     }
 
     #[test]
@@ -34,9 +41,21 @@ mod tests {
             already_downloaded: Some(true),
         };
         let json = serde_json::to_string(&res).expect("serialization failed");
-        assert!(json.contains("\"filePath\":"), "JSON must contain camelCase filePath, got: {}", json);
-        assert!(json.contains("\"inProgress\":false"), "JSON must contain camelCase inProgress, got: {}", json);
-        assert!(json.contains("\"alreadyDownloaded\":true"), "JSON must contain camelCase alreadyDownloaded, got: {}", json);
+        assert!(
+            json.contains("\"filePath\":"),
+            "JSON must contain camelCase filePath, got: {}",
+            json
+        );
+        assert!(
+            json.contains("\"inProgress\":false"),
+            "JSON must contain camelCase inProgress, got: {}",
+            json
+        );
+        assert!(
+            json.contains("\"alreadyDownloaded\":true"),
+            "JSON must contain camelCase alreadyDownloaded, got: {}",
+            json
+        );
         assert!(!json.contains("file_path"));
         assert!(!json.contains("in_progress"));
         assert!(!json.contains("already_downloaded"));

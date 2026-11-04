@@ -1,5 +1,8 @@
 import { create } from 'zustand'
 import type { Network, Connection, AppSettings, Toast, SpeedSample, ToastType, StreamerStatus, DownloadProgress } from './types'
+import { errorMessage, visibleNetworks, nextSelection } from './network-state'
+import { createSettingsQueue } from './settings-queue'
+import { shortcutEquals } from './keyboard-shortcuts'
 
 // Single persistent Float32Array(60) ring buffer for ultra-low GC pressure
 const speedRingBuffer = new Float32Array(60)
@@ -31,6 +34,13 @@ export const DEFAULT_SHORTCUTS: Record<string, string> = {
 interface Store {
   networks: Network[]
   connection: Connection | null
+  connectionError: string | null
+  capabilities: import('./types').PlatformCapabilities | null
+  networkSearch: string
+  visible: boolean
+  reconnecting: boolean
+  streamerBusy: boolean
+  speedTesting: boolean
   selectedGuid: string | null
   settings: AppSettings
   toasts: Toast[]
@@ -49,6 +59,8 @@ interface Store {
   elevationStatus: import('./types').ElevationStatus | null
   downloadProgress: DownloadProgress | null
   downloadedVersion: string | null
+  updateInfo: import('./types').UpdateInfo | null
+  updateDownloading: boolean
 
   // Hotspot Privacy Cloak, DNS, Roaming, Ping, Captive, Share
   pingTelemetry: import('./types').PingTelemetry | null
@@ -63,12 +75,13 @@ interface Store {
 
   // Actions
   setNetworks: (nets: Network[]) => void
+  setNetworkSearch: (search: string) => void
   setConnection: (conn: Connection | null) => void
   selectNetwork: (guid: string | null) => void
   setSettings: (s: AppSettings) => void
-  updateSetting: <K extends keyof AppSettings>(key: K, val: AppSettings[K]) => void
-  updateShortcut: (id: string, key: string) => void
-  resetAllShortcuts: () => void
+  updateSetting: <K extends keyof AppSettings>(key: K, val: AppSettings[K]) => Promise<boolean>
+  updateShortcut: (id: string, key: string) => Promise<boolean>
+  resetAllShortcuts: () => Promise<boolean>
   addToast: (msg: string, type?: ToastType) => string
   removeToast: (id: string) => void
   setSpeed: (s: SpeedSample) => void
@@ -102,11 +115,11 @@ const DEFAULT_SETTINGS: AppSettings = {
   minimizeToTray: true,
   launchOnStartup: false,
   autoRefreshInterval: 30,
-  theme: 'dark',
+  theme: 'light',
   showEthernet: true,
   ultraLowMemory: false,
   autoCloakStreamer: true,
-  streamerMaskName: 'StreamSafe-Fiber-Pro',
+  streamerMaskName: 'Private network',
   bssidCloaking: true,
   bssidMaskMode: 'partial',
   silentElevation: true,
@@ -116,6 +129,13 @@ const DEFAULT_SETTINGS: AppSettings = {
 export const useStore = create<Store>((set, get) => ({
   networks: [],
   connection: null,
+  connectionError: null,
+  capabilities: null,
+  networkSearch: '',
+  visible: true,
+  reconnecting: false,
+  streamerBusy: false,
+  speedTesting: false,
   selectedGuid: null,
   settings: DEFAULT_SETTINGS,
   toasts: [],
@@ -134,6 +154,8 @@ export const useStore = create<Store>((set, get) => ({
   elevationStatus: null,
   downloadProgress: null,
   downloadedVersion: null,
+  updateInfo: null,
+  updateDownloading: false,
   pingTelemetry: null,
   deviceIdentity: null,
   dnsResults: null,
@@ -145,22 +167,23 @@ export const useStore = create<Store>((set, get) => ({
   roamingModalOpen: false,
 
   setNetworks: (nets) => set({ networks: nets }),
+  setNetworkSearch: (networkSearch) => set(state => ({ networkSearch, selectedGuid: nextSelection(visibleNetworks(state.networks, state.settings, networkSearch, state.streamerStatus.isCloaked), state.selectedGuid) })),
   setConnection: (conn) => set({ connection: conn }),
   selectNetwork: (guid) => set({ selectedGuid: guid }),
-  setSettings: (s) => set({
-    settings: {
-      ...s,
-      shortcuts: { ...DEFAULT_SHORTCUTS, ...(s?.shortcuts || {}) }
-    }
-  }),
+  setSettings: (s) => set({ settings: settingWrites.initialize({
+    ...DEFAULT_SETTINGS, ...s, shortcuts: { ...DEFAULT_SHORTCUTS, ...(s?.shortcuts || {}) }
+  }) }),
 
   updateSetting: (key, val) => {
     const settings = { ...get().settings, [key]: val }
     set({ settings })
-    window.nm.setSetting(key, val).catch(() => {})
+    if (key === 'showEthernet') {
+      set(state => ({ selectedGuid: nextSelection(visibleNetworks(state.networks, settings, state.networkSearch, state.streamerStatus.isCloaked), state.selectedGuid) }))
+    }
     if (key === 'theme') {
       document.documentElement.setAttribute('data-theme', val as string)
     }
+    return settingWrites.write(key, val)
   },
 
   updateShortcut: (id, key) => {
@@ -168,17 +191,17 @@ export const useStore = create<Store>((set, get) => ({
     const updated = { ...current }
     if (key) {
       for (const [k, v] of Object.entries(updated)) {
-        if (k !== id && v && v.toLowerCase() === key.toLowerCase()) {
+        if (k !== id && shortcutEquals(v, key, get().capabilities?.platform)) {
           updated[k] = ''
         }
       }
     }
     updated[id] = key
-    get().updateSetting('shortcuts', updated)
+    return get().updateSetting('shortcuts', updated)
   },
 
   resetAllShortcuts: () => {
-    get().updateSetting('shortcuts', { ...DEFAULT_SHORTCUTS })
+    return get().updateSetting('shortcuts', { ...DEFAULT_SHORTCUTS })
   },
 
   addToast: (message, type = 'info') => {
@@ -211,11 +234,12 @@ export const useStore = create<Store>((set, get) => ({
 
   setAdminOk: (ok) => set({ adminOk: ok }),
   setRefreshing: (r) => set({ refreshing: r }),
-  setSettingsOpen: (open) => set({ settingsOpen: open }),
-  setShortcutsModalOpen: (open) => set({ shortcutsModalOpen: open }),
-  setDetailsModalGuid: (guid) => set({ detailsModalGuid: guid }),
+  setSettingsOpen: (open) => set(state => ({ settingsOpen: open, contextMenu: open ? null : state.contextMenu })),
+  setShortcutsModalOpen: (open) => set(state => ({ shortcutsModalOpen: open, contextMenu: open ? null : state.contextMenu })),
+  setDetailsModalGuid: (guid) => set(state => ({ detailsModalGuid: guid, contextMenu: guid ? null : state.contextMenu })),
   setContextMenu: (cm) => set({ contextMenu: cm }),
-  setStreamerStatus: (status) => set({ streamerStatus: status }),
+  setStreamerStatus: (status) => set(state => ({ streamerStatus: status,
+    selectedGuid: nextSelection(visibleNetworks(state.networks, state.settings, state.networkSearch, status.isCloaked), state.selectedGuid) })),
   setElevationStatus: (status) => set({ elevationStatus: status }),
   setDownloadProgress: (p) => set({ downloadProgress: p }),
   setDownloadedVersion: (v) => set({ downloadedVersion: v }),
@@ -225,10 +249,10 @@ export const useStore = create<Store>((set, get) => ({
   setDnsResults: (r) => set({ dnsResults: r }),
   setRoamingSettings: (s) => set({ roamingSettings: s }),
   setCaptivePortal: (cp) => set({ captivePortal: cp }),
-  setWifiShareModalProfile: (p) => set({ wifiShareModalProfile: p }),
-  setDnsModalOpen: (open) => set({ dnsModalOpen: open }),
-  setPrivacyCloakModalOpen: (open) => set({ privacyCloakModalOpen: open }),
-  setRoamingModalOpen: (open) => set({ roamingModalOpen: open }),
+  setWifiShareModalProfile: (p) => set(state => ({ wifiShareModalProfile: p, contextMenu: p ? null : state.contextMenu })),
+  setDnsModalOpen: (open) => set(state => ({ dnsModalOpen: open, contextMenu: open ? null : state.contextMenu })),
+  setPrivacyCloakModalOpen: (open) => set(state => ({ privacyCloakModalOpen: open, contextMenu: open ? null : state.contextMenu })),
+  setRoamingModalOpen: (open) => set(state => ({ roamingModalOpen: open, contextMenu: open ? null : state.contextMenu })),
 
   peekBssid: () => {
     if (bssidPeekTimer) clearTimeout(bssidPeekTimer)
@@ -239,5 +263,17 @@ export const useStore = create<Store>((set, get) => ({
     }, 3000)
   }
 }))
+
+const settingWrites = createSettingsQueue(DEFAULT_SETTINGS,
+  (key, value) => window.nm.setSetting(key, value),
+  (key, value) => {
+    useStore.setState(state => {
+      const settings = { ...state.settings, [key]: value }
+      return { settings, selectedGuid: nextSelection(visibleNetworks(state.networks, settings, state.networkSearch, state.streamerStatus.isCloaked), state.selectedGuid) }
+    })
+    if (key === 'theme') document.documentElement.setAttribute('data-theme', value as string)
+  },
+  error => useStore.getState().addToast(errorMessage(error, 'The setting could not be saved'), 'error')
+)
 
 

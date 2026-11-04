@@ -1,257 +1,86 @@
-# 🏛️ NetMask System Architecture Documentation
+# NetMask architecture
 
-Welcome to the internal architectural documentation of **NetMask v2.1.2**. This document details the engineering specifications, cross-platform subsystems, security & privilege tiers, IPC schemas, and memory management lifecycle.
+The app has one runtime: Tauri 2 hosts a system webview and a Rust backend. React, TypeScript, Zustand, and Vite build the interface. Network, storage, background, and update operations are native Rust engines.
 
----
-
-## 🧭 Table of Contents
-1. [High-Level Architectural Overview](#1-high-level-architectural-overview)
-2. [Component Hierarchy & Data Flow](#2-component-hierarchy--data-flow)
-3. [ContextBridge IPC Schema & API Contract](#3-contextbridge-ipc-schema--api-contract)
-4. [Cross-Platform Platform Dispatchers](#4-cross-platform-platform-dispatchers)
-   - [Windows Subsystem (`windows.ts`)](#windows-subsystem-windowsts)
-   - [macOS Subsystem (`darwin.ts`)](#macos-subsystem-darwints)
-   - [Linux Subsystem (`linux.ts`)](#linux-subsystem-linuxts)
-5. [3-Tier Cascading Privilege Architecture (`admin.ts`)](#5-3-tier-cascading-privilege-architecture-admints)
-6. [Streamer Safe & Anti-Dox Engine (`streamer.ts`)](#6-streamer-safe--anti-dox-engine-streamerts)
-7. [Throughput & RF Physical Layer Diagnostics (`speed.ts`)](#7-throughput--rf-physical-layer-diagnostics-speedts)
-8. [Ultra-Low RAM Engine & Tray Standby Unloading](#8-ultra-low-ram-engine--tray-standby-unloading)
-
----
-
-## 1. High-Level Architectural Overview
-
-NetMask is structured as an isolated, multi-process Electron application enforcing strict process boundaries:
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        Renderer Process (UI)                          │
-│   React 18 + Zustand + Granular Selectors + Canvas Sparkline Engine   │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ window.nm (ContextBridge)
-┌───────────────────────────────────▼────────────────────────────────────┐
-│                       Preload Layer (Sandbox)                          │
-│   Typed IPC Bridge (contextBridge.exposeInMainWorld / ipcRenderer)     │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ IPC Channels (nm:*)
-┌───────────────────────────────────▼────────────────────────────────────┐
-│                    Electron Main Process Core                          │
-│   • Window Manager & Tray Standby Lifecycle                            │
-│   • 3-Tier Cascading Silent Elevation Broker                           │
-│   • Streamer Safe Process Monitor (15s Interval + Cloaking)            │
-│   • Zero-Spawn Bandwidth Sampling Engine (EMA Filtered)                │
-│   • Dynamic Cross-Platform Dispatcher (Windows / Darwin / Linux)       │
-└────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+  UI[React components] --> Actions[Frontend actions and state]
+  Actions --> Bridge[Typed Tauri bridge]
+  Bridge --> Commands[Async native commands]
+  Commands --> Core[Native core engines]
+  Core --> OS[Windows / macOS / Linux integrations]
+  Core --> Data[Per-user JSON and recovery records]
+  Workers[Visibility-aware workers] --> Core
+  Workers --> Events[Tauri events]
+  Events --> Actions
 ```
 
----
+## Desktop host and native core
 
-## 2. Component Hierarchy & Data Flow
+`src-tauri/src/lib.rs` owns the main window, branded tray, single-instance lock, worker stop flag, window-size persistence, and orderly shutdown. Its command handlers live in `commands.rs`. Slow handlers use `tauri::async_runtime::spawn_blocking` so subprocesses, downloads, locks, and diagnostics do not block the window thread.
 
-### Reactive State Management (Zustand)
-The UI renderer uses **Zustand** (`src/renderer/src/store.ts`) with granular slice selectors to prevent unnecessary re-renders:
+The workspace's `netmask-core` crate points to `src-tauri/src/core.rs`. It contains the platform adapters, settings, rename/recovery operations, DNS, transfer measurements, ping, portal detection, QR sharing, identity controls, roaming, streamer automation, and updater. Separating it from the webview permits actual native-engine tests without launching a desktop or changing a real network.
 
-- `networks`: Array of detected Wi-Fi and Ethernet network profiles.
-- `connection`: Current active Wi-Fi connection metadata (SSID, dBm, SNR, band, Wi-Fi generation, link rates).
-- `speed`: Live throughput samples (`downMBps`, `upMBps`, `downKbps`, `upKbps`).
-- `history`: Fixed-size ring buffer (`Float32Array(60)`) powering the zero-GC canvas sparkline.
-- `streamerStatus`: Active broadcast detection state (`detectedApp`, `isCloaked`, `cooldownSeconds`).
-- `elevationStatus`: Current privilege tier (`isElevated`, `silentElevationEnabled`, `taskConfigured`, `tier`).
-- `settings`: Persisted user configuration options.
+## Network identity and changes
 
-### Component Tree
-```
-App.tsx
-├── TitleBar (Glassmorphic Custom Controls + Minimize / Maximize / Close)
-├── AdminBanner (Displays UAC Warning or 1-Click Silent Elevation Prompt)
-├── StreamerBadge (Visual feedback when OBS/Discord/Teams is detected)
-├── HeroCard (Active network card, live throughput, and RF metrics)
-│   ├── Sparkline (Canvas-rendered 60s bandwidth graph)
-│   └── BSSID Masker (Masked MAC display with 3-second temporary peek)
-├── ActionPanel (Rename editor with real-time OS UI preview)
-├── NetworkList (Searchable list of all network profiles)
-│   └── NetworkRow (Individual Wi-Fi or Ethernet card with context menu)
-├── SpeedInfoPanel (Expandable bandwidth capability advisor)
-├── NetworkDetailsModal (In-depth RF physical layer radio diagnostic dialog)
-├── SettingsModal (Full system preferences, privilege, streamer, and RAM controls)
-└── ToastContainer (Non-intrusive status notifications)
-```
+A network snapshot returns saved profiles, the connected network, and a separate connection error. Stable identities survive display-name changes: Windows Network List GUIDs, macOS network-service UUIDs, and Linux NetworkManager UUIDs. A saved profile's connection parameters remain distinct from its editable local label.
 
----
+`operations.rs` serializes name changes with a file lock. It refreshes the network, rejects stale expected names, writes the original before changing the OS, and asks the platform adapter to confirm the resulting label. Restore-all retains failed entries and reports partial failure. Backup imports merge records rather than overwriting an existing original.
 
-## 3. ContextBridge IPC Schema & API Contract
+Windows uses the Network List Manager and WLAN APIs alongside permission-controlled configuration commands. Ambiguous profiles are marked non-editable. macOS changes a service label with `networksetup`; it does not remove and recreate the Wi-Fi network. Linux changes NetworkManager connection names with `nmcli` and uses UUIDs for reconnects.
 
-All communication between the React renderer and Electron main process passes through `src/preload/index.ts`. No raw Node.js APIs are exposed to the DOM (`contextIsolation: true`, `nodeIntegration: false`).
+These are local labels. The router's broadcast SSID and any operating-system UI that chooses to show it remain governed by the router and OS.
 
-### Typed IPC Invocation Table (`ipcRenderer.invoke`)
+## Persistence
 
-| IPC Channel | Method (`window.nm.*`) | Arguments | Return Type | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `nm:is-admin` | `isAdmin()` | `void` | `Promise<boolean>` | Checks if process has administrative rights |
-| `nm:elevate` | `elevate()` | `void` | `Promise<void>` | Restarts process in elevated context |
-| `nm:get-elevation-status` | `getElevationStatus()` | `void` | `Promise<ElevationStatus>` | Checks active tier & Task Scheduler registration |
-| `nm:setup-silent-elevation` | `setupSilentElevation()` | `void` | `Promise<{ success: boolean; message?: string }>` | Registers `/rl HIGHEST` Task Scheduler entry |
-| `nm:remove-silent-elevation`| `removeSilentElevation()`| `void` | `Promise<{ success: boolean; message?: string }>` | Deletes Task Scheduler entry |
-| `nm:get-networks` | `getNetworks()` | `void` | `Promise<Network[]>` | Scans local network profiles |
-| `nm:get-connection` | `getConnection()` | `void` | `Promise<Connection \| null>` | Returns active connection and RF telemetry |
-| `nm:get-details` | `getDetails(guid)` | `guid: string` | `Promise<NetworkDetails>` | Returns in-depth physical layer RF stats |
-| `nm:rename` | `rename(guid, newName, orig?)` | `guid, newName, orig?` | `Promise<void>` | Renames local network display profile |
-| `nm:restore` | `restore(guid, current?)` | `guid, current?` | `Promise<void>` | Restores network to original hardware SSID |
-| `nm:restore-all` | `restoreAll()` | `void` | `Promise<void>` | Restores all renamed profiles |
-| `nm:reconnect` | `reconnect(profile?)` | `profile?: string` | `Promise<boolean>` | Flushes interface & reconnects |
-| `nm:run-speed-test` | `runSpeedTest()` | `void` | `Promise<SpeedTestResult>` | Executes quick throughput test |
-| `nm:export-backup` | `exportBackup()` | `void` | `Promise<string>` | Exports original SSID backup JSON |
-| `nm:import-backup` | `importBackup(json)` | `json: string` | `Promise<void>` | Restores backup dictionary |
-| `nm:get-settings` | `getSettings()` | `void` | `Promise<AppSettings>` | Reads settings from disk |
-| `nm:set-setting` | `setSetting(key, val)` | `key: string, value: any` | `Promise<void>` | Updates setting atomically |
-| `nm:trim-memory` | `trimMemory()` | `void` | `Promise<void>` | Trims process working set & invokes `gc()` |
-| `nm:get-streamer-status` | `getStreamerStatus()` | `void` | `Promise<StreamerStatus>` | Returns active broadcast app state |
-| `nm:toggle-streamer-cloak`| `toggleStreamerCloak()`| `void` | `Promise<StreamerStatus>` | Manually toggles streamer disguise |
-| `nm:check-update` | `checkUpdate()` | `void` | `Promise<UpdateInfo \| null>`| Checks GitHub Releases API |
-| `nm:open-release-url` | `openReleaseUrl(url?)` | `url?: string` | `Promise<void>` | Opens release in external browser |
+Preferences and recovery records stay in the current account's data directory:
 
-### Push Event Subscriptions (`ipcRenderer.on`)
+| System | Directory |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\NetMask` |
+| macOS | `~/Library/Application Support/NetMask` |
+| Linux | `$XDG_CONFIG_HOME/netmask`, or `~/.config/netmask` |
 
-| Event Channel | Preload Subscriber | Payload | Purpose |
-| :--- | :--- | :--- | :--- |
-| `nm:speed` | `onSpeed(callback)` | `SpeedSample` | Broadcasts 1,000ms network throughput metrics |
-| `nm:streamer-status`| `onStreamerStatus(cb)` | `StreamerStatus` | Broadcasts OBS/broadcast detection & cooldowns |
-| `nm:maximize-change`| `onMaximizeChange(cb)` | `boolean` | Notifies title bar of window maximize state |
-| `nm:update-available`| `onUpdateAvailable(cb)` | `UpdateInfo` | Pushes available software release notifications |
-| `nm:trim-memory` | Main process internal | `void` | Renderer memory trimming trigger |
+An absolute `NETMASK_DATA_DIR` override is available for isolated diagnostics. Tests inject temporary storage explicitly. Launching a diagnostic app also requires preferences that turn off automation; changing its data directory alone does not disable network operations.
 
----
+`settings.rs` bounds JSON size, validates preferences and imports, merges new defaults into old preferences, serializes mutations with OS file locks, and replaces complete files atomically. On Unix it sets private directory/file permissions. Parse failures preserve the original file and surface an error rather than treating corrupt recovery data as an empty backup.
 
-## 4. Cross-Platform Platform Dispatchers
+Windows migration copies missing settings and name files from the previous ProgramData location. It does not delete the old files or overwrite existing per-user data. `names.json` stores original labels and `streamer.json` stores a recoverable masking session. These files are JSON, not encrypted storage.
 
-All OS-specific logic is abstracted behind the unified interface `NetworkPlatformProvider` (`src/main/platform/types.ts`):
+## Fieldnotes interface and events
 
-```typescript
-export interface NetworkPlatformProvider {
-  getNetworks(backup: Record<string, string>): Promise<Network[]> | Network[]
-  getCurrentConnection(): Promise<Connection | null> | Connection | null
-  getNetworkDetails(guidOrName: string): Promise<NetworkDetails> | NetworkDetails
-  renameNetwork(guid: string, newName: string, currentDisplayName?: string): Promise<void>
-  reconnectNetwork(profileName?: string): Promise<boolean>
-  getRawNetworkBytes(): Promise<{ received: number; sent: number }>
-}
-```
+`bridge.ts` maps the typed `window.nm` contract to Tauri `invoke`. `types.ts` and `env.d.ts` describe arguments, snapshots, status, and events. Add a command by updating the Rust handler, handler registration, bridge, and types together.
 
-The active provider is resolved at runtime by `getPlatformProvider()` (`src/main/platform/index.ts`) via `process.platform`.
+Event subscribers return cleanup functions and handle cleanup arriving before the asynchronous listener has registered. Events include speed, ping, captive-portal state, streamer status, update progress, visibility, and maximization.
 
-### Windows Subsystem (`windows.ts`)
-- **Dual Registry Sync**: Windows stores local network display names in `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles\<GUID>\ProfileName`. NetMask reads and modifies this value via PowerShell / Win32 registry APIs.
-- **WlanSvc Profile XML Sync**: To update the native Windows 11 Wi-Fi flyout and Settings, NetMask syncs the WLAN service XML profile using `netsh wlan export profile` and `netsh wlan add profile`.
-- **RF Radio Telemetry**: Parses `netsh wlan show interfaces` for logarithmic Signal (dBm), calculated SNR margin (+95 dBm floor), Radio Type (802.11be/ax/ac/n), Channel, and Band.
-- **Throughput Engine**: Executes direct `netstat.exe -e` byte counter queries via `execFile`, bypassing `cmd.exe`.
+`network-actions.ts` coalesces overlapping refreshes and forces a fresh snapshot after a mutation. Network filtering and keyboard selection use the same helpers. `settings-queue.ts` serializes optimistic writes and rolls a failed write back to confirmed settings without overwriting a newer choice. `update-actions.ts` owns update actions and synchronizes native download status.
 
-### macOS Subsystem (`darwin.ts`)
-- **Profile Management**: Uses `/usr/sbin/networksetup -listpreferredwirelessnetworks` and `-renamename`.
-- **RF Telemetry**: Interfaces with the private Apple80211 framework via `/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I` to extract raw `agrCtlRSSI`, `agrCtlNoise`, `channel`, and `link auth`.
-- **Bandwidth Sampling**: Measures interface byte differentials using `netstat -ib -n`.
-- **Privilege Elevation**: Employs `osascript -e 'do shell script ... with administrator privileges'`.
+Fieldnotes tokens define paper, green, and terracotta colors, serif display names, readable body type, and both themes. Shared `Controls` provide custom Select, Toggle, HelpTip, Tooltip, and Popover components. Popovers render outside scroll containers, stay within the viewport, and consume Escape before a parent dialog. Select keeps keyboard focus on its trigger, supports typeahead, and scrolls the active option into view.
 
-### Linux Subsystem (`linux.ts`)
-- **Profile Management**: Communicates directly with NetworkManager using `nmcli connection show` and `nmcli connection modify <id> connection.id <newName>`.
-- **RF Diagnostics**: Queries wireless radio telemetry via `nmcli device wifi` combined with `iw dev <interface> link`.
-- **Bandwidth Sampling**: Direct reading of Linux kernel socket device counters from `/proc/net/dev`.
-- **Privilege Elevation**: Utilizes PolicyKit (`pkexec`).
+The shared `Dialog` portals into the document body, makes the underlying app inert and hidden from assistive technology, traps focus, handles Escape, and restores focus when closed. Nested dialogs apply the same protection to the underlying dialog. The app and every dialog use a bounded scroll area so controls remain reachable at the 320 × 200 minimum window size.
 
----
+## Background work and measurement
 
-## 5. 3-Tier Cascading Privilege Architecture (`admin.ts`)
+Transfer samples run once per second while the window is visible. Counter resets, missing samples, and interface changes reset the baseline. Windows reads adapter counters through native APIs; Linux reads `/proc/net/dev`; macOS reads interface counters from `netstat`. Measured transfer rate is distinct from negotiated link rate and the explicit download speed test.
 
-Renaming system network profiles requires administrative privileges. Rather than forcing intrusive UAC prompts on every launch, NetMask uses a cascading 3-tier fallback architecture:
+Visible ping telemetry runs every two seconds. Captive-portal checks run about every 30 seconds while visible and emit state changes. Streamer status ticks once per second, with process scans every five seconds, including in the tray. Cooldown uses elapsed time. Manual masking persists independently of broadcast-process detection. Failed automatic operations do not open administrator prompts or claim protection succeeded.
 
-```
-                  [Application Launch]
-                           │
-                 Is Task Configured?
-                    ┌──────┴──────┐
-                  YES             NO
-                    │             │
-        Tier 1: Silent Launch   Tier 2: Elevated Broker Active?
-        (Task Scheduler /rl)      ┌──────┴──────┐
-                    │           YES             NO
-                 SUCCESS          │             │
-                             Tier 2 Call   Tier 3: On-Demand JIT Elevation
-                                          (Prompt UAC only when renaming)
-```
+The window hides to the tray rather than being destroyed. There is no claimed fixed Tauri RAM footprint or GPU-disable mode. See [BENCHMARKS.md](../BENCHMARKS.md) for measurement limits.
 
-1. **Tier 1 — Windows Task Scheduler (`setupTaskElevation`)**:
-   - Registers a task named `NetMask_Elevated` via `schtasks /create /tn "NetMask_Elevated" /tr "\"<ExePath>\"" /sc onlogon /rl HIGHEST /f`.
-   - On subsequent launches, an un-elevated NetMask instance invokes `schtasks /run /tn "NetMask_Elevated"` and cleanly exits.
-   - **Result**: The app runs elevated with **zero UAC prompts forever**.
-2. **Tier 2 — Elevated Broker**:
-   - If an elevated background instance is already active, tasks are delegated seamlessly via local IPC.
-3. **Tier 3 — On-Demand Just-In-Time (JIT) Elevation**:
-   - If running un-elevated without Task Scheduler, NetMask remains non-elevated.
-   - When the user explicitly renames a network, a targeted JIT elevation worker triggers a single UAC prompt for that specific rename only.
-   - If the user cancels the prompt, NetMask catches the error gracefully without crashing.
+## External processes and updates
 
----
+`system.rs` executes direct argument lists, hides Windows subprocess windows, enforces deadlines including inherited output pipes, stops process groups/job trees on timeout, and avoids echoing private subprocess output in errors. Permission-controlled operations propagate child failures.
 
-## 6. Streamer Safe & Anti-Dox Engine (`streamer.ts`)
+The updater accepts the repository's stable GitHub releases, chooses the exact platform-specific native asset, limits redirect hosts and file size, verifies GitHub's SHA-256 digest, and retains native progress/status. Installation opens only the tracked verified path and rechecks its size and hash. Missing digests or unsupported architectures direct the user to the release page.
 
-Broadcasters face unique risks when presenting screen contents:
+The production CSP restricts scripts, images, connections, objects, and framing. Capabilities apply to the main window. Website opening accepts HTTP/HTTPS addresses and passes them directly to the OS opener.
 
-### Automated Process Monitoring
-- **Polling Loop**: Every 15 seconds, NetMask checks running processes via `tasklist.exe` (Windows) or `ps -e` (macOS/Linux) using `execFile` without launching a shell.
-- **Target Applications**: OBS Studio (`obs64.exe`), Streamlabs, Discord, Zoom, Microsoft Teams, Twitch Studio, XSplit.
-- **Auto-Cloak Action**: When a target process is detected, NetMask checks if the network is already cloaked. If not, it saves the original name and immediately renames the network to the user's Streamer Mask Name (`StreamSafe-Fiber-Pro`).
-- **10-Second Cooldown**: When broadcast apps exit, NetMask initiates a 10-second cooldown timer. If no broadcast app reappears, it safely restores the original network name.
+## Branding, build, and release
 
-### Anti-Dox BSSID Cloaking
-A router's hardware MAC address (BSSID) is indexed in public databases like WiGLE. Anyone viewing a streamer's BSSID can locate their physical address.
-- **Masking Strategy**: Masks MAC addresses into partial vendor masks (`9A:B3:E0:••:••:••`) or full masks (`XX:XX:XX:XX:XX:XX`).
-- **Protected Clipboard**: Copy actions copy the cloaked string by default unless the user has actively initiated a 3-second temporary peek.
+[The selected Orbit SVG](branding/logos/orbit/mark.svg) is the branding source. `scripts/apply-branding.cjs` promotes its desktop exports and generates the renderer mark. `scripts/generate-installer-assets.py` creates the committed NSIS/MSI and DMG artwork. Builds do not require the image-generation tools.
 
----
+`npm run test:ui` checks the built renderer and HTML studies in a browser with fictional IPC responses. It covers dropdown interaction, nested focus/scrolling, errors, names, sharing, and the minimum window size without operating-system mutations.
 
-## 7. Throughput & RF Physical Layer Diagnostics (`speed.ts`)
+`npm run build` produces `dist` from Vite. Tauri compiles the Rust host and installers; the release matrix builds Windows x64, Apple silicon, Intel macOS, and Linux x64. It stages only the expected native package names, requires all six before publishing, and creates a SHA-256 manifest. No second desktop framework is installed or shipped.
 
-### Sub-Second Speed Polling
-- **1,000ms Sampling**: Computes instantaneous byte differentials:
-  $$\text{Speed (MB/s)} = \frac{\Delta \text{Bytes}}{\Delta t \times 1,048,576}$$
-- **Exponential Moving Average (EMA)**: Applies a smoothing filter ($\alpha = 0.35$) to eliminate erratic packet bursts while preserving immediate response times.
-- **Canvas Ring Buffer**: Pushes speed samples to a typed `Float32Array(60)` ring buffer in the Zustand store. The canvas sparkline draws directly from this buffer without instantiating any JavaScript arrays, eliminating V8 garbage collection churn.
-
-### Radio Frequency Telemetry Formulas
-- **Logarithmic Signal (dBm)**: Windows `netsh` reports signal as a 0–100% quality value. NetMask converts this to standard logarithmic dBm:
-  $$\text{dBm} \approx \left(\frac{\text{Signal Percentage}}{2}\right) - 100$$
-- **Signal-to-Noise Ratio (SNR)**:
-  $$\text{SNR (dB)} \approx \text{Signal (dBm)} - (-95 \text{ dBm Noise Floor})$$
-- **Wi-Fi Generation Mapping**:
-  - `802.11be` &rarr; **Wi-Fi 7**
-  - `802.11ax` (6 GHz band) &rarr; **Wi-Fi 6E**
-  - `802.11ax` (2.4 / 5 GHz) &rarr; **Wi-Fi 6**
-  - `802.11ac` &rarr; **Wi-Fi 5**
-  - `802.11n` &rarr; **Wi-Fi 4**
-
----
-
-## 8. Ultra-Low RAM Engine & Tray Standby Unloading
-
-### The Problem of Chromium Footprint
-A standard Electron desktop application runs four distinct OS processes:
-1. **Browser Process** (Node.js runtime, window manager, IPC broker)
-2. **GPU Process** (DirectX/ANGLE hardware compositing)
-3. **Renderer Process** (Chromium Blink engine, DOM, React 18, V8 heap)
-4. **Utility Process** (Network, audio services)
-
-Each Chromium child process maps shared read-only system DLLs (`ntdll.dll`, `kernel32.dll`, `d3d11.dll`, `dxgi.dll`). Windows maintains only **one physical copy** of these pages in RAM, but summing raw working sets quadruple-counts them.
-
-### True Tray Standby Unloading
-To achieve an authentic **18–25 MB footprint in the system tray**:
-1. When the user closes or minimizes the window to the tray (`s.minimizeToTray`):
-   - The `BrowserWindow` instance is destroyed (`mainWindow.destroy()`).
-   - The Chromium Renderer process (`Tab`) **terminates immediately**.
-   - All DirectX GPU swapchains and textures are destroyed.
-   - `stopSpeed()` pauses bandwidth polling; `stopStreamerMonitor()` keeps only minimal process checks.
-   - Win32 `trimWorkingSet()` and `global.gc()` are executed.
-2. The remaining footprint in the system tray consists exclusively of the lightweight Node/Electron main event loop (~18–25 MB Private Working Set).
-3. When the user clicks the tray icon, `createWindow()` reinstantiates the window in **~150ms** with zero perceptible delay.
-
-### Ultra-Low Memory Mode
-When enabled in Settings, NetMask calls `app.disableHardwareAcceleration()` before `app.whenReady()`. This completely bypasses DirectX/ANGLE hardware acceleration, reducing active memory by an additional 50+ MB.
-
+See [the audit](AUDIT.md) for fixes and verification boundaries and [the release guide](../RELEASE_GUIDE.md) for the required checks and publication sequence.

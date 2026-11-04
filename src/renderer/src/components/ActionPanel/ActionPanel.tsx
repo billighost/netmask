@@ -1,236 +1,72 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { shallow } from 'zustand/shallow'
 import { useStore } from '../../store'
-import { WifiIcon, CheckIcon, RestoreIcon, RefreshIcon, LockIcon } from '../../icons'
+import { CheckIcon, RestoreIcon, RefreshIcon, LockIcon } from '../../icons'
+import { HelpTip } from '../Controls/HelpTip'
+import { refreshNetworks, reconnectSelected } from '../../network-actions'
+import { errorMessage } from '../../network-state'
 import styles from './ActionPanel.module.css'
 
 export const ActionPanel: React.FC = () => {
-  const { networks, selectedGuid, adminOk, addToast, setNetworks, setConnection, setAdminOk } = useStore()
-  const net = networks.find(n => n.guid === selectedGuid) || null
+  const { networks, selectedGuid, addToast, reconnecting, capabilities, privateNames } = useStore(state => ({
+    networks: state.networks, selectedGuid: state.selectedGuid, addToast: state.addToast, reconnecting: state.reconnecting,
+    capabilities: state.capabilities, privateNames: state.streamerStatus.isCloaked
+  }), shallow)
+  const net = networks.find(network => network.guid === selectedGuid) || null
   const [inputVal, setInputVal] = useState(net?.name ?? '')
   const [applying, setApplying] = useState(false)
   const [restoring, setRestoring] = useState(false)
-  const [reconnecting, setReconnecting] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-
+  const previous = useRef({ guid: net?.guid, name: net?.name ?? '' })
   useEffect(() => {
-    setInputVal(net?.name ?? '')
-    if (net && inputRef.current) {
-      requestAnimationFrame(() => {
-        inputRef.current?.focus()
-        inputRef.current?.select()
-      })
-    }
-  }, [selectedGuid, net?.guid])
+    const old = previous.current
+    setInputVal(value => old.guid !== net?.guid || value === old.name ? net?.name ?? '' : value)
+    previous.current = { guid: net?.guid, name: net?.name ?? '' }
+  }, [net?.guid, net?.name])
 
-  const preview = inputVal.trim() || net?.name || 'Wi-Fi Network'
-  const unchanged = inputVal.trim() === net?.name
-  const disabled = !net || !inputVal.trim() || unchanged
-
-  const refresh = async () => {
-    try {
-      const [nets, conn, admin] = await Promise.all([
-        window.nm.getNetworks(),
-        window.nm.getConnection(),
-        window.nm.isAdmin()
-      ])
-      setNetworks(nets)
-      setConnection(conn)
-      setAdminOk(admin)
-    } catch {}
-  }
-
-  const handleApply = async () => {
-    if (!net) {
-      addToast('Please select a network first', 'info')
-      return
-    }
-    if (unchanged) {
-      addToast('Name is unchanged. Enter a new name to apply.', 'info')
-      return
-    }
-    if (disabled || applying) return
-
+  const name = inputVal.trim()
+  const invalid = !name || Array.from(name).length > 128 || /[\x00-\x1f\x7f]/.test(name)
+  const unchanged = name === net?.name
+  const busy = applying || restoring || reconnecting
+  const supported = net?.canRename !== false && capabilities?.networkRename !== false
+  const disabled = !net || !supported || invalid || unchanged || busy
+  const apply = async () => {
+    if (!net || disabled) return
     setApplying(true)
-    const newName = inputVal.trim()
-    try {
-      await window.nm.rename(net.guid, newName, net.name)
-      await refresh()
-
-      if (net.live) {
-        addToast(`Renamed to "${newName}"! Windows taskbar and Wi-Fi list updated.`, 'success')
-      } else {
-        addToast(`Renamed "${net.originalName}" to "${newName}" in Windows`, 'success')
-      }
-    } catch (err: any) {
-      const msg = err?.message || ''
-      if (msg.includes('cancel') || msg.includes('cancelled') || msg.includes('canceled')) {
-        addToast('Rename canceled. Administrator privileges were not granted.', 'info')
-      } else if (msg.includes('Access is denied') || msg.includes('denied')) {
-        addToast('Administrator permission required to rename networks in Windows', 'error')
-      } else {
-        addToast(msg || 'Failed to rename network', 'error')
-      }
-    } finally {
-      setApplying(false)
-    }
+    try { await window.nm.rename(net.guid, name, net.name); await refreshNetworks(true); addToast('Display name saved: ' + name, 'success') }
+    catch (error) { addToast(errorMessage(error, 'The name could not be saved'), 'error') }
+    finally { setApplying(false) }
   }
-
-  const handleRestore = async () => {
-    if (!net || restoring) return
+  const restore = async () => {
+    if (!net || busy || !supported) return
     setRestoring(true)
-    const tid = addToast('Restoring original name...', 'loading')
-    try {
-      await window.nm.restore(net.guid, net.name)
-      await refresh()
-      useStore.getState().removeToast(tid)
-      addToast(`Restored original name "${net.originalName}" everywhere`, 'success')
-    } catch {
-      useStore.getState().removeToast(tid)
-      addToast('Failed to restore original name', 'error')
-    } finally {
-      setRestoring(false)
-    }
+    try { await window.nm.restore(net.guid, net.name); await refreshNetworks(true); addToast('Original display name restored', 'success') }
+    catch (error) { addToast(errorMessage(error, 'The original name could not be restored'), 'error') }
+    finally { setRestoring(false) }
   }
 
-  const handleReconnect = async () => {
-    if (!net?.live) {
-      addToast('Only the currently connected Wi-Fi can be reconnected', 'info')
-      return
-    }
-    if (reconnecting) return
-    setReconnecting(true)
-    const tid = addToast('Reconnecting Wi-Fi...', 'loading')
-    try {
-      const ok = await window.nm.reconnect(net.name)
-      useStore.getState().removeToast(tid)
-      if (ok) {
-        addToast('Reconnected successfully', 'success')
-      } else {
-        addToast('Failed to reconnect. Check Wi-Fi is within range.', 'error')
-      }
-      await refresh()
-    } catch {
-      useStore.getState().removeToast(tid)
-      addToast('Failed to reconnect Wi-Fi', 'error')
-    } finally {
-      setReconnecting(false)
-    }
-  }
-
-  const handleElevate = async () => {
-    try {
-      await window.nm.elevate()
-    } catch {}
-  }
-
-  return (
-    <div className={styles.panel}>
-      <div className={styles.header}>
-        <div className={styles.label}>
-          <span>Rename Network</span>
-        </div>
-        {net ? (
-          <div className={styles.targetBadge} title={`Original SSID: ${net.originalName}`}>
-            <WifiIcon size={12} color="var(--accent)" />
-            <span className={styles.targetName}>{net.name}</span>
-            {net.live && <span className={styles.liveBadge}>Active</span>}
-          </div>
-        ) : (
-          <span className={styles.noSelectionText}>No network selected</span>
-        )}
-      </div>
-
-      <div className={styles.inputWrap}>
-        <input
-          id="rename-network-input"
-          ref={inputRef}
-          className={styles.input}
-          type="text"
-          maxLength={60}
-          spellCheck={false}
-          placeholder={net ? `Type new name for "${net.name}"…` : 'Click a network above first'}
-          value={inputVal}
-          disabled={!net}
-          onChange={e => setInputVal(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              e.stopPropagation()
-              handleApply()
-            }
-          }}
-        />
-      </div>
-
-      {/* Windows Preview Card */}
-      <div className={styles.previewBox}>
-        <div className={styles.previewLeft}>
-          <WifiIcon size={13} color="var(--accent)" />
-          <span className={styles.previewLabel}>Windows Wi-Fi will show:</span>
-          <strong className={styles.previewName}>{preview}</strong>
-        </div>
-        <span className={styles.previewStatus}>
-          {net?.live ? 'Connected' : 'Available'}
-        </span>
-      </div>
-
-      {/* Admin Notice if un-elevated */}
-      {!adminOk && (
-        <div className={styles.adminNotice}>
-          <LockIcon size={13} />
-          <span className={styles.adminText}>
-            Windows requires administrator access to save network names. You will be prompted on apply.
-          </span>
-          <button type="button" className={styles.adminBtn} onClick={handleElevate}>
-            Elevate now
-          </button>
-        </div>
-      )}
-
-      {/* Action Buttons */}
-      <div className={styles.btns}>
-        <button
-          id="apply-rename-btn"
-          className={`${styles.btn} ${styles.btnPrimary}`}
-          disabled={disabled || applying}
-          onClick={handleApply}
-          title={
-            unchanged
-              ? 'Type a new name above to apply'
-              : !adminOk
-              ? 'Apply name (will prompt for administrator access)'
-              : 'Apply new display name to Windows registry'
-          }
-        >
-          {applying ? <span className={styles.spinner} /> : <CheckIcon size={14} />}
-          <span>{applying ? 'Applying…' : 'Apply name'}</span>
-          {!applying && !disabled && <span className={styles.kbd}>↵</span>}
-        </button>
-
-        <button
-          className={styles.btn}
-          disabled={!net?.renamed || restoring}
-          onClick={handleRestore}
-          title={
-            net?.renamed
-              ? `Restore original SSID: "${net?.originalName}"`
-              : 'Network is already using its original name'
-          }
-        >
-          {restoring ? <span className={styles.spinner} /> : <RestoreIcon size={14} />}
-          <span>{restoring ? 'Restoring…' : 'Restore original'}</span>
-        </button>
-
-        <button
-          className={styles.btn}
-          disabled={!net?.live || reconnecting}
-          onClick={handleReconnect}
-          title="Reconnect to force Windows taskbar to refresh Wi-Fi names"
-        >
-          {reconnecting ? <span className={styles.spinner} /> : <RefreshIcon size={14} />}
-          <span>{reconnecting ? 'Reconnecting…' : 'Reconnect'}</span>
-        </button>
-      </div>
+  return <section className={styles.panel} aria-labelledby="editor-title">
+    <div className={styles.header}><h2 className={styles.title} id="editor-title">Make it yours.<HelpTip label="Local display name">This changes the saved name on this computer. Your router keeps broadcasting the same Wi-Fi name, and other devices keep their own names.</HelpTip></h2>
+      <p className={styles.subtitle}>{net ? 'Give this saved network a name you recognize.' : 'Choose a saved network above to name it.'}</p>
     </div>
-  )
+    <label className={styles.fieldLabel} htmlFor="rename-network-input">DISPLAY NAME ON THIS COMPUTER</label>
+    <form className={styles.editLine} onSubmit={event => { event.preventDefault(); void apply() }}>
+      <input id="rename-network-input" className={styles.input} type="text" maxLength={256} spellCheck={false} value={inputVal}
+        disabled={!net || !supported || busy} placeholder={net ? 'A name you recognize' : 'Choose a network first'}
+        onChange={event => setInputVal(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); void apply() } }} />
+      <button id="apply-rename-btn" type="submit" className={styles.btn + ' ' + styles.btnPrimary} disabled={disabled}>
+        {applying ? <span className={styles.spinner} /> : <CheckIcon size={13} />}{applying ? 'Saving…' : 'Save name'}
+      </button>
+    </form>
+    {!invalid && !unchanged && net && <p className={styles.previewBox}>Will display as <strong>{name}</strong></p>}
+    {name && invalid && <p className={styles.error}>Use up to 128 characters without control characters.</p>}
+    <div className={styles.restoreLine}>
+      <p className={styles.original}>{!net ? 'No network selected' : privateNames ? 'Your original name stays saved.' : 'Original: ' + net.originalName}</p>
+      <button type="button" className={styles.textButton} disabled={!net?.renamed || !supported || busy} onClick={() => void restore()}>{restoring ? 'Restoring…' : 'Restore original'}</button>
+    </div>
+    <div className={styles.bottomRow}>
+      <p className={styles.permission}>{capabilities?.platform === 'windows' && <LockIcon size={11} />}<span>{!supported ? 'Display-name changes are unavailable here.' : 'Only the local name changes.'}</span>
+        {capabilities?.platform === 'windows' && <HelpTip label="Windows permission">Windows may ask for administrator permission when you save a name. Your original name is kept before the change.</HelpTip>}</p>
+      <button type="button" className={styles.textButton} disabled={!net || net.type !== 'wifi' || !net.profile || busy} onClick={() => void reconnectSelected()}><RefreshIcon size={11} />{reconnecting ? ' Reconnecting…' : ' Reconnect Wi-Fi'}</button>
+    </div>
+  </section>
 }

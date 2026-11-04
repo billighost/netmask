@@ -2,12 +2,14 @@ import React, { useEffect, useRef } from 'react'
 import { useStore, DEFAULT_SHORTCUTS } from './store'
 import { TitleBar } from './components/TitleBar/TitleBar'
 import { HeroCard } from './components/HeroCard/HeroCard'
-import { AdminBanner } from './components/AdminBanner/AdminBanner'
+import { PrivacyPanel } from './components/PrivacyPanel/PrivacyPanel'
+import { ToolsPanel } from './components/ToolsPanel/ToolsPanel'
 import { NetworkList } from './components/NetworkList/NetworkList'
 import { ActionPanel } from './components/ActionPanel/ActionPanel'
 import { ToastContainer } from './components/Toast/Toast'
 import { SettingsModal } from './components/SettingsModal/SettingsModal'
-import { KeyboardControlsModal, normalizeKeyCombination } from './components/KeyboardControlsModal/KeyboardControlsModal'
+import { KeyboardControlsModal } from './components/KeyboardControlsModal/KeyboardControlsModal'
+import { normalizeKeyCombination, shortcutEquals } from './keyboard-shortcuts'
 import { ContextMenu } from './components/ContextMenu/ContextMenu'
 import { UpdateBanner } from './components/UpdateBanner/UpdateBanner'
 import { NetworkDetailsModal } from './components/NetworkDetailsModal/NetworkDetailsModal'
@@ -17,54 +19,43 @@ import { DnsBenchmarkModal } from './components/DnsBenchmarkModal/DnsBenchmarkMo
 import { DeviceIdentityModal } from './components/DeviceIdentityModal/DeviceIdentityModal'
 import { RoamingTunerModal } from './components/RoamingTunerModal/RoamingTunerModal'
 import styles from './App.module.css'
+import { refreshNetworks, reconnectSelected, toggleStreamer, selectNetworkAndFocus, runSpeedTest } from './network-actions'
+import { errorMessage, visibleNetworks } from './network-state'
+import { subscribeToUpdates } from './update-actions'
 
 export const App: React.FC = () => {
   const autoRefreshInterval = useStore(s => s.settings.autoRefreshInterval)
+  const visible = useStore(s => s.visible)
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const refresh = async () => {
-    try {
-      const [nets, conn] = await Promise.all([
-        window.nm.getNetworks(),
-        window.nm.getConnection()
-      ])
-      useStore.getState().setNetworks(nets)
-      useStore.getState().setConnection(conn)
-      // Auto-select active network (or first available)
-      const store = useStore.getState()
-      const guidExists = store.selectedGuid && nets.some(n => n.guid === store.selectedGuid)
-      if (!guidExists) {
-        const live = nets.find(n => n.live)
-        const first = nets[0]
-        useStore.getState().selectNetwork(live?.guid ?? first?.guid ?? null)
-      }
-    } catch {}
-  }
+  const refresh = () => refreshNetworks().catch(error => useStore.setState({ connectionError: errorMessage(error) }))
 
   useEffect(() => {
+    const unsubUpdates = subscribeToUpdates()
     // Initial load
     ;(async () => {
-      try {
-        const [admin, s, streamer, elev] = await Promise.all([
+        const results = await Promise.allSettled([
           window.nm.isAdmin(),
           window.nm.getSettings(),
           window.nm.getStreamerStatus(),
-          window.nm.getElevationStatus()
+          window.nm.getElevationStatus(),
+          window.nm.getCapabilities()
         ])
         const state = useStore.getState()
-        state.setAdminOk(admin)
-        state.setSettings(s)
-        state.setStreamerStatus(streamer)
-        state.setElevationStatus(elev)
-        document.documentElement.setAttribute('data-theme', s.theme)
+        const [admin, preferences, streamer, elevation, capabilities] = results
+        if (admin.status === 'fulfilled') state.setAdminOk(admin.value)
+        if (preferences.status === 'fulfilled') {
+          state.setSettings(preferences.value)
+          document.documentElement.setAttribute('data-theme', useStore.getState().settings.theme)
+        } else state.addToast(errorMessage(preferences.reason, 'Settings could not be loaded'), 'error')
+        if (streamer.status === 'fulfilled') state.setStreamerStatus(streamer.value)
+        if (elevation.status === 'fulfilled') state.setElevationStatus(elevation.value)
+        if (capabilities.status === 'fulfilled') useStore.setState({ capabilities: capabilities.value })
 
         // Initial captive portal probe
         window.nm.checkCaptivePortal().then(status => {
-          if (status.isCaptive) {
-            useStore.getState().setCaptivePortal(status)
-          }
+          useStore.getState().setCaptivePortal(status)
         }).catch(() => {})
-      } catch {}
       await refresh()
     })()
 
@@ -85,32 +76,47 @@ export const App: React.FC = () => {
 
     // Streamer status subscription
     const unsubStreamer = window.nm.onStreamerStatus(status => {
+      const changed = useStore.getState().streamerStatus.isCloaked !== status.isCloaked
       useStore.getState().setStreamerStatus(status)
-      refresh()
+      if (changed) refresh()
     })
 
+    const onVisibility = (visible: boolean) => {
+      const changed = useStore.getState().visible !== visible
+      useStore.setState({ visible })
+      if (visible && changed) refresh()
+    }
+    const unsubVisibility = window.nm.onVisibility(onVisibility)
+    const documentVisibility = () => onVisibility(!document.hidden)
+    document.addEventListener('visibilitychange', documentVisibility)
+    documentVisibility()
+
     return () => {
+      unsubUpdates()
       unsubSpeed()
       unsubPing()
       unsubCaptive()
       unsubStreamer()
+      unsubVisibility()
+      document.removeEventListener('visibilitychange', documentVisibility)
     }
   }, [])
 
   // Auto-refresh when interval setting changes
   useEffect(() => {
     if (autoRefreshRef.current) clearInterval(autoRefreshRef.current)
-    if (autoRefreshInterval > 0) {
+    if (autoRefreshInterval > 0 && visible) {
       autoRefreshRef.current = setInterval(refresh, autoRefreshInterval * 1000)
     }
     return () => {
       if (autoRefreshRef.current) clearInterval(autoRefreshRef.current)
     }
-  }, [autoRefreshInterval])
+  }, [autoRefreshInterval, visible])
 
   // Global customizable keyboard shortcuts dispatcher
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.repeat) return
       const state = useStore.getState()
       const shortcuts = state.settings.shortcuts || DEFAULT_SHORTCUTS
 
@@ -120,7 +126,7 @@ export const App: React.FC = () => {
       // Find action that matches combo
       let matchedAction: string | null = null
       for (const [actionId, keyBinding] of Object.entries(shortcuts)) {
-        if (keyBinding && keyBinding.toLowerCase() === combo.toLowerCase()) {
+        if (shortcutEquals(keyBinding, combo, state.capabilities?.platform)) {
           matchedAction = actionId
           break
         }
@@ -145,7 +151,7 @@ export const App: React.FC = () => {
 
       // Check active element tag
       const activeEl = document.activeElement
-      const isInput = activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement
+      const isInput = activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement || activeEl instanceof HTMLSelectElement || (activeEl instanceof HTMLElement && activeEl.isContentEditable)
 
       // If user is editing text inside an input, only allow modifier combinations (e.g. Ctrl+...) or Escape
       if (isInput) {
@@ -159,8 +165,7 @@ export const App: React.FC = () => {
       switch (matchedAction) {
         case 'refresh': {
           e.preventDefault()
-          refresh()
-          state.addToast('Refreshed networks', 'info')
+          refreshNetworks().then(() => state.addToast('Networks refreshed', 'success')).catch(error => state.addToast(errorMessage(error), 'error'))
           break
         }
         case 'focusRename': {
@@ -195,36 +200,26 @@ export const App: React.FC = () => {
         }
         case 'reconnectWifi': {
           e.preventDefault()
-          const net = state.networks.find(n => n.guid === state.selectedGuid)
-          if (net && net.live) {
-            state.addToast('Reconnecting Wi-Fi...', 'loading')
-            window.nm.reconnect(net.name).then(async (ok) => {
-              if (ok) state.addToast('Reconnected successfully', 'success')
-              else state.addToast('Failed to reconnect', 'error')
-              await refresh()
-            }).catch(() => {
-              state.addToast('Reconnect error', 'error')
-            })
-          }
+          void reconnectSelected()
           break
         }
         case 'selectNext': {
           e.preventDefault()
-          const nets = state.networks
+          const nets = visibleNetworks(state.networks, state.settings, state.networkSearch, state.streamerStatus.isCloaked)
           if (nets.length > 0) {
             const currentIndex = nets.findIndex(n => n.guid === state.selectedGuid)
             const nextIndex = (currentIndex + 1) % nets.length
-            state.selectNetwork(nets[nextIndex].guid)
+            selectNetworkAndFocus(nets[nextIndex].guid)
           }
           break
         }
         case 'selectPrev': {
           e.preventDefault()
-          const nets = state.networks
+          const nets = visibleNetworks(state.networks, state.settings, state.networkSearch, state.streamerStatus.isCloaked)
           if (nets.length > 0) {
             const currentIndex = nets.findIndex(n => n.guid === state.selectedGuid)
             const prevIndex = currentIndex <= 0 ? nets.length - 1 : currentIndex - 1
-            state.selectNetwork(nets[prevIndex].guid)
+            selectNetworkAndFocus(nets[prevIndex].guid)
           }
           break
         }
@@ -246,11 +241,7 @@ export const App: React.FC = () => {
         }
         case 'toggleStreamer': {
           e.preventDefault()
-          window.nm.toggleStreamerCloak().then(s => {
-            state.setStreamerStatus(s)
-            refresh()
-            state.addToast(s.isCloaked ? 'Stream Safe Cloak Activated' : 'Stream Safe Cloak Deactivated', 'info')
-          }).catch(() => {})
+          void toggleStreamer()
           break
         }
         case 'peekBssid': {
@@ -260,20 +251,15 @@ export const App: React.FC = () => {
         }
         case 'trimMemory': {
           e.preventDefault()
+          if (state.capabilities?.platform !== 'windows') { state.addToast('This platform manages process memory automatically', 'info'); break }
           window.nm.trimMemory().then(() => {
             state.addToast('Working set memory trimmed', 'success')
-          }).catch(() => {})
+          }).catch(error => state.addToast(errorMessage(error), 'error'))
           break
         }
         case 'runSpeedTest': {
           e.preventDefault()
-          state.addToast('Running speed test...', 'info')
-          window.nm.runSpeedTest().then(res => {
-            state.setTestedSpeed(res)
-            state.addToast(`Speed test complete: ${res.mbps.toFixed(1)} Mbps`, 'success')
-          }).catch(() => {
-            state.addToast('Speed test failed', 'error')
-          })
+          void runSpeedTest()
           break
         }
         case 'openSettings': {
@@ -308,14 +294,20 @@ export const App: React.FC = () => {
   return (
     <div className={styles.app}>
       <TitleBar />
-      <div className={styles.main}>
+      <main className={styles.main} id="main-content">
+        <div className={styles.workspace}>
         <CaptivePortalBanner />
         <UpdateBanner />
-        <HeroCard />
-        <AdminBanner />
-        <NetworkList />
-        <ActionPanel />
-      </div>
+        <div className={styles.layout}>
+          <div className={styles.connection}><HeroCard /></div>
+          <div className={styles.profiles}><NetworkList /></div>
+          <div className={styles.editor}><ActionPanel /></div>
+          <div className={styles.privacy}><PrivacyPanel /></div>
+          <div className={styles.tools}><ToolsPanel /></div>
+        </div>
+        <footer className={styles.footnote}><span>Local names. Your router stays the same.</span><button type="button" onClick={() => useStore.getState().setShortcutsModalOpen(true)}>Keyboard controls</button></footer>
+        </div>
+      </main>
       <ToastContainer />
       <SettingsModal />
       <KeyboardControlsModal />

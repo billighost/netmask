@@ -2,17 +2,12 @@ name: CI & Code Quality
 
 on:
   push:
-    branches:
-      - main
-    paths-ignore:
-      - '**.md'
-      - '.github/ISSUE_TEMPLATE/**'
+    branches: [main]
   pull_request:
-    branches:
-      - main
-    paths-ignore:
-      - '**.md'
-      - '.github/ISSUE_TEMPLATE/**'
+    branches: [main]
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,26 +18,26 @@ jobs:
     name: TypeScript Check
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run TypeScript typecheck
-        run: npm run typecheck
-
-      - name: Run Verification Suite
-        run: npm run test
-
-      - name: Run Hook Linter
-        run: npm run lint
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Install browser for interface checks
+        run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+      - name: Save interface check screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interface-checks
+          path: .tmp/ui-checks
+          if-no-files-found: ignore
 
   build:
     name: Build (${{ matrix.os }})
@@ -51,49 +46,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-
+        os: [windows-latest, macos-latest, macos-15-intel, ubuntu-latest]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
-
-      - name: Setup Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
-
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libarchive-tools libsecret-1-dev xvfb
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Frontend (Vite)
-        run: npm run vite:build
-
-      - name: Tauri Cargo Check
-        run: cargo check --manifest-path src-tauri/Cargo.toml
-
-      - name: Tauri Cargo Test
-        run: cargo test --bin netmask --manifest-path src-tauri/Cargo.toml
-
-      - name: Compile application (legacy electron-vite build)
-        run: npm run build
-        continue-on-error: true
-
-      - name: Measure Performance & Memory Footprint (Linux Headless)
-        if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" node scripts/benchmark.js
-        continue-on-error: true
-
-      - name: Measure Performance & Memory Footprint (Windows / macOS)
-        if: runner.os != 'Linux'
-        run: node scripts/benchmark.js
-        continue-on-error: true
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - run: npm ci
+      - run: npm run build
+      - run: npm run format:native
+      - run: npm run check:native
+      - run: npm run test:native

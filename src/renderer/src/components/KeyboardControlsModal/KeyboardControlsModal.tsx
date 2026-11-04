@@ -1,159 +1,126 @@
+import { shallow } from 'zustand/shallow'
 import React, { useState, useEffect } from 'react'
 import { useStore, DEFAULT_SHORTCUTS } from '../../store'
 import type { ShortcutDefinition } from '../../types'
 import { KeyboardIcon, CloseIcon, SearchIcon, RefreshIcon, CheckIcon } from '../../icons'
-import styles from './KeyboardControlsModal.module.css'
+import styles from '../Dialog/Panel.module.css'
+import { Dialog } from '../Dialog/Dialog'
+import { normalizeKeyCombination, parseKeyCombination, shortcutEquals, shortcutKeyLabel } from '../../keyboard-shortcuts'
 
 export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   {
     id: 'refresh',
-    name: 'Refresh Networks',
-    description: 'Rescan Wi-Fi profiles, active adapter link, and RF connection stats',
-    category: 'Network Actions',
+    name: 'Refresh networks',
+    description: 'Check saved networks and your current connection again.',
+    category: 'Networks',
     defaultKey: 'Ctrl+R'
   },
   {
     id: 'focusRename',
-    name: 'Focus Rename Input',
-    description: 'Jump immediately into the rename input box for the selected network',
-    category: 'Network Actions',
+    name: 'Edit display name',
+    description: 'Move to the name box for the selected network.',
+    category: 'Networks',
     defaultKey: 'Ctrl+N'
   },
   {
     id: 'applyRename',
-    name: 'Apply New Name',
-    description: 'Apply the pending display name to the Windows network registry',
-    category: 'Network Actions',
+    name: 'Save name',
+    description: 'Save the name in the editor.',
+    category: 'Networks',
     defaultKey: 'Ctrl+Enter'
   },
   {
     id: 'restoreOriginal',
-    name: 'Restore Original Name',
-    description: 'Restore the hardware SSID and true profile name',
-    category: 'Network Actions',
+    name: 'Restore original name',
+    description: 'Put back the original name saved on this device.',
+    category: 'Networks',
     defaultKey: 'Ctrl+Shift+Z'
   },
   {
     id: 'reconnectWifi',
     name: 'Reconnect Wi-Fi',
-    description: 'Cycle Wi-Fi interface connection to update Windows taskbar shell',
-    category: 'Network Actions',
+    description: 'Connect using the selected saved Wi-Fi profile.',
+    category: 'Networks',
     defaultKey: 'Ctrl+Shift+R'
   },
   {
     id: 'viewDetails',
-    name: 'Network Diagnostics',
-    description: 'Open RF telemetry, BSSID, RSSI, SNR, and channel details modal',
-    category: 'Network Actions',
+    name: 'Network details',
+    description: 'See signal strength, security, and connection details.',
+    category: 'Networks',
     defaultKey: 'Ctrl+D'
   },
   {
     id: 'selectNext',
-    name: 'Next Network',
-    description: 'Move selection cursor down through saved network profiles',
+    name: 'Next network',
+    description: 'Select the next visible network.',
     category: 'Navigation',
     defaultKey: 'ArrowDown'
   },
   {
     id: 'selectPrev',
-    name: 'Previous Network',
-    description: 'Move selection cursor up through saved network profiles',
+    name: 'Previous network',
+    description: 'Select the previous visible network.',
     category: 'Navigation',
     defaultKey: 'ArrowUp'
   },
   {
     id: 'filterSearch',
-    name: 'Filter Networks',
-    description: 'Focus the network profile search filter',
+    name: 'Find a network',
+    description: 'Move to the saved network search box.',
     category: 'Navigation',
     defaultKey: 'Ctrl+F'
   },
   {
     id: 'closeModals',
-    name: 'Dismiss / Close Modals',
-    description: 'Close active popups, shortcuts modal, or context menu',
+    name: 'Close a panel',
+    description: 'Close the current menu or dialog.',
     category: 'Navigation',
     defaultKey: 'Escape'
   },
   {
     id: 'toggleStreamer',
-    name: 'Toggle Streamer Cloak',
-    description: 'Instantly cloak or uncloak active network for broadcast safety',
-    category: 'Privacy & Streamer',
+    name: 'Use a private display name',
+    description: 'Switch between your private name and your usual name.',
+    category: 'Privacy',
     defaultKey: 'Ctrl+Shift+S'
   },
   {
     id: 'peekBssid',
-    name: 'Peek Hardware BSSID',
-    description: 'Temporarily reveal masked router MAC address for 3 seconds',
-    category: 'Privacy & Streamer',
+    name: 'Show the access point address',
+    description: 'Reveal the hidden router address for three seconds.',
+    category: 'Privacy',
     defaultKey: 'Ctrl+Shift+B'
   },
   {
     id: 'trimMemory',
-    name: 'Trim Process Memory',
-    description: 'Evict stale heap pages and flush working set to minimum RAM footprint',
-    category: 'Window & General',
+    name: 'Release unused memory',
+    description: 'Ask Windows to trim the memory currently held by NetMask.',
+    category: 'App',
     defaultKey: 'Ctrl+Shift+M'
   },
   {
     id: 'runSpeedTest',
-    name: 'Run Speed Benchmark',
-    description: 'Test live network throughput and packet latency',
-    category: 'Window & General',
+    name: 'Test download speed',
+    description: 'Measure a 3 MB sample download from Cloudflare.',
+    category: 'App',
     defaultKey: 'Ctrl+Shift+T'
   },
   {
     id: 'openSettings',
-    name: 'Open Settings',
-    description: 'Open the main NetMask configuration and options panel',
-    category: 'Window & General',
+    name: 'Open settings',
+    description: 'Change your NetMask preferences.',
+    category: 'App',
     defaultKey: 'Ctrl+,'
   },
   {
     id: 'openShortcuts',
-    name: 'Keyboard Controls',
-    description: 'Open this keyboard shortcuts mapping and reference panel',
-    category: 'Window & General',
+    name: 'Keyboard controls',
+    description: 'See and change your keyboard shortcuts.',
+    category: 'App',
     defaultKey: 'Ctrl+/'
   }
 ]
-
-export function normalizeKeyCombination(e: KeyboardEvent): string | null {
-  // Solitary modifiers and lock keys don't constitute a valid shortcut
-  if (['Control', 'Alt', 'Shift', 'Meta', 'AltGraph', 'CapsLock', 'NumLock', 'ScrollLock'].includes(e.key)) {
-    return null
-  }
-
-  const parts: string[] = []
-  if (e.ctrlKey) parts.push('Ctrl')
-  if (e.altKey) parts.push('Alt')
-  if (e.shiftKey) parts.push('Shift')
-  if (e.metaKey) parts.push('Meta')
-
-  let key = e.key
-  if (key === ' ') key = 'Space'
-  else if (key === 'ArrowUp') key = 'ArrowUp'
-  else if (key === 'ArrowDown') key = 'ArrowDown'
-  else if (key === 'ArrowLeft') key = 'ArrowLeft'
-  else if (key === 'ArrowRight') key = 'ArrowRight'
-  else if (key.length === 1) key = key.toUpperCase()
-
-  parts.push(key)
-  return parts.join('+')
-}
-
-export function parseKeyCombination(keyStr: string): string[] {
-  if (!keyStr) return []
-  if (keyStr.endsWith('++')) {
-    const prefix = keyStr.slice(0, -2)
-    return [...(prefix ? prefix.split('+') : []), '+']
-  }
-  if (keyStr === '+') {
-    return ['+']
-  }
-  return keyStr.split('+')
-}
 
 export const KeyboardControlsModal: React.FC = () => {
   const {
@@ -163,18 +130,21 @@ export const KeyboardControlsModal: React.FC = () => {
     updateShortcut,
     resetAllShortcuts,
     addToast
-  } = useStore()
+  } = useStore(state => ({ shortcutsModalOpen: state.shortcutsModalOpen, setShortcutsModalOpen: state.setShortcutsModalOpen, settings: state.settings, updateShortcut: state.updateShortcut, resetAllShortcuts: state.resetAllShortcuts, addToast: state.addToast }), shallow)
 
   const [search, setSearch] = useState('')
   const [recordingId, setRecordingId] = useState<string | null>(null)
+  const platform = useStore(state => state.capabilities?.platform)
 
   // Shortcuts map: merge user settings with fallback defaults
   const shortcuts = settings.shortcuts || DEFAULT_SHORTCUTS
 
+  useEffect(() => { if (!shortcutsModalOpen) setRecordingId(null) }, [shortcutsModalOpen])
+
   useEffect(() => {
     if (!recordingId) return
 
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
       e.preventDefault()
       e.stopPropagation()
 
@@ -186,9 +156,8 @@ export const KeyboardControlsModal: React.FC = () => {
 
       // Allow Backspace or Delete without modifiers to unassign
       if ((e.key === 'Backspace' || e.key === 'Delete') && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
-        updateShortcut(recordingId, '')
         setRecordingId(null)
-        addToast('Shortcut unassigned', 'info')
+        if (await updateShortcut(recordingId, '')) addToast('Shortcut unassigned', 'info')
         return
       }
 
@@ -197,11 +166,11 @@ export const KeyboardControlsModal: React.FC = () => {
 
       // Conflict detection: check if another action uses this shortcut
       const conflicting = Object.entries(shortcuts).find(
-        ([id, key]) => id !== recordingId && key && key.toLowerCase() === combo.toLowerCase()
+        ([id, key]) => id !== recordingId && shortcutEquals(key, combo, platform)
       )
 
-      updateShortcut(recordingId, combo)
       setRecordingId(null)
+      if (!await updateShortcut(recordingId, combo)) return
 
       if (conflicting) {
         const def = SHORTCUT_DEFINITIONS.find(d => d.id === conflicting[0])
@@ -216,7 +185,7 @@ export const KeyboardControlsModal: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [recordingId, shortcuts, updateShortcut, addToast])
+  }, [recordingId, shortcuts, updateShortcut, addToast, platform])
 
   if (!shortcutsModalOpen) return null
 
@@ -246,21 +215,19 @@ export const KeyboardControlsModal: React.FC = () => {
         {parts.map((part, i) => (
           <React.Fragment key={i}>
             {i > 0 && <span className={styles.plusSep}>+</span>}
-            <kbd className={styles.kbd}>{part}</kbd>
+            <kbd className={styles.kbd}>{shortcutKeyLabel(part, platform)}</kbd>
           </React.Fragment>
         ))}
       </>
     )
   }
 
-  const handleResetOne = (id: string, defaultKey: string) => {
-    updateShortcut(id, defaultKey)
-    addToast('Shortcut reset to default', 'info')
+  const handleResetOne = async (id: string, defaultKey: string) => {
+    if (await updateShortcut(id, defaultKey)) addToast('Shortcut reset to default', 'info')
   }
 
   return (
-    <div className={styles.scrim} onClick={() => setShortcutsModalOpen(false)}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
+    <Dialog label="Keyboard controls" onClose={() => setShortcutsModalOpen(false)} scrimClass={styles.scrim} modalClass={styles.modal}>
         {/* Header */}
         <div className={styles.header}>
           <div className={styles.headerTitleGroup}>
@@ -268,9 +235,9 @@ export const KeyboardControlsModal: React.FC = () => {
               <KeyboardIcon size={18} />
             </div>
             <div>
-              <div className={styles.title}>Keyboard Controls & Shortcuts</div>
+              <div className={styles.title}>Keyboard controls</div>
               <div className={styles.subtitle}>
-                Customize keybindings to execute network operations instantly
+                Choose a shortcut, then press the keys you want to use.
               </div>
             </div>
           </div>
@@ -290,7 +257,8 @@ export const KeyboardControlsModal: React.FC = () => {
             <input
               type="text"
               className={styles.searchInput}
-              placeholder="Search shortcuts by name, key, or category…"
+              placeholder="Find a shortcut…"
+              aria-label="Find a keyboard shortcut"
               value={search}
               onChange={e => setSearch(e.target.value)}
               autoFocus
@@ -299,7 +267,7 @@ export const KeyboardControlsModal: React.FC = () => {
               <button
                 className={styles.clearSearchBtn}
                 onClick={() => setSearch('')}
-                title="Clear filter"
+                aria-label="Clear shortcut search"
               >
                 ×
               </button>
@@ -347,13 +315,13 @@ export const KeyboardControlsModal: React.FC = () => {
                                 <span>Press keys… (Esc to cancel)</span>
                               </div>
                             ) : (
-                              <div
+                              <button
                                 className={styles.keyBadges}
                                 onClick={() => setRecordingId(def.id)}
-                                title="Click to remap shortcut"
+                                aria-label={'Change shortcut for ' + def.name}
                               >
                                 {renderKeyBadges(currentKey)}
-                              </div>
+                              </button>
                             )}
 
                             {!isRecording && (
@@ -361,7 +329,7 @@ export const KeyboardControlsModal: React.FC = () => {
                                 type="button"
                                 className={`${styles.rowBtn} ${styles.rowBtnPrimary}`}
                                 onClick={() => setRecordingId(def.id)}
-                                title="Change key combination"
+                                aria-label={'Edit shortcut for ' + def.name}
                               >
                                 Edit
                               </button>
@@ -372,7 +340,7 @@ export const KeyboardControlsModal: React.FC = () => {
                                 type="button"
                                 className={styles.rowBtn}
                                 onClick={() => handleResetOne(def.id, def.defaultKey)}
-                                title={`Reset to default (${def.defaultKey})`}
+                                aria-label={'Reset shortcut for ' + def.name}
                               >
                                 Reset
                               </button>
@@ -391,18 +359,17 @@ export const KeyboardControlsModal: React.FC = () => {
         {/* Footer */}
         <div className={styles.footer}>
           <div className={styles.hint}>
-            Click <strong>Edit</strong> or any key badge, then press your new shortcut combo.
+            Choose <strong>Edit</strong>, then press the keys you want to use.
           </div>
           <div className={styles.footerActions}>
             <button
               type="button"
               className={styles.resetBtn}
-              onClick={() => {
-                resetAllShortcuts()
-                addToast('All shortcuts restored to defaults', 'info')
+              onClick={async () => {
+                if (await resetAllShortcuts()) addToast('All shortcuts restored to defaults', 'info')
               }}
             >
-              Reset All
+              Reset all
             </button>
             <button
               type="button"
@@ -413,7 +380,6 @@ export const KeyboardControlsModal: React.FC = () => {
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Dialog>
   )
 }

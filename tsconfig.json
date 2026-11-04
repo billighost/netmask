@@ -17,11 +17,10 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@renderer/*": ["src/renderer/src/*"],
-      "@main/*": ["src/main/*"]
+      "@renderer/*": ["src/renderer/src/*"]
     }
   },
-  "include": ["src/**/*", "electron.vite.config.ts"],
-  "exclude": ["node_modules", "dist", "out"]
+  "include": ["src/renderer/**/*", "vite.config.mts"],
+  "exclude": ["node_modules", "dist"]
 }
 

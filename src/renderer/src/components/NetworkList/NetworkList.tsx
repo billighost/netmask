@@ -1,51 +1,39 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { useStore } from '../../store'
-import { WifiIcon, EthernetIcon, SearchIcon, RefreshIcon } from '../../icons'
+import { SearchIcon, RefreshIcon } from '../../icons'
+import { Tooltip } from '../Controls/Tooltip'
 import { NetworkRow } from '../NetworkRow/NetworkRow'
 import styles from './NetworkList.module.css'
+import { refreshNetworks } from '../../network-actions'
+import { visibleNetworks, errorMessage } from '../../network-state'
+import { shallow } from 'zustand/shallow'
 
 export const NetworkList: React.FC = () => {
-  const { networks, settings, refreshing, setRefreshing, setNetworks, setConnection, addToast } = useStore()
-  const [search, setSearch] = useState('')
-
-  const visible = networks.filter(n => {
-    if (!settings.showEthernet && n.type === 'ethernet') return false
-    if (search) return n.name.toLowerCase().includes(search.toLowerCase()) ||
-      n.originalName.toLowerCase().includes(search.toLowerCase())
-    return true
-  })
+  const { networks, settings, refreshing, addToast, search, setSearch, privateNames } = useStore(state => ({ networks: state.networks, settings: state.settings, refreshing: state.refreshing, addToast: state.addToast, search: state.networkSearch, setSearch: state.setNetworkSearch, privateNames: state.streamerStatus.isCloaked }), shallow)
+  const visible = visibleNetworks(networks, settings, search, privateNames)
 
   const handleRefresh = async () => {
     if (refreshing) return
-    setRefreshing(true)
     try {
-      const [nets, conn] = await Promise.all([
-        window.nm.getNetworks(),
-        window.nm.getConnection()
-      ])
-      setNetworks(nets)
-      setConnection(conn)
+      await refreshNetworks()
       addToast('Refreshed', 'success')
-    } catch {
-      addToast('Refresh failed', 'error')
-    } finally {
-      setRefreshing(false)
-    }
+    } catch (error) { addToast(errorMessage(error, 'Refresh failed'), 'error') }
   }
 
   return (
     <div className={styles.root}>
       <div className={styles.header}>
         <span className={styles.title}>
-          Saved networks {networks.length > 0 && `(${networks.length})`}
+          Saved networks <span className={styles.count}>{visible.length}</span>
         </span>
-        <button
+        <Tooltip label="Refresh saved networks"><button
           className={`${styles.iconBtn} ${refreshing ? styles.spinning : ''}`}
-          title="Refresh"
+          aria-label="Refresh saved networks"
+          disabled={refreshing}
           onClick={handleRefresh}
         >
           <RefreshIcon size={14} />
-        </button>
+        </button></Tooltip>
       </div>
 
       <div className={styles.searchWrap}>
@@ -54,17 +42,18 @@ export const NetworkList: React.FC = () => {
           id="filter-networks-input"
           className={styles.search}
           type="text"
-          placeholder="Filter networks…"
+          placeholder="Find a saved network…"
+          aria-label="Filter saved networks"
           value={search}
           onChange={e => setSearch(e.target.value)}
           spellCheck={false}
         />
         {search && (
-          <button className={styles.clearBtn} onClick={() => setSearch('')}>×</button>
+          <button className={styles.clearBtn} aria-label="Clear network filter" onClick={() => setSearch('')}>×</button>
         )}
       </div>
 
-      <div className={styles.list}>
+      <div className={styles.list} role="list" aria-label="Saved networks">
         {visible.length === 0 ? (
           <div className={styles.empty}>
             {search

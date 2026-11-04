@@ -8,52 +8,7 @@ interface IconProps {
   style?: React.CSSProperties
 }
 
-/**
- * NetMaskLogoIcon — Wi-Fi arcs + closed eye (the app's signature mark)
- * The eye replaces the usual Wi-Fi dot, symbolising "masked / hidden identity"
- */
-export const NetMaskLogoIcon = ({ size = 18, className = '' }: IconProps) => (
-  <svg
-    className={className}
-    width={size} height={size}
-    viewBox="0 0 24 24" fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    {/* Outer arc */}
-    <path
-      d="M3 6.8a13 13 0 0 1 18 0"
-      stroke="var(--accent)" strokeWidth="1.9" strokeLinecap="round"
-    />
-    {/* Middle arc */}
-    <path
-      d="M6 10a8.5 8.5 0 0 1 12 0"
-      stroke="var(--accent)" strokeWidth="1.9" strokeLinecap="round"
-    />
-    {/* Inner arc */}
-    <path
-      d="M9 13.2a4.2 4.2 0 0 1 6 0"
-      stroke="var(--accent)" strokeWidth="1.9" strokeLinecap="round"
-    />
-    {/* Eyelid contour */}
-    <path
-      d="M8.2 16.5 Q12 14.5 15.8 16.5"
-      stroke="var(--accent-light, #38bdf8)" strokeWidth="1.3" strokeLinecap="round" fill="none"
-    />
-    <path
-      d="M8.2 16.5 Q12 18.5 15.8 16.5"
-      stroke="var(--accent-light, #38bdf8)" strokeWidth="1.3" strokeLinecap="round" fill="none"
-    />
-    {/* 5 Downward-pointing eyelashes matching the new logo */}
-    <path
-      d="M8.8 17.2 L7.5 19.8M10.4 17.8 L9.8 21M12 18 L12 21.8M13.6 17.8 L14.2 21M15.2 17.2 L16.5 19.8"
-      stroke="var(--accent-light, #38bdf8)" strokeWidth="1.2" strokeLinecap="round"
-    />
-  </svg>
-)
-
-/* ─────────────────────────────────────────────────────────
-   WifiIcon — arcs sweep in from dot, staggered
-───────────────────────────────────────────────────────── */
+export { NetMaskLogoIcon } from './BrandMark'
 export const WifiIcon = ({ size = 16, color = 'currentColor', className = '' }: IconProps) => (
   <svg
     className={`icon-wifi ${className}`}
