@@ -144,4 +144,4 @@ jobs:
           prerelease: false
           make_latest: legacy
           fail_on_unmatched_files: true
-          files: release-assets/*
+          files: publish-assets/*
