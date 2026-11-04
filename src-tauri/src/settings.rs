@@ -299,7 +299,11 @@ pub fn get_settings() -> AppSettings {
         .get_or_insert_with(|| {
             load_settings(storage()).unwrap_or_else(|error| {
                 log::warn!("Settings could not be loaded: {error}");
-                default_settings()
+                // Damaged preferences must not authorize automatic OS mutations.
+                let mut fallback = default_settings();
+                fallback.auto_cloak_streamer = false;
+                fallback.silent_elevation = false;
+                fallback
             })
         })
         .clone()

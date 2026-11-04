@@ -358,32 +358,16 @@ pub fn get_current_dns(interface: Option<&str>) -> Result<(String, Option<String
 
 pub fn benchmark_dns() -> Result<Vec<DnsResolverResult>, String> {
     let config = configuration(None)?;
-    let current = config.effective.first().cloned();
+    let specifications = benchmark_resolvers(&config);
     let mut results = std::thread::scope(|scope| {
-        let handles: Vec<_> = PRESETS
-            .iter()
-            .map(|preset| {
-                let primary = if preset.id == "dhcp" {
-                    current.clone()
-                } else {
-                    Some(preset.primary.into())
-                };
-                let is_current = if preset.id == "dhcp" {
-                    config.automatic
-                } else {
-                    !config.automatic && current.as_deref() == Some(preset.primary)
-                };
-                scope.spawn(move || DnsResolverResult {
-                    id: preset.id.into(),
-                    name: preset.name.into(),
-                    provider: preset.provider.into(),
-                    primary: preset.primary.into(),
-                    secondary: preset.secondary.map(str::to_owned),
-                    description: preset.description.into(),
-                    is_dhcp: Some(preset.id == "dhcp"),
-                    latency_ms: primary.as_deref().and_then(median_latency),
-                    is_current,
-                    is_fastest: Some(false),
+        let handles: Vec<_> = specifications
+            .into_iter()
+            .map(|mut result| {
+                scope.spawn(move || {
+                    if result.primary != "Automatic" {
+                        result.latency_ms = median_latency(&result.primary);
+                    }
+                    result
                 })
             })
             .collect();
@@ -406,6 +390,69 @@ pub fn benchmark_dns() -> Result<Vec<DnsResolverResult>, String> {
         results[index].is_fastest = Some(true);
     }
     Ok(results)
+}
+
+fn benchmark_resolvers(config: &Configuration) -> Vec<DnsResolverResult> {
+    let mut results: Vec<_> = PRESETS
+        .iter()
+        .map(|preset| {
+            let automatic = preset.id == "dhcp";
+            let servers: Vec<_> = std::iter::once(preset.primary)
+                .chain(preset.secondary)
+                .map(str::to_owned)
+                .collect();
+            DnsResolverResult {
+                id: preset.id.into(),
+                name: preset.name.into(),
+                provider: preset.provider.into(),
+                // DHCP addresses cannot be inferred from a manual configuration.
+                primary: if automatic && config.automatic {
+                    config
+                        .effective
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "Automatic".into())
+                } else {
+                    preset.primary.into()
+                },
+                secondary: if automatic && config.automatic {
+                    config.effective.get(1).cloned()
+                } else {
+                    preset.secondary.map(str::to_owned)
+                },
+                description: preset.description.into(),
+                is_dhcp: Some(automatic),
+                latency_ms: None,
+                is_current: if automatic {
+                    config.automatic
+                } else {
+                    !config.automatic && config.servers == servers
+                },
+                is_fastest: Some(false),
+                configuration_id: Some(config.target.clone()),
+            }
+        })
+        .collect();
+    if !results.iter().any(|result| result.is_current) {
+        results.push(DnsResolverResult {
+            id: "current".into(),
+            name: "Current DNS".into(),
+            provider: "Custom configuration".into(),
+            primary: config
+                .effective
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "Unavailable".into()),
+            secondary: config.effective.get(1).cloned(),
+            description: "Your current resolver settings".into(),
+            is_dhcp: Some(false),
+            latency_ms: None,
+            is_current: true,
+            is_fastest: Some(false),
+            configuration_id: Some(config.target.clone()),
+        });
+    }
+    results
 }
 
 #[cfg(windows)]
@@ -468,13 +515,16 @@ fn apply_configuration(config: &Configuration) -> Result<(), String> {
     platform::macos::privileged_networksetup(&args, true)
 }
 
-pub fn apply_dns(resolver_id: &str) -> Result<bool, String> {
+pub fn apply_dns(resolver_id: &str, expected_target: Option<&str>) -> Result<bool, String> {
     let preset = PRESETS
         .iter()
         .find(|p| p.id == resolver_id)
         .ok_or("Unknown DNS resolver")?;
     settings::storage().with_lock("dns-mutations", || {
         let previous = configuration(None)?;
+        if expected_target.is_some_and(|target| target != previous.target) {
+            return Err("The active connection changed. Test DNS again before applying a resolver.".into());
+        }
         let mut updated = previous.clone();
         updated.automatic = preset.id == "dhcp";
         updated.ignore_auto = !updated.automatic;
@@ -498,6 +548,41 @@ pub fn apply_dns(resolver_id: &str) -> Result<bool, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn manual_dns_is_not_measured_as_dhcp_and_custom_resolvers_remain_visible() {
+        let config = Configuration {
+            target: "profile-id".into(),
+            interface: "Wi-Fi".into(),
+            servers: vec!["192.0.2.1".into()],
+            effective: vec!["192.0.2.1".into()],
+            automatic: false,
+            ignore_auto: true,
+        };
+        let results = benchmark_resolvers(&config);
+        let automatic = results.iter().find(|result| result.id == "dhcp").unwrap();
+        assert_eq!(automatic.primary, "Automatic");
+        assert_eq!(automatic.latency_ms, None);
+        assert!(!automatic.is_current);
+        let current = results.iter().find(|result| result.is_current).unwrap();
+        assert_eq!(current.id, "current");
+        assert_eq!(current.primary, "192.0.2.1");
+        assert_eq!(current.configuration_id.as_deref(), Some("profile-id"));
+        let automatic = Configuration {
+            automatic: true,
+            servers: vec![],
+            ..config
+        };
+        let results = benchmark_resolvers(&automatic);
+        assert_eq!(
+            results
+                .iter()
+                .find(|result| result.id == "dhcp")
+                .unwrap()
+                .primary,
+            "192.0.2.1"
+        );
+        assert!(!results.iter().any(|result| result.id == "current"));
+    }
     #[test]
     fn dns_measurement_requires_a_matching_successful_answer() {
         let query = query_packet(1234);

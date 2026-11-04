@@ -10,8 +10,8 @@ import { enablePrivacyControls } from '../../privacy-actions'
 import styles from '../Dialog/Panel.module.css'
 
 export const DeviceIdentityModal: React.FC = () => {
-  const { open, identity, capabilities } = useStore(state => ({
-    open: state.privacyCloakModalOpen, identity: state.deviceIdentity, capabilities: state.capabilities
+  const { open, identity, capabilities, epoch } = useStore(state => ({
+    open: state.privacyCloakModalOpen, identity: state.deviceIdentity, capabilities: state.capabilities, epoch: state.connectionEpoch
   }), shallow)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -20,10 +20,11 @@ export const DeviceIdentityModal: React.FC = () => {
   const state = useStore.getState()
   const fetchIdentity = async () => {
     const id = ++request.current
+    const startedOn = useStore.getState().connectionEpoch
     setLoading(true); setError(null)
     try {
       const identity = await window.nm.getDeviceIdentity()
-      if (id === request.current) state.setDeviceIdentity(identity)
+      if (id === request.current && startedOn === useStore.getState().connectionEpoch) state.setDeviceIdentity(identity)
     } catch (error) { if (id === request.current) setError(errorMessage(error)) }
     finally { if (id === request.current) setLoading(false) }
   }
@@ -31,7 +32,7 @@ export const DeviceIdentityModal: React.FC = () => {
     state.setDeviceIdentity(null)
     if (open) void fetchIdentity()
     return () => { request.current++ }
-  }, [open])
+  }, [open, epoch])
   if (!open) return null
   const macSupported = capabilities?.macRandomization === true && Boolean(identity?.activeProfile)
   const netbiosSupported = capabilities?.netbiosControl === true

@@ -44,7 +44,7 @@ export const tauriApi = {
   benchmarkDns: (): Promise<DnsResolverResult[]> => invoke('nm_benchmark_dns'),
   getCurrentDns: (interfaceName?: string): Promise<{ primary: string; secondary?: string; isDhcp: boolean }> =>
     invoke('nm_get_current_dns', { interfaceName }),
-  applyDns: (resolverId: string): Promise<boolean> => invoke('nm_apply_dns', { resolverId }),
+  applyDns: (resolverId: string, configurationId?: string): Promise<boolean> => invoke('nm_apply_dns', { resolverId, configurationId }),
 
   // Wi-Fi Roaming & Band Steering Tuner
   getRoamingSettings: (): Promise<RoamingSettings> => invoke('nm_get_roaming_settings'),

@@ -55,6 +55,7 @@ export type StreamerStatus = {
 }
 
 export type SpeedSample = {
+  available?: boolean
   downMBps: number
   upMBps: number
   downKbps: number
@@ -111,6 +112,7 @@ export type DnsResolverResult = {
   latencyMs: number | null
   isCurrent: boolean
   isFastest?: boolean
+  configurationId?: string
 }
 
 export type RoamingSettings = {

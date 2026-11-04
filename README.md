@@ -2,7 +2,7 @@
 
 <h1 align="center">NetMask</h1>
 <p align="center"><strong>Your networks. Your names.</strong></p>
-<p align="center">Give a saved network a name you recognise, see how your connection is doing,<br>and keep personal names out of screenshots. A small desktop app for Windows, macOS, and Linux.</p>
+<p align="center">Give a saved network a name you recognise, see how your connection is doing,<br>and use a private local display name. A small desktop app for Windows, macOS, and Linux.</p>
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/fieldnotes-dark.png"><img src="docs/assets/fieldnotes-paper.png" width="960" alt="NetMask's Fieldnotes interface: the Studio network, connection measurements, saved networks, and local name editor"></picture></p>
 
@@ -12,22 +12,24 @@
 
 - **Use a familiar name.** Turn `HomeFiber_5G` into `Studio` on your computer. The original is saved so you can restore it.
 - **Read your connection.** See transfer activity, response time, and the Wi-Fi details your system provides. Small information buttons explain the numbers.
-- **Keep names off your screen.** Use a private display name for screenshots and calls, manually or while a supported broadcast app runs.
+- **Mask the active display name.** Use a private local label, manually or while a supported broadcast app runs.
 - **Keep useful tools close.** Reconnect saved Wi-Fi, compare DNS lookup times, run a small download test, or share a supported Wi-Fi network with a QR code.
 
-Only local labels change; your router keeps its Wi-Fi name. Display privacy changes what is shown and does not make your connection anonymous.
+Only local labels change; your router keeps its Wi-Fi name. Display privacy masks selected fields; check other screens and apps before sharing. It does not make your connection anonymous.
 
 ## Get NetMask
 
-**Latest: v2.3.0** · [Release notes](https://github.com/billighost/netmask/releases/tag/v2.3.0)
+**Latest: v2.3.1** · [Release notes](https://github.com/billighost/netmask/releases/tag/v2.3.1)
 
 | Windows 10 / 11 | macOS 12+ | Linux |
 | --- | --- | --- |
-| **x64**<br>[Download installer](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_x64-setup.exe) · [MSI](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_x64_en-US.msi) | [Apple silicon](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_aarch64.dmg)<br>[Intel](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_x64.dmg) | **x64 · NetworkManager**<br>[Debian / Ubuntu](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_amd64.deb) · [AppImage](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_amd64.AppImage) |
+| **x64**<br>[EXE / MSI downloads](https://github.com/billighost/netmask/releases/tag/v2.3.1) | [Apple silicon / Intel downloads](https://github.com/billighost/netmask/releases/tag/v2.3.1) | **x64 · NetworkManager**<br>[DEB / AppImage downloads](https://github.com/billighost/netmask/releases/tag/v2.3.1) |
 
 Run the Windows installer, drag the Mac app into Applications, or install the Linux package. For AppImage, make the file executable first.
 
-[Checksums](https://github.com/billighost/netmask/releases/download/v2.3.0/checksums.txt) · [Installation and privacy notes](SECURITY.md) · [All releases](https://github.com/billighost/netmask/releases)
+[Checksums](https://github.com/billighost/netmask/releases/download/v2.3.1/checksums.txt) · [Installation and privacy notes](SECURITY.md) · [All releases](https://github.com/billighost/netmask/releases)
+
+The release page lists available installers. A platform awaiting a build runner is added after a successful retry.
 
 ## A little room goes a long way
 
@@ -49,6 +51,6 @@ npm ci
 npm run dev
 ```
 
-[Contributing](CONTRIBUTING.md) · [Architecture](docs/ARCHITECTURE.md) · [Audit](docs/AUDIT.md) · [Release guide](RELEASE_GUIDE.md)
+[Contributing](CONTRIBUTING.md) · [Architecture](docs/ARCHITECTURE.md) · [Audit](docs/AUDIT.md) · [Product and launch plan](docs/PRODUCT_STRATEGY.md) · [Release guide](RELEASE_GUIDE.md)
 
 Created and maintained by **Bello Bilal** · [@billighost](https://github.com/billighost) · `bb2010ng@gmail.com` · [MIT](LICENSE)

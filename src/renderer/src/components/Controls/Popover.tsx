@@ -17,6 +17,7 @@ export const Popover: React.FC<{
   const [position, setPosition] = useState<React.CSSProperties>({ visibility: 'hidden' })
 
   useLayoutEffect(() => {
+    let frame = 0
     const place = () => {
       if (!anchor.current || !ref.current) return
       const bounds = anchor.current.getBoundingClientRect()
@@ -30,7 +31,11 @@ export const Popover: React.FC<{
       const below = bounds.bottom + 6
       const above = bounds.top - height - 6
       const top = below + height <= screenHeight - 8 ? below : above >= 8 ? above : Math.max(8, Math.min(below, screenHeight - height - 8))
-      setPosition({ left: Math.max(8, Math.min(bounds.left, screenWidth - fittedWidth - 8)), top, width: fittedWidth, maxHeight: screenHeight - 16, visibility: 'visible' })
+      const next = { left: Math.max(8, Math.min(bounds.left, screenWidth - fittedWidth - 8)), top, width: fittedWidth, maxHeight: screenHeight - 16, visibility: 'visible' as const }
+      setPosition(previous => previous.left === next.left && previous.top === next.top && previous.width === next.width && previous.maxHeight === next.maxHeight && previous.visibility === next.visibility ? previous : next)
+    }
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(() => { frame = 0; place() })
     }
     const outside = (event: PointerEvent) => {
       if (!ref.current?.contains(event.target as Node) && !anchor.current?.contains(event.target as Node)) close.current()
@@ -42,16 +47,17 @@ export const Popover: React.FC<{
       close.current()
     }
     place()
-    const observer = new ResizeObserver(place)
+    const observer = new ResizeObserver(schedule)
     observer.observe(ref.current!)
-    window.addEventListener('resize', place)
-    document.addEventListener('scroll', place, true)
+    window.addEventListener('resize', schedule)
+    document.addEventListener('scroll', schedule, true)
     document.addEventListener('pointerdown', outside, true)
     window.addEventListener('keydown', escape, true)
     return () => {
       observer.disconnect()
-      window.removeEventListener('resize', place)
-      document.removeEventListener('scroll', place, true)
+      cancelAnimationFrame(frame)
+      window.removeEventListener('resize', schedule)
+      document.removeEventListener('scroll', schedule, true)
       document.removeEventListener('pointerdown', outside, true)
       window.removeEventListener('keydown', escape, true)
     }

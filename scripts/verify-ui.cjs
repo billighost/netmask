@@ -42,7 +42,7 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
     if (listener.event === event) callbacks.get(listener.handler)?.({ event, id, payload })
   })
   window.__NM_FIXTURE__ = {
-    calls, settings, capabilities, networks, connection,
+    calls, settings, capabilities, networks, connection, resolvers,
     fail: (command, message = 'Permission denied by the test fixture') => failures.set(command, message),
     emit,
     longName: () => { networks[0].name = 'A'.repeat(128); connection.name = networks[0].name }
@@ -294,6 +294,102 @@ async function previewChecks(browser, base, errors, results) {
   }
   await page.close()
 }
+
+async function regressionChecks(browser, base, errors, results) {
+  const page = await browser.newPage({ viewport: { width: 440, height: 700 }, reducedMotion: 'reduce' })
+  page.on('pageerror', error => errors.push(error.message))
+  await page.addInitScript(nativeFixture, { version: appVersion })
+  await page.goto(base + '/dist/index.html')
+  await page.locator('[data-network-guid]').first().waitFor()
+  await page.getByRole('button', { name: 'Keyboard controls', exact: true }).first().click()
+  await page.getByRole('button', { name: 'Edit shortcut for Save name', exact: true }).click()
+  await page.keyboard.press('Control+Shift+E')
+  await page.getByText('Shortcut saved: Ctrl+Shift+E', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Edit shortcut for Network details', exact: true }).click()
+  await page.keyboard.press('Control+Enter')
+  await page.getByText('Shortcut saved: Ctrl+Enter', { exact: true }).waitFor()
+  await page.keyboard.press('Escape')
+  await page.locator('#rename-network-input').fill('A deliberate new name')
+  await page.keyboard.press('Control+Enter')
+  await page.getByRole('dialog', { name: 'Network details', exact: true }).waitFor()
+  assert.equal(await page.locator('#connection-name').textContent(), 'Studio', 'Reassigned Enter must not submit the name editor')
+  assert.equal(await page.evaluate(() => window.__NM_FIXTURE__.calls.filter(call => call.command === 'nm_rename').length), 0)
+  await page.keyboard.press('Escape')
+  await page.locator('#rename-network-input').focus()
+  await page.locator('#rename-network-input').evaluate(element => element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true })))
+  assert.equal(await page.evaluate(() => window.__NM_FIXTURE__.calls.filter(call => call.command === 'nm_rename').length), 0, 'IME composition must not save a name')
+  await page.keyboard.press('Control+Shift+E')
+  await page.waitForFunction(() => document.getElementById('connection-name').textContent === 'A deliberate new name')
+  results.push('Custom Enter shortcuts and IME composition preserve the intended name action')
+
+  await page.getByRole('button', { name: 'Test download speed', exact: true }).click()
+  await page.getByRole('button', { name: 'Start download test', exact: true }).click()
+  await page.getByText('100.0', { exact: false }).first().waitFor()
+  await page.evaluate(() => {
+    const fixture = window.__NM_FIXTURE__
+    fixture.emit('nm:ping-telemetry', { gatewayMs: 7, internetMs: 21, jitterMs: 2 })
+    fixture.emit('nm:captive-portal-status', { isCaptive: true, portalUrl: 'https://example.test/login', checkedAt: Date.now() })
+    fixture.connection.ssid = 'Different access point'
+    fixture.connection.bssid = '11:22:33:44:55:66'
+    fixture.connection.name = fixture.networks[0].name = 'New connection'
+  })
+  await page.getByRole('button', { name: 'Refresh saved networks', exact: true }).click()
+  await page.waitForFunction(() => document.getElementById('connection-name').textContent === 'New connection')
+  assert.equal(await page.getByText('21 ms', { exact: true }).count(), 0)
+  assert.equal(await page.getByRole('region', { name: 'Download speed test', exact: true }).getByText('100.0', { exact: false }).count(), 0)
+  assert.equal(await page.getByRole('region', { name: 'Wi-Fi sign-in', exact: true }).count(), 0)
+  results.push('Changing Wi-Fi on the same service clears prior latency, download results, and sign-in banners')
+
+  await page.evaluate(() => window.__NM_FIXTURE__.emit('nm:speed', { available: false, downMBps: 0, upMBps: 0, downKbps: 0, upKbps: 0 }))
+  assert.equal(await page.locator('section[aria-labelledby="connection-name"]').getByText('\u2014', { exact: true }).count(), 5, 'Unavailable transfer readings use a dash alongside unavailable latency')
+  results.push('Unavailable transfer counters display missing readings')
+
+  await page.evaluate(() => {
+    const original = window.__TAURI_INTERNALS__.invoke
+    let holdNextDns = true
+    window.__TAURI_INTERNALS__.invoke = async (command, args) => {
+      const result = await original(command, args)
+      if (command === 'nm_benchmark_dns' && holdNextDns) {
+        holdNextDns = false
+        return new Promise(resolve => { window.__NM_FIXTURE__.releaseDns = () => resolve(result) })
+      }
+      return result
+    }
+  })
+  await page.getByRole('button', { name: 'Compare DNS', exact: true }).click()
+  await page.waitForFunction(() => Boolean(window.__NM_FIXTURE__.releaseDns))
+  await page.evaluate(() => {
+    const fixture = window.__NM_FIXTURE__
+    fixture.connection.ssid = 'Latest connection'
+    fixture.resolvers[0].latencyMs = 44
+    fixture.emit('nm:visibility', false)
+    fixture.emit('nm:visibility', true)
+  })
+  await page.getByRole('dialog', { name: 'Compare DNS', exact: true }).getByText('44 ms', { exact: true }).waitFor()
+  await page.evaluate(() => window.__NM_FIXTURE__.releaseDns())
+  // Allow the old promise and React's subsequent commit to finish.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  assert.equal(await page.getByRole('dialog', { name: 'Compare DNS', exact: true }).getByText('8 ms', { exact: true }).count(), 0)
+  await page.keyboard.press('Escape')
+  results.push('Open DNS comparisons refresh on a connection change and discard late responses')
+
+  await page.evaluate(() => {
+    const fixture = window.__NM_FIXTURE__
+    for (let index = 2; index < 1000; index++) fixture.networks.push({ guid: 'stress-' + index, name: 'Saved network ' + index, originalName: 'Original ' + index, renamed: true, live: false, type: 'wifi', profile: 'Profile ' + index, canRename: true })
+  })
+  await page.getByRole('button', { name: 'Refresh saved networks', exact: true }).click()
+  await page.waitForFunction(() => document.querySelectorAll('[data-network-guid]').length === 1000)
+  await page.locator('[data-network-guid="stress-999"]').evaluate(element => element.scrollIntoView({ block: 'center' }))
+  await page.locator('[data-network-guid="stress-999"]').click()
+  assert.equal(await page.locator('[data-network-guid="stress-999"]').getAttribute('aria-pressed'), 'true')
+  await geometry(page, '1000 saved networks')
+  await page.keyboard.press('Control+F')
+  await page.locator('#filter-networks-input').fill('Saved network 999')
+  await page.keyboard.press('ArrowDown')
+  assert.equal(await page.locator('[data-network-guid][aria-pressed=true]').getAttribute('data-network-guid'), 'stress-999')
+  results.push('1000 saved networks remain scrollable, selectable, searchable, and keyboard accessible')
+  await page.close()
+}
 async function main() {
   if (!fs.existsSync(path.join(root, 'dist/index.html'))) throw Error('Run npm run build before npm run test:ui')
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -304,6 +400,7 @@ async function main() {
   try {
     browser = await chromium.launch({ executablePath, headless: true })
     await appChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
+    await regressionChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
     await previewChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
     assert.deepEqual(errors, [], 'Browser JavaScript errors')
     fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify({ results, errors, boundary: 'Fictional native IPC. No live OS mutations.' }, null, 2))
@@ -316,4 +413,5 @@ async function main() {
     throw error
   } finally { if (browser) await browser.close(); server.close() }
 }
-main().catch(error => { console.error(error.stack); server.close(); process.exitCode = 1 })
+module.exports = { nativeFixture }
+if (require.main === module) main().catch(error => { console.error(error.stack); server.close(); process.exitCode = 1 })

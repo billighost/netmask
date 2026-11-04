@@ -60,7 +60,10 @@ fn start_workers(app: &AppHandle, running: Arc<AtomicBool>) {
             }
             let visible = window_visible(&speed_app);
             if visible {
-                if let Ok(sample) = speed::get_speed_sample() {
+                let generation = platform::connection_generation();
+                let sample =
+                    speed::get_speed_sample().unwrap_or_else(|_| types::SpeedSample::unavailable());
+                if generation == platform::connection_generation() && window_visible(&speed_app) {
                     let _ = speed_app.emit("nm:speed", sample);
                 }
             } else if was_visible {
@@ -79,7 +82,11 @@ fn start_workers(app: &AppHandle, running: Arc<AtomicBool>) {
                 break;
             }
             if window_visible(&ping_app) {
-                let _ = ping_app.emit("nm:ping-telemetry", ping::get_ping_telemetry());
+                let generation = platform::connection_generation();
+                let telemetry = ping::get_ping_telemetry();
+                if generation == platform::connection_generation() && window_visible(&ping_app) {
+                    let _ = ping_app.emit("nm:ping-telemetry", telemetry);
+                }
             }
         }
     });
@@ -91,14 +98,28 @@ fn start_workers(app: &AppHandle, running: Arc<AtomicBool>) {
             .checked_sub(Duration::from_secs(30))
             .unwrap_or_else(Instant::now);
         let mut previous = None;
+        let mut previous_generation = platform::connection_generation();
         while portal_running.load(Ordering::Relaxed) {
             std::thread::sleep(Duration::from_secs(1));
             if !portal_running.load(Ordering::Relaxed) {
                 break;
             }
+            let generation = platform::connection_generation();
+            if generation != previous_generation {
+                previous_generation = generation;
+                previous = None;
+                last_check = Instant::now()
+                    .checked_sub(Duration::from_secs(30))
+                    .unwrap_or_else(Instant::now);
+            }
             if window_visible(&portal_app) && last_check.elapsed() >= Duration::from_secs(30) {
                 last_check = Instant::now();
                 if let Ok(status) = portal::check_captive_portal() {
+                    if generation != platform::connection_generation()
+                        || !window_visible(&portal_app)
+                    {
+                        continue;
+                    }
                     let signature = (status.is_captive, status.portal_url.clone());
                     if previous.as_ref() != Some(&signature) {
                         let _ = portal_app.emit("nm:captive-portal-status", status);

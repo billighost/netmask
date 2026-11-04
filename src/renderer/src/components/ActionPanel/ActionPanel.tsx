@@ -52,7 +52,7 @@ export const ActionPanel: React.FC = () => {
     <form className={styles.editLine} onSubmit={event => { event.preventDefault(); void apply() }}>
       <input id="rename-network-input" className={styles.input} type="text" maxLength={256} spellCheck={false} value={inputVal}
         disabled={!net || !supported || busy} placeholder={net ? 'A name you recognize' : 'Choose a network first'}
-        onChange={event => setInputVal(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); void apply() } }} />
+        onChange={event => setInputVal(event.target.value)} onKeyDown={event => { if (event.nativeEvent.isComposing) return; if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) { event.preventDefault(); event.stopPropagation(); void apply() } }} />
       <button id="apply-rename-btn" type="submit" className={styles.btn + ' ' + styles.btnPrimary} disabled={disabled}>
         {applying ? <span className={styles.spinner} /> : <CheckIcon size={13} />}{applying ? 'Saving…' : 'Save name'}
       </button>

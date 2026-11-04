@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { useStore } from '../../store'
 import { SearchIcon, RefreshIcon } from '../../icons'
 import { Tooltip } from '../Controls/Tooltip'
@@ -9,8 +9,8 @@ import { visibleNetworks, errorMessage } from '../../network-state'
 import { shallow } from 'zustand/shallow'
 
 export const NetworkList: React.FC = () => {
-  const { networks, settings, refreshing, addToast, search, setSearch, privateNames } = useStore(state => ({ networks: state.networks, settings: state.settings, refreshing: state.refreshing, addToast: state.addToast, search: state.networkSearch, setSearch: state.setNetworkSearch, privateNames: state.streamerStatus.isCloaked }), shallow)
-  const visible = visibleNetworks(networks, settings, search, privateNames)
+  const { networks, settings, refreshing, addToast, search, setSearch, privateNames, platform } = useStore(state => ({ networks: state.networks, settings: state.settings, refreshing: state.refreshing, addToast: state.addToast, search: state.networkSearch, setSearch: state.setNetworkSearch, privateNames: state.streamerStatus.isCloaked, platform: state.capabilities?.platform }), shallow)
+  const visible = useMemo(() => visibleNetworks(networks, settings, search, privateNames), [networks, settings.showEthernet, search, privateNames])
 
   const handleRefresh = async () => {
     if (refreshing) return
@@ -24,7 +24,7 @@ export const NetworkList: React.FC = () => {
     <div className={styles.root}>
       <div className={styles.header}>
         <span className={styles.title}>
-          Saved networks <span className={styles.count}>{visible.length}</span>
+          {platform === 'macos' ? 'Network services' : 'Saved networks'} <span className={styles.count}>{visible.length}</span>
         </span>
         <Tooltip label="Refresh saved networks"><button
           className={`${styles.iconBtn} ${refreshing ? styles.spinning : ''}`}
@@ -58,7 +58,7 @@ export const NetworkList: React.FC = () => {
           <div className={styles.empty}>
             {search
               ? 'No networks match your search.'
-              : 'No saved Wi-Fi networks found. Connect to a network once and it will appear here.'}
+              : platform === 'macos' ? 'No Wi-Fi or Ethernet services found in macOS network settings.' : 'No saved Wi-Fi networks found. Connect to a network once and it will appear here.'}
           </div>
         ) : (
           visible.map((net, i) => (

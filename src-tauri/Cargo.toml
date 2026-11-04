@@ -1,6 +1,6 @@
 [package]
 name = "netmask"
-version = "2.3.0"
+version = "2.3.1"
 description = "Cross-platform local network display name manager"
 authors = ["Bello Bilal <bb2010ng@gmail.com>"]
 license = "MIT"
@@ -17,6 +17,7 @@ resolver = "2"
 
 [build-dependencies]
 tauri-build = { version = "2.7.4", features = [] }
+embed-resource = "3"
 
 [dependencies]
 netmask-core = { path = "core" }

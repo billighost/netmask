@@ -1,0 +1,102 @@
+{
+  "workload": "1000 saved networks, identical 300px list viewport, continuous scrolling, transfer/ping events and unchanged refreshes every 250 ms; three 4-second runs per build",
+  "browser": "156.0.4314.58",
+  "node": "v24.12.0",
+  "os": "Windows_NT 10.0.22000",
+  "cpu": "Intel(R) Core(TM) i5-7200U CPU @ 2.50GHz",
+  "buildAssets": {
+    "current": [
+      {
+        "file": "index-B3rp_LXU.css",
+        "sha256": "4874738d4edf9db79694ab061cd9be7f45c6e76b58fb62d439a0db79661a38da"
+      },
+      {
+        "file": "index-Da4G0d9N.js",
+        "sha256": "4d3ed3780bf593b19be6bab548097cfeb491012c22dcf12f4ad4dd4a20d194b7"
+      }
+    ],
+    "baseline": [
+      {
+        "file": "index-DhV48JXf.js",
+        "sha256": "b1fb164668a2d2b1f46adae75ec71ccc64ecb37a0090beae1d4d37f241522c12"
+      },
+      {
+        "file": "index-DkxgFXn_.css",
+        "sha256": "86fb6e517bc91781abc98fee2ec765a52d5922c5b440f217e2fa376f25c61856"
+      }
+    ]
+  },
+  "boundary": "Headless browser with fictional IPC, not a native app RAM/battery benchmark. Timings vary with machine load.",
+  "summaries": [
+    {
+      "variant": "current",
+      "frameP95Ms": 33.600000000000364,
+      "scriptMs": 207.834,
+      "layoutMs": 9.418,
+      "framesOver50Ms": 1
+    },
+    {
+      "variant": "baseline",
+      "frameP95Ms": 166.19999999999982,
+      "scriptMs": 1947.1290000000001,
+      "layoutMs": 7.026,
+      "framesOver50Ms": 16
+    }
+  ],
+  "runs": [
+    {
+      "variant": "current",
+      "frames": 116,
+      "frameP50Ms": 33.30000000000018,
+      "frameP95Ms": 33.600000000000364,
+      "framesOver50Ms": 1,
+      "scriptMs": 207.834,
+      "layoutMs": 9.418
+    },
+    {
+      "variant": "baseline",
+      "frames": 79,
+      "frameP50Ms": 33.40000000000009,
+      "frameP95Ms": 166.19999999999982,
+      "framesOver50Ms": 16,
+      "scriptMs": 1947.1290000000001,
+      "layoutMs": 7.026
+    },
+    {
+      "variant": "current",
+      "frames": 119,
+      "frameP50Ms": 33.30000000000018,
+      "frameP95Ms": 33.600000000000364,
+      "framesOver50Ms": 1,
+      "scriptMs": 208.27499999999998,
+      "layoutMs": 11.927
+    },
+    {
+      "variant": "baseline",
+      "frames": 88,
+      "frameP50Ms": 33.40000000000009,
+      "frameP95Ms": 132.9000000000001,
+      "framesOver50Ms": 16,
+      "scriptMs": 1731.946,
+      "layoutMs": 4.04
+    },
+    {
+      "variant": "current",
+      "frames": 120,
+      "frameP50Ms": 33.30000000000018,
+      "frameP95Ms": 33.69999999999982,
+      "framesOver50Ms": 0,
+      "scriptMs": 203.246,
+      "layoutMs": 8.876999999999999
+    },
+    {
+      "variant": "baseline",
+      "frames": 67,
+      "frameP50Ms": 33.40000000000009,
+      "frameP95Ms": 166.5,
+      "framesOver50Ms": 14,
+      "scriptMs": 2141.204,
+      "layoutMs": 7.826
+    }
+  ]
+}

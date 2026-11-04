@@ -1,10 +1,10 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const load = require('./load-renderer.cjs')
-const { visibleNetworks, nextSelection, maskBssid } = load('network-state.ts')
+const { visibleNetworks, nextSelection, maskBssid, connectionKey, reconcileNetworks } = load('network-state.ts')
 const { createSettingsQueue } = load('settings-queue.ts')
 const { enablePrivacyControls } = load('privacy-actions.ts')
-const { useStore } = load('store.ts')
+const { useStore, getSpeedRingBuffer } = load('store.ts')
 const actions = load('network-actions.ts')
 const updates = load('update-actions.ts')
 const { normalizeKeyCombination, parseKeyCombination, shortcutEquals } = load('keyboard-shortcuts.ts')
@@ -225,4 +225,80 @@ test('repository links use the checked external opener', async () => {
   window.nm.openExternal = async url => { opened = url }
   await updates.openWebPage('https://github.com/billighost/netmask')
   assert.equal(opened, 'https://github.com/billighost/netmask')
+})
+
+test('unchanged snapshots preserve object identity and changed rows replace only themselves', async () => {
+  reset()
+  const previous = [wifi, ethernet]
+  assert.equal(reconcileNetworks(previous, structuredClone(previous)), previous)
+  const changed = reconcileNetworks(previous, [{ ...wifi, name: 'New label' }, { ...ethernet }])
+  assert.equal(changed[1], ethernet)
+  assert.notEqual(changed[0], wifi)
+  useStore.setState({ networks: previous, connection })
+  useStore.getState().setTestedSpeed({ mbps: 80, mbPerSec: 10 })
+  window.nm.getNetworkSnapshot = async () => ({ networks: structuredClone(previous), connection: { ...connection } })
+  await actions.refreshNetworks()
+  assert.equal(useStore.getState().networks, previous)
+  assert.equal(useStore.getState().connection, connection)
+  assert.equal(useStore.getState().testedSpeed.mbps, 80)
+})
+
+test('SSID and access point changes invalidate readings even with the same network service', async () => {
+  reset()
+  assert.equal(connectionKey(connection), connectionKey({ ...connection, name: 'Masked' }))
+  useStore.setState({ networks: [wifi], connection, pingTelemetry: { internetMs: 15 }, captivePortal: { isCaptive: true }, dnsResults: [{ id: 'old' }] })
+  useStore.getState().setSpeed({ downMBps: 20, upMBps: 1, downKbps: 20000, upKbps: 1000 })
+  useStore.getState().setTestedSpeed({ mbps: 160, mbPerSec: 20 })
+  window.nm.getNetworkSnapshot = async () => ({ networks: [wifi], connection: { ...connection, ssid: 'New Wi-Fi' } })
+  await actions.refreshNetworks()
+  const state = useStore.getState()
+  assert.equal(state.speed.downMBps, 0)
+  assert.equal(state.testedSpeed, null)
+  assert.equal(state.pingTelemetry, null)
+  assert.equal(state.captivePortal, null)
+  assert.equal(state.dnsResults, null)
+  assert.ok(getSpeedRingBuffer().every(value => value === 0))
+  assert.notEqual(connectionKey(connection), connectionKey({ ...connection, bssid: '11:22:33:44:55:66' }))
+})
+
+test('a speed test cannot attach its result after a connection switches away and back', async () => {
+  reset()
+  useStore.setState({ networks: [wifi], connection })
+  const pending = deferred()
+  window.nm.runSpeedTest = () => pending.promise
+  const running = actions.runSpeedTest()
+  window.nm.getNetworkSnapshot = async () => ({ networks: [wifi], connection: { ...connection, ssid: 'Other' } })
+  await actions.refreshNetworks()
+  window.nm.getNetworkSnapshot = async () => ({ networks: [wifi], connection })
+  await actions.refreshNetworks()
+  pending.resolve({ mbps: 80, mbPerSec: 10 })
+  await running
+  assert.equal(useStore.getState().testedSpeed, null)
+  assert.equal(useStore.getState().speedTesting, false)
+  assert.ok(useStore.getState().toasts.some(toast => /connection changed/i.test(toast.message)))
+})
+
+test('a late initial update status cannot undo a newer downloaded event', async () => {
+  reset()
+  const pending = deferred()
+  const handlers = {}
+  window.nm.onUpdateAvailable = callback => { handlers.available = callback; return () => {} }
+  window.nm.onUpdateProgress = callback => { handlers.progress = callback; return () => {} }
+  window.nm.onUpdateDownloaded = callback => { handlers.downloaded = callback; return () => {} }
+  window.nm.getUpdateStatus = () => pending.promise
+  const unsubscribe = updates.subscribeToUpdates()
+  handlers.downloaded({ version: '2.4.0' })
+  pending.resolve({ availableUpdate: null, downloadedVersion: null, progress: null, isDownloading: false })
+  await Promise.resolve()
+  assert.equal(useStore.getState().downloadedVersion, '2.4.0')
+  unsubscribe()
+})
+
+test('installer launch failure removes stale readiness so the download can be retried', async () => {
+  reset()
+  useStore.setState({ downloadedVersion: '2.4.0' })
+  window.nm.installUpdate = async () => { throw Error('Installer changed; download again') }
+  await updates.installAppUpdate()
+  assert.equal(useStore.getState().downloadedVersion, null)
+  assert.ok(useStore.getState().toasts.some(toast => toast.type === 'error'))
 })

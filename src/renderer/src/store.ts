@@ -35,6 +35,7 @@ interface Store {
   networks: Network[]
   connection: Connection | null
   connectionError: string | null
+  connectionEpoch: number
   capabilities: import('./types').PlatformCapabilities | null
   networkSearch: string
   visible: boolean
@@ -85,6 +86,7 @@ interface Store {
   addToast: (msg: string, type?: ToastType) => string
   removeToast: (id: string) => void
   setSpeed: (s: SpeedSample) => void
+  resetTelemetry: () => void
   setTestedSpeed: (ts: { mbps: number; mbPerSec: number } | null) => void
   setAdminOk: (ok: boolean) => void
   setRefreshing: (r: boolean) => void
@@ -130,6 +132,7 @@ export const useStore = create<Store>((set, get) => ({
   networks: [],
   connection: null,
   connectionError: null,
+  connectionEpoch: 0,
   capabilities: null,
   networkSearch: '',
   visible: true,
@@ -225,6 +228,14 @@ export const useStore = create<Store>((set, get) => ({
       speedTick: (s.speedTick + 1) % 1000000,
       peakDownMBps: Math.max(s.peakDownMBps, speed.downMBps)
     }))
+  },
+
+  resetTelemetry: () => {
+    speedRingBuffer.fill(0)
+    set(state => ({ speed: { downMBps: 0, upMBps: 0, downKbps: 0, upKbps: 0 },
+      speedTick: state.speedTick + 1, testedSpeed: null, peakDownMBps: 0,
+      pingTelemetry: null, captivePortal: null, dnsResults: null, deviceIdentity: null, roamingSettings: null,
+      connectionEpoch: state.connectionEpoch + 1 }))
   },
 
   setTestedSpeed: (ts) => set(s => ({

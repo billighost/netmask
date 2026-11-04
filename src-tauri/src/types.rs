@@ -82,6 +82,22 @@ pub struct SpeedSample {
     pub up_kbps: i64,
     pub instant_down_m_bps: Option<f64>,
     pub instant_up_m_bps: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub available: Option<bool>,
+}
+
+impl SpeedSample {
+    pub fn unavailable() -> Self {
+        Self {
+            down_m_bps: 0.0,
+            up_m_bps: 0.0,
+            down_kbps: 0,
+            up_kbps: 0,
+            instant_down_m_bps: None,
+            instant_up_m_bps: None,
+            available: Some(false),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -186,6 +202,8 @@ pub struct DnsResolverResult {
     pub latency_ms: Option<i64>,
     pub is_current: bool,
     pub is_fastest: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configuration_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -22,13 +22,14 @@ function downloaded(version: string) {
 
 export function subscribeToUpdates(): () => void {
   let active = true
+  let revision = 0
   const listeners = [
-    window.nm.onUpdateAvailable(info => useStore.setState({ updateInfo: info })),
-    window.nm.onUpdateProgress(progress => useStore.setState({ downloadProgress: progress, updateDownloading: true })),
-    window.nm.onUpdateDownloaded(info => downloaded(info.version))
+    window.nm.onUpdateAvailable(info => { revision++; useStore.setState({ updateInfo: info }) }),
+    window.nm.onUpdateProgress(progress => { revision++; useStore.setState({ downloadProgress: progress, updateDownloading: true }) }),
+    window.nm.onUpdateDownloaded(info => { revision++; downloaded(info.version) })
   ]
   window.nm.getUpdateStatus().then(status => {
-    if (active) useStore.setState({ updateInfo: status.availableUpdate, downloadedVersion: status.downloadedVersion,
+    if (active && revision === 0) useStore.setState({ updateInfo: status.availableUpdate, downloadedVersion: status.downloadedVersion,
       downloadProgress: status.progress, updateDownloading: status.isDownloading })
   }).catch(() => {})
   const timer = setTimeout(() => { void checkAppUpdate().catch(() => {}) }, 3500)
@@ -38,7 +39,7 @@ export function subscribeToUpdates(): () => void {
 export async function downloadAppUpdate(info: UpdateInfo): Promise<void> {
   if (useStore.getState().updateDownloading) return
   if (!info.downloadUrl) { await openWebPage(info.url); return }
-  useStore.setState({ updateDownloading: true, downloadProgress: null })
+  useStore.setState({ updateDownloading: true, downloadProgress: null, downloadedVersion: null })
   let inProgress = false
   try {
     const result = await window.nm.downloadUpdate(info.downloadUrl)
@@ -54,7 +55,7 @@ export async function downloadAppUpdate(info: UpdateInfo): Promise<void> {
 
 export async function installAppUpdate(): Promise<void> {
   try { await window.nm.installUpdate() }
-  catch (error) { useStore.getState().addToast(errorMessage(error, 'The installer could not open'), 'error') }
+  catch (error) { useStore.setState({ downloadedVersion: null }); useStore.getState().addToast(errorMessage(error, 'The installer could not open'), 'error') }
 }
 
 export async function openWebPage(url: string): Promise<void> {

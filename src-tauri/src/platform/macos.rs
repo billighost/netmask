@@ -137,17 +137,62 @@ fn services() -> Result<Value, String> {
 }
 
 pub fn service_for_device(device: &str) -> Result<String, String> {
-    services()?
-        .get("NetworkServices")
-        .and_then(Value::as_object)
-        .and_then(|services| {
-            services
-                .values()
-                .find(|service| service["Interface"]["DeviceName"].as_str() == Some(device))
-        })
-        .and_then(|service| service["UserDefinedName"].as_str())
+    let data = services()?;
+    let id = service_id_for_device(&data, device)?;
+    editable_service_name(&data, id)
         .map(str::to_owned)
         .ok_or_else(|| "The active macOS network service is unavailable".into())
+}
+
+fn service_id_for_device<'a>(data: &'a Value, device: &str) -> Result<&'a str, String> {
+    let services = data["NetworkServices"]
+        .as_object()
+        .ok_or("No network services are available")?;
+    let current = data["CurrentSet"]
+        .as_str()
+        .and_then(|path| data.pointer(path))
+        .and_then(|set| set.pointer("/Network/Service"))
+        .and_then(Value::as_object);
+    if data.get("CurrentSet").is_some() && current.is_none() {
+        return Err("The current macOS network location is unavailable".into());
+    }
+    let mut candidates = services.iter().filter(|(id, service)| {
+        current.is_none_or(|set| set.contains_key(*id))
+            && service["Interface"]["DeviceName"].as_str() == Some(device)
+    });
+    let (id, _) = candidates
+        .next()
+        .ok_or("The active macOS network service is unavailable")?;
+    if candidates.next().is_some() {
+        return Err("Multiple services use this adapter. macOS has not exposed an unambiguous active service.".into());
+    }
+    Ok(id)
+}
+
+fn editable_service_name<'a>(data: &'a Value, id: &str) -> Option<&'a str> {
+    let services = data["NetworkServices"].as_object()?;
+    let name = services.get(id)?["UserDefinedName"].as_str()?;
+    let current = data["CurrentSet"]
+        .as_str()
+        .and_then(|path| data.pointer(path))
+        .and_then(|set| set.pointer("/Network/Service"))
+        .and_then(Value::as_object);
+    if data.get("CurrentSet").is_some() && current.is_none()
+        || current.is_some_and(|set| !set.contains_key(id))
+    {
+        return None;
+    }
+    // networksetup selects by label in the current location, rather than UUID.
+    (services
+        .iter()
+        .filter(|(key, value)| {
+            current.is_none_or(|set| set.contains_key(*key))
+                && value["UserDefinedName"].as_str() == Some(name)
+        })
+        .take(2)
+        .count()
+        == 1)
+        .then_some(name)
 }
 
 pub fn privileged_networksetup(arguments: &[&str], allow_prompt: bool) -> Result<(), String> {
@@ -240,7 +285,8 @@ pub fn parse_services(
                 "Ethernet" => "ethernet",
                 _ => return None,
             };
-            let live = connection.is_some_and(|c| c.interface_name.as_deref() == Some(device));
+            let live = connection.is_some_and(|c| c.interface_name.as_deref() == Some(device))
+                && service_id_for_device(value, device).is_ok_and(|selected| selected == id);
             let original = backup.get(id).cloned().unwrap_or_else(|| name.into());
             Some(Network {
                 guid: id.clone(),
@@ -250,7 +296,7 @@ pub fn parse_services(
                 live,
                 network_type: kind.into(),
                 profile: connection.filter(|_| live).map(|c| c.ssid.clone()),
-                can_rename: true,
+                can_rename: editable_service_name(value, id).is_some(),
             })
         })
         .collect()
@@ -272,6 +318,8 @@ pub fn get_networks(
             && services["NetworkServices"][&network.guid]["Interface"]["DeviceName"].as_str()
                 == device
             && device.is_some()
+            && service_id_for_device(&services, device.unwrap_or(""))
+                .is_ok_and(|id| id == network.guid)
         {
             network.live = true;
         }
@@ -283,13 +331,12 @@ fn service_name(id: &str) -> Result<String, String> {
     if !super::is_guid(id) {
         return Err("Invalid macOS network service identifier".into());
     }
-    services()?
-        .get("NetworkServices")
-        .and_then(|v| v.get(id))
-        .and_then(|v| v.get("UserDefinedName"))
-        .and_then(Value::as_str)
+    let data = services()?;
+    editable_service_name(&data, id)
         .map(str::to_owned)
-        .ok_or_else(|| "This network service is no longer available".into())
+        .ok_or_else(|| {
+            "Choose a uniquely named service in the current macOS network location".into()
+        })
 }
 
 pub fn shell_literal(value: &str) -> String {
@@ -334,20 +381,49 @@ pub fn active_service() -> Result<String, String> {
         .find_map(|line| line.trim().strip_prefix("interface:"))
         .map(str::trim)
         .ok_or("No active network interface")?;
-    services()?
-        .get("NetworkServices")
-        .and_then(Value::as_object)
-        .ok_or("No network services")?
-        .values()
-        .find(|service| service["Interface"]["DeviceName"].as_str() == Some(device))
-        .and_then(|service| service["UserDefinedName"].as_str())
-        .map(str::to_owned)
-        .ok_or_else(|| "Active network service is unavailable".into())
+    service_for_device(device)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn inactive_locations_and_ambiguous_services_do_not_get_live_wifi_details() {
+        let first = "00112233-4455-6677-8899-aabbccddeeff";
+        let second = "11112233-4455-6677-8899-aabbccddeeff";
+        let mut data = serde_json::json!({"CurrentSet":"/Sets/location", "Sets":{"location":{"Network":{"Service":{first:{}}}}}, "NetworkServices":{
+            first:{"UserDefinedName":"Current Wi-Fi", "Interface":{"Hardware":"IEEE80211", "DeviceName":"en0"}},
+            second:{"UserDefinedName":"Old location", "Interface":{"Hardware":"IEEE80211", "DeviceName":"en0"}}
+        }});
+        let connection = parse_connection(&Value::Null, "en0", "Home");
+        let networks = parse_services(&data, &HashMap::new(), Some(&connection));
+        assert!(editable_service_name(&data, first).is_some());
+        assert!(editable_service_name(&data, second).is_none());
+        assert_eq!(networks.iter().filter(|network| network.live).count(), 1);
+        assert!(
+            networks
+                .iter()
+                .find(|network| network.guid == first)
+                .unwrap()
+                .live
+        );
+        data["Sets"]["location"]["Network"]["Service"][second] = serde_json::json!({});
+        assert!(service_id_for_device(&data, "en0").is_err());
+        assert!(
+            parse_services(&data, &HashMap::new(), Some(&connection))
+                .iter()
+                .all(|network| !network.live)
+        );
+        data["NetworkServices"][second]["UserDefinedName"] = serde_json::json!("Current Wi-Fi");
+        assert!(editable_service_name(&data, first).is_none());
+        assert!(
+            parse_services(&data, &HashMap::new(), None)
+                .iter()
+                .all(|network| !network.can_rename)
+        );
+        data["CurrentSet"] = serde_json::json!("/Sets/missing");
+        assert!(service_id_for_device(&data, "en0").is_err());
+    }
     #[test]
     fn service_renames_preserve_stable_identity_and_unknown_rf_values() {
         let id = "00112233-4455-6677-8899-aabbccddeeff";

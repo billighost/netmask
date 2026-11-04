@@ -25,10 +25,12 @@ function nativePackages(version) {
     'linux-x64': [`NetMask_${version}_amd64.deb`, `NetMask_${version}_amd64.AppImage`]
   }
 }
-function verifyNativePackages(version, assets) {
-  const required = Object.values(nativePackages(version)).flat()
+function verifyNativePackages(version, assets, platforms = Object.keys(nativePackages(version))) {
+  const packages = nativePackages(version)
+  if (!platforms.length || platforms.some(platform => !packages[platform]) || new Set(platforms).size !== platforms.length) throw new Error('Invalid release platform selection')
+  const required = platforms.flatMap(platform => packages[platform])
   if (assets.length !== required.length || !required.every(name => assets.filter(asset => asset.name === name && asset.size > 0).length === 1)) {
-    throw new Error('Release must contain exactly six complete native packages for Windows, both Macs, and Linux')
+    throw new Error(platforms.length === 4 ? 'Release must contain exactly six complete native packages for Windows, both Macs, and Linux' : 'Release must contain complete native package sets for every available platform')
   }
   return required
 }

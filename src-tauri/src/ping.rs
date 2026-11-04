@@ -3,13 +3,14 @@ use std::net::IpAddr;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-static GATEWAY: Mutex<Option<(Instant, Option<String>)>> = Mutex::new(None);
-static RECENT: Mutex<(Option<String>, Vec<i64>)> = Mutex::new((None, Vec::new()));
+static GATEWAY: Mutex<Option<(Instant, Option<String>, u64)>> = Mutex::new(None);
+static RECENT: Mutex<(Option<String>, Vec<i64>, u64)> = Mutex::new((None, Vec::new(), 0));
 
 pub fn get_gateway_ip() -> Option<String> {
+    let generation = crate::platform::connection_generation();
     let mut cache = GATEWAY.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some((checked, gateway)) = &*cache {
-        if checked.elapsed() < Duration::from_secs(30) {
+    if let Some((checked, gateway, cached_generation)) = &*cache {
+        if *cached_generation == generation && checked.elapsed() < Duration::from_secs(30) {
             return gateway.clone();
         }
     }
@@ -42,7 +43,7 @@ pub fn get_gateway_ip() -> Option<String> {
             .parse::<IpAddr>()
             .is_ok_and(|ip| !ip.is_unspecified())
     });
-    *cache = Some((Instant::now(), gateway.clone()));
+    *cache = Some((Instant::now(), gateway.clone(), generation));
     gateway
 }
 
@@ -124,6 +125,7 @@ pub fn compute_jitter(samples: &[i64]) -> Option<f64> {
 }
 
 pub fn get_ping_telemetry() -> PingTelemetry {
+    let generation = crate::platform::connection_generation();
     let gateway_ip = get_gateway_ip();
     let (gateway_ms, internet_ms) = std::thread::scope(|scope| {
         let gateway = scope.spawn(|| {
@@ -138,10 +140,11 @@ pub fn get_ping_telemetry() -> PingTelemetry {
         )
     });
     let mut recent = RECENT.lock().unwrap_or_else(|e| e.into_inner());
-    if recent.0 != gateway_ip || internet_ms.is_none() {
+    if recent.0 != gateway_ip || internet_ms.is_none() || recent.2 != generation {
         recent.1.clear();
     }
     recent.0 = gateway_ip.clone();
+    recent.2 = generation;
     if let Some(ms) = internet_ms {
         recent.1.push(ms);
         if recent.1.len() > 10 {

@@ -4,6 +4,7 @@
 const fs = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { releaseAssetPlan } = require('./release-assets.cjs')
+const { verifyMergeChecks } = require('./release-checks.cjs')
 
 const repository = '/repos/billighost/netmask'
 let credential
@@ -81,15 +82,49 @@ async function main() {
       }
       break
     }
-    case 'pr-merge':
+    case 'pr-merge': {
       if (!extra) throw new Error('The reviewed PR head SHA is required when merging.')
+      const pr = await api('GET', `/pulls/${arg}`)
+      const [checks, statuses] = await Promise.all([
+        api('GET', `/commits/${extra}/check-runs?filter=latest&per_page=100`),
+        api('GET', `/commits/${extra}/status?per_page=100`)
+      ])
+      const gate = checks.check_runs.find(check => check.name === 'CI Gate' && check.app?.slug === 'github-actions')
+      const runId = (gate?.details_url || gate?.html_url || '').match(/\/actions\/runs\/(\d+)/)?.[1]
+      if (!runId) throw new Error('The required CI workflow run could not be identified')
+      const { runJobs, platformStatus, runnerUnavailable } = require('./workflow-status.cjs')
+      const run = await api('GET', `/actions/runs/${runId}`)
+      if (run.head_sha !== extra || run.event !== 'pull_request') throw new Error('CI must belong to this PR head')
+      const jobs = await runJobs(runId)
+      platformStatus(jobs, undefined, true)
+      verifyMergeChecks(pr, extra, checks, statuses, jobs.filter(runnerUnavailable))
       result = await api('PUT', `/pulls/${arg}/merge`, { merge_method: 'squash', sha: extra })
       break
+    }
     case 'runs': {
       const runs = await api('GET', `/actions/runs?per_page=15${arg ? `&head_sha=${encodeURIComponent(arg)}` : ''}`)
       result = runs.workflow_runs.map(r => ({ id: r.id, name: r.name, event: r.event, branch: r.head_branch, sha: r.head_sha, status: r.status, conclusion: r.conclusion, url: r.html_url }))
       break
     }
+    case 'run-notices': {
+      const jobs = await api('GET', `/actions/runs/${arg}/jobs?per_page=100`)
+      result = await Promise.all(jobs.jobs.map(async job => {
+        const id = job.check_run_url?.split('/').at(-1)
+        if (!id) return { name: job.name, conclusion: job.conclusion }
+        const check = await api('GET', `/check-runs/${id}`)
+        const annotations = await api('GET', `/check-runs/${id}/annotations?per_page=100`)
+        return { name: job.name, conclusion: job.conclusion, labels: job.labels, runner: job.runner_name,
+          output: check.output, annotations }
+      }))
+      break
+    }
+    case 'run-rerun-failed':
+      result = await api('POST', `/actions/runs/${arg}/rerun-failed-jobs`)
+      break
+    case 'workflow-dispatch':
+      if (!extra) throw new Error('A dispatch JSON file with ref and inputs is required')
+      result = await api('POST', `/actions/workflows/${encodeURIComponent(arg)}/dispatches`, JSON.parse(fs.readFileSync(extra, 'utf8')))
+      break
     case 'run': {
       const run = await api('GET', `/actions/runs/${arg}`)
       const jobs = await api('GET', `/actions/runs/${arg}/jobs?per_page=100`)
@@ -103,7 +138,7 @@ async function main() {
     case 'release': {
       const release = await api('GET', `/releases/tags/${encodeURIComponent(arg)}`)
       result = { id: release.id, tag: release.tag_name, url: release.html_url, draft: release.draft, prerelease: release.prerelease,
-        body: release.body, assets: release.assets.map(a => ({ id: a.id, name: a.name, size: a.size, state: a.state, url: a.browser_download_url })) }
+        body: release.body, assets: release.assets.map(a => ({ id: a.id, name: a.name, size: a.size, state: a.state, digest: a.digest, url: a.browser_download_url })) }
       break
     }
     case 'release-asset-plan': {
@@ -149,13 +184,16 @@ async function main() {
       break
     }
     default:
-      throw new Error('Usage: github-release.cjs prs | pr-create <json-file> | pr <number> | checks <sha> | pr-merge <number> <sha> | runs [sha] | run <id> | logs <job-id> | release <tag> | release-edit <tag> <notes-file>')
+      throw new Error('Usage: github-release.cjs prs | pr-create <json-file> | pr <number> | checks <sha> | pr-merge <number> <sha> | runs [sha] | run <id> | run-notices <id> | run-rerun-failed <id> | workflow-dispatch <workflow> <json-file> | logs <job-id> | release <tag> | release-edit <tag> <notes-file>')
   }
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
 }
 
-main().catch(error => {
+function reportError(error) {
   const message = String(error.message || 'Release helper failed')
   process.stderr.write(`${credential ? message.replaceAll(credential, '[redacted]') : message}\n`)
   process.exitCode = 1
-})
+}
+
+module.exports = { api, reportError }
+if (require.main === module) main().catch(reportError)
