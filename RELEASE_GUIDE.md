@@ -14,7 +14,7 @@ npm run version:set -- X.Y.Z
 
 The helper updates `package.json`, `package-lock.json`, `src-tauri/tauri.conf.json`, both Rust package manifests, and the two workspace package versions in `Cargo.lock`.
 
-Update the latest version and all direct downloads in `README.md`. Write `docs/releases/vX.Y.Z.md` with concrete changes, supported architectures, direct downloads, and remaining platform limitations. Preserve the maintainer attribution and license.
+Update the latest version and release-page download links in `README.md`. Write `docs/releases/vX.Y.Z.md` with concrete changes, intended architectures, direct downloads, and remaining platform limitations. Publication removes download rows for unavailable platforms and reports the actual installer availability. Preserve the maintainer attribution and license.
 
 The title bar, settings, tray, and updater read the Rust package version at runtime. Do not hardcode the release version into UI components.
 
@@ -41,9 +41,9 @@ npm run test:native
 
 Fix failures before committing or pushing. The hook scanner detects unsafe hook ordering; Node tests exercise actual frontend actions, persistence queues, and release-package validation. Native core tests use isolated storage, socket fixtures, and subprocess fixtures rather than changing a real network.
 
-A missing system linker, webview development package, or platform runtime is an environment limitation, not a passing check. Document it and obtain a successful native check and core test result on the corresponding CI runner before merging. OS permission prompts, Wi-Fi reconnects, DNS mutations, and driver settings need a separate manual check on real hardware.
+A missing system linker, webview development package, or platform runtime is an environment limitation, not a passing check. Document it and obtain successful workspace checks and tests on the corresponding CI runner before merging. Native tests cover both the core and desktop host; three subprocess fixtures are intentionally ignored in direct enumeration and invoked by a deadline test. OS permission prompts, Wi-Fi reconnects, DNS mutations, and driver settings need a separate manual check on real hardware.
 
-For native changes, also build the host installers with `npm run dist:win`, `npm run dist:mac`, or `npm run dist:linux` where the relevant build toolchain is installed. Installer compilation on all four release runners is mandatory before publication.
+For native changes, also build the host installers with `npm run dist:win`, `npm run dist:mac`, or `npm run dist:linux` where the relevant build toolchain is installed. Each published platform must pass its tests and installer compilation. A confirmed GitHub runner-allocation failure may leave that platform unavailable while verified platforms release.
 
 ## 3. Create and push the release branch
 
@@ -70,13 +70,13 @@ node scripts/github-release.cjs checks <exact-head-sha>
 node scripts/github-release.cjs pr <pr-number>
 ```
 
-Wait for **TypeScript Check** and every **Build** check on the current PR head to finish successfully. Native CI covers Windows, Apple silicon, Intel macOS, and Linux. Do not rely on checks from an older commit or merge while checks are pending.
+Wait for **TypeScript Check** and **CI Gate** on the current PR head to succeed and every **Build** check to finish. Native CI covers workspace tests and installer compilation on Windows, Apple silicon, Intel macOS, and Linux. CI Gate runs even when a dependency fails or is skipped. It requires successful frontend checks and at least one successful platform, and accepts a cancelled platform only when it has no runner, no executed steps, and GitHub's explicit annotation that a hosted runner could not be acquired. Missing, pending, skipped, manually cancelled, or failed builds block the gate.
 
 ```sh
 node scripts/github-release.cjs pr-merge <pr-number> <verified-head-sha>
 ```
 
-The required SHA guards against merging changes that arrived after review. Squash merge only after all required checks pass.
+The helper verifies that the PR is open, mergeable, targets main, and still has the reviewed SHA. It checks the current PR workflow and every named GitHub Actions result; only the narrowly verified runner-allocation exception above is allowed. Pending or failed commit statuses block the merge. The merge API's SHA guard protects against changes arriving during verification. Configure repository branch protection to require **CI Gate** when enforcing this policy for merges outside the helper.
 
 ## 5. Tag the merged commit
 
@@ -103,7 +103,9 @@ The tag triggers `.github/workflows/release.yml`. Its first job checks the tag, 
 | `macos-15-intel` | `NetMask_X.Y.Z_x64.dmg` |
 | `ubuntu-latest` | `NetMask_X.Y.Z_amd64.deb`, `NetMask_X.Y.Z_amd64.AppImage` |
 
-Each runner checks formatting, compiles the workspace, runs native core tests, and builds its installers. The publish job runs only after every runner succeeds. It requires exactly six non-empty native packages, rejects unexpected or duplicate files, and generates `checksums.txt`.
+Each runner checks formatting, compiles and tests the whole native workspace, and builds its installers. The publish job examines actual job results and capacity annotations. It publishes complete package sets from successful platforms when other platforms lack runners; any actual test/build failure, unexplained cancellation, skipped job, or incomplete package set blocks publication. At least one platform must succeed. Windows requires both EXE and MSI; Linux requires both DEB and AppImage. All four platforms produce six packages.
+
+Publication generates `checksums.txt`, `availability.json`, and release notes listing only available downloads. Successful later retries merge existing verified packages, regenerate checksums and availability, and add the new platform links without moving the source tag. The publication automation comes from the workflow revision, while the app and original notes come from the requested immutable tag; this permits historical-tag recovery through an updated workflow.
 
 ```sh
 node scripts/github-release.cjs runs <merged-sha>
@@ -111,7 +113,28 @@ node scripts/github-release.cjs run <release-run-id>
 node scripts/github-release.cjs logs <failed-job-id>
 ```
 
-Wait for `completed` / `success`. If a release build fails, repair it through a new PR. Do not silently move a published tag to different code. A manual rerun is appropriate for a transient service failure when the tagged source remains unchanged.
+Check the publication job and actual release assets. A partial release may be published even while the workflow conclusion reports the cancelled runner. If an application build fails, repair it through a new PR and version. Do not silently move a published tag to different code.
+
+If a job was cancelled before receiving a runner, inspect GitHub's annotations before treating it as a code failure:
+
+```sh
+node scripts/github-release.cjs run-notices <release-run-id>
+node scripts/github-release.cjs run-rerun-failed <release-run-id>
+```
+
+The original v2.3.0 run had successful source, Windows, and Linux jobs, but both Mac jobs were cancelled because GitHub could not acquire hosted runners. Its publication job correctly skipped the incomplete release. Rerunning failed jobs retains the successful packages and retries the missing jobs without changing the tag. Skipping Linux-only dependency installation on Windows and macOS is intentional; skipping a required build or test is not a successful release.
+
+`.github/workflows/retry-release.yml` automatically reruns confirmed runner-allocation failures up to three workflow attempts. It retains successful jobs and refuses automatic retries of code/test failures. After the limit, rerun failed jobs manually or dispatch one missing platform from `main` using a temporary JSON file:
+
+```json
+{"ref":"main","inputs":{"tag_name":"vX.Y.Z","platform":"macos-arm64"}}
+```
+
+```sh
+node scripts/github-release.cjs workflow-dispatch release.yml .tmp/retry-platform.json
+```
+
+Accepted platforms are `all`, `windows-x64`, `macos-arm64`, `macos-x64`, and `linux-x64`. The retry compiles the original tag and adds its installer only after successful checks. Manual permission-controlled hardware tests remain separate.
 
 ## 7. Verify the release and download links
 
@@ -119,12 +142,12 @@ Wait for `completed` / `success`. If a release build fails, repair it through a 
 node scripts/github-release.cjs release vX.Y.Z
 ```
 
-Check that the release is published, targets the merged tag, includes every package and `checksums.txt`, and contains the prepared release notes. Open or fetch the README's direct downloads and verify the exact filenames and architectures. The native updater selects the current platform's package and requires GitHub's SHA-256 asset digest before offering an in-app verified download; releases without a digest remain accessible from their release page.
+Check that the release is published, targets the merged tag, includes every package declared available and `checksums.txt`, and contains accurate generated notes. For new releases, compare `availability.json` with the actual packages and verify the direct download URLs in the published notes. The README leads to this availability-aware release page. The native updater selects the current platform's package and requires GitHub's SHA-256 asset digest before offering an in-app verified download; a missing package is not offered.
 
-The workflow publishes `docs/releases/vX.Y.Z.md` automatically. If notes need correcting:
+The workflow derives the published notes from `docs/releases/vX.Y.Z.md` and removes unavailable download rows. If notes need correcting, preserve the generated availability statement and use a corrected notes file:
 
 ```sh
-node scripts/github-release.cjs release-edit vX.Y.Z docs/releases/vX.Y.Z.md
+node scripts/github-release.cjs release-edit vX.Y.Z .tmp/corrected-release-notes.md
 ```
 
 Historical compatibility-asset cleanup uses an exact reviewed plan:

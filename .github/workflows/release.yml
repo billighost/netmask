@@ -9,9 +9,17 @@ on:
         description: 'Existing release tag (e.g. v2.3.0)'
         required: true
         type: string
+      platform:
+        description: 'Retry one missing platform, or build all platforms'
+        required: true
+        default: all
+        type: choice
+        options: [all, windows-x64, macos-arm64, macos-x64, linux-x64]
 
 permissions:
   contents: read
+  actions: read
+  checks: read
 
 concurrency:
   group: release-${{ inputs.tag_name || github.ref_name }}
@@ -23,6 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,6 +42,12 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.tag_name || github.ref_name }}
         run: node scripts/check-release-tag.cjs
+      - name: Select installer platforms
+        id: matrix
+        env:
+          RELEASE_PLATFORM: ${{ inputs.platform || 'all' }}
+        run: |
+          node -e "const all = [{os:'windows-latest',platform:'windows-x64',build_cmd:'npm run dist:win'},{os:'macos-latest',platform:'macos-arm64',build_cmd:'npm run dist:mac'},{os:'macos-15-intel',platform:'macos-x64',build_cmd:'npm run dist:mac'},{os:'ubuntu-latest',platform:'linux-x64',build_cmd:'npm run dist:linux'}]; const selected = all.filter(p => process.env.RELEASE_PLATFORM === 'all' || p.platform === process.env.RELEASE_PLATFORM); if (!selected.length) throw Error('Invalid platform'); require('node:fs').appendFileSync(process.env.GITHUB_OUTPUT, 'matrix=' + JSON.stringify({include:selected}) + '\n');"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -43,26 +58,17 @@ jobs:
       - run: npm test
       - run: npm run build
 
+      - name: Install browser for interface checks
+        run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+
   build-release:
     name: Build (${{ matrix.platform }})
     needs: verify
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            platform: windows-x64
-            build_cmd: npm run dist:win
-          - os: macos-latest
-            platform: macos-arm64
-            build_cmd: npm run dist:mac
-          - os: macos-15-intel
-            platform: macos-x64
-            build_cmd: npm run dist:mac
-          - os: ubuntu-latest
-            platform: linux-x64
-            build_cmd: npm run dist:linux
+      matrix: ${{ fromJSON(needs.verify.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -99,14 +105,22 @@ jobs:
 
   publish:
     name: Create GitHub Release
+    if: ${{ always() && needs.verify.result == 'success' }}
     needs: [verify, build-release]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
+      checks: read
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.verify.outputs.tag }}
+      - name: Check out release automation for historical-tag recovery
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .release-tools
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -115,16 +129,19 @@ jobs:
           pattern: netmask-*
           path: release-assets
           merge-multiple: true
-      - name: Verify every package and write checksums
+      - name: Verify available package sets, merge previous downloads, and write checksums
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.verify.outputs.tag }}
-        run: node scripts/check-release-assets.cjs release-assets
+          RELEASE_PLATFORM: ${{ inputs.platform || 'all' }}
+        run: node .release-tools/scripts/prepare-release.cjs release-assets docs/releases/${{ needs.verify.outputs.tag }}.md "${RELEASE_TAG#v}"
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.verify.outputs.tag }}
           name: NetMask ${{ needs.verify.outputs.tag }}
-          body_path: docs/releases/${{ needs.verify.outputs.tag }}.md
+          body_path: release-notes.md
           draft: false
           prerelease: false
+          make_latest: legacy
           fail_on_unmatched_files: true
           files: release-assets/*

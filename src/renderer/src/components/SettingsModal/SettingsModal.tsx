@@ -180,7 +180,7 @@ export const SettingsModal: React.FC = () => {
         </section>
         <section className={styles.section}><h3 className={styles.sectionTitle}>Updates</h3>
           <p className={styles.note}>{ready ? 'Version ' + downloaded + ' is ready to install.' : update ? 'Version ' + update.version + ' is available.' : updateStatus || 'Check for a new release on GitHub.'}</p>
-          {progress && <div className={styles.progressBox}><p>{progress.percent}% · {(progress.transferred / 1e6).toFixed(1)} of {(progress.total / 1e6).toFixed(1)} MB</p><progress aria-label="Update download" max={100} value={progress.percent} /></div>}
+          {progress && <div className={styles.progressBox}><p>{Math.round(progress.percent)}% · {(progress.transferred / 1e6).toFixed(1)} of {(progress.total / 1e6).toFixed(1)} MB</p><progress aria-label="Update download" max={100} value={progress.percent} /></div>}
           <div className={styles.buttonGroup}><button type="button" className={styles.button} disabled={checking || downloading} onClick={() => void checkUpdate()}><RefreshIcon size={13} />{checking ? 'Checking…' : 'Check for updates'}</button>
             {ready ? <button type="button" className={styles.button + ' ' + styles.primary} onClick={() => void installAppUpdate()}><DownloadIcon size={13} />Open installer</button> : update && <button type="button" className={styles.button + ' ' + styles.primary} disabled={downloading} onClick={() => void downloadAppUpdate(update)}><DownloadIcon size={13} />{downloading ? 'Downloading…' : update.downloadUrl ? 'Download update' : 'View release'}</button>}
           </div>

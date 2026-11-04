@@ -114,8 +114,11 @@ pub async fn nm_get_current_dns(
 }
 
 #[tauri::command]
-pub async fn nm_apply_dns(resolver_id: String) -> Result<bool, String> {
-    blocking(move || dns::apply_dns(&resolver_id)).await
+pub async fn nm_apply_dns(
+    resolver_id: String,
+    configuration_id: Option<String>,
+) -> Result<bool, String> {
+    blocking(move || dns::apply_dns(&resolver_id, configuration_id.as_deref())).await
 }
 
 #[tauri::command]
@@ -331,4 +334,44 @@ pub async fn nm_install_update(app: AppHandle, file_path: Option<String>) -> Res
 #[tauri::command]
 pub async fn nm_open_release_url(url: Option<String>) -> Result<(), String> {
     blocking(move || updater::open_release_url(url.as_deref())).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_results_match_the_renderer_contract() {
+        let dns = serde_json::to_value(CurrentDnsResult {
+            primary: "1.1.1.1".into(),
+            secondary: None,
+            is_dhcp: false,
+        })
+        .unwrap();
+        assert_eq!(
+            dns,
+            serde_json::json!({"primary":"1.1.1.1", "secondary":null, "isDhcp":false})
+        );
+        let download = serde_json::to_value(updater::DownloadOutcome {
+            success: true,
+            file_path: Some("verified-installer.exe".into()),
+            error: None,
+            in_progress: false,
+            already_downloaded: true,
+        })
+        .unwrap();
+        assert_eq!(
+            download,
+            serde_json::json!({"success":true, "filePath":"verified-installer.exe", "error":null, "inProgress":false, "alreadyDownloaded":true})
+        );
+        let operation = serde_json::to_value(OperationResult {
+            success: false,
+            message: "Permission denied".into(),
+        })
+        .unwrap();
+        assert_eq!(
+            operation,
+            serde_json::json!({"success":false, "message":"Permission denied"})
+        );
+    }
 }

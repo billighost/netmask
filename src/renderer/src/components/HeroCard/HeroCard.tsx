@@ -43,11 +43,12 @@ const Sparkline: React.FC = () => {
 }
 
 const LiveRates: React.FC<{ onInfo: () => void; expanded: boolean }> = ({ onInfo, expanded }) => {
+  const available = useStore(state => state.speed.available !== false)
   const down = speed(useStore(state => state.speed.downMBps))
   const up = speed(useStore(state => state.speed.upMBps))
   return <div className={styles.transfer}>
-    <div className={styles.rate}><div className={styles.rateCaption}><ArrowDownIcon size={11} /><span>DOWNLOAD</span><HelpTip label="Download rate">Data arriving on the active network adapter right now. MB/s means megabytes each second. This is current activity, not the connection's maximum speed.</HelpTip></div><p className={styles.rateValue}>{down.value}<span>{down.unit}</span></p></div>
-    <div className={styles.rate}><div className={styles.rateCaption}><ArrowUpIcon size={11} /><span>UPLOAD</span><HelpTip label="Upload rate">Data leaving the active network adapter right now. One megabyte is eight megabits; internet plans usually use megabits per second.</HelpTip></div><p className={styles.rateValue}>{up.value}<span>{up.unit}</span></p></div>
+    <div className={styles.rate}><div className={styles.rateCaption}><ArrowDownIcon size={11} /><span>DOWNLOAD</span><HelpTip label="Download rate">Data arriving across physical network adapters on this computer. If Wi-Fi and Ethernet are both active, both can contribute. MB/s means megabytes each second. This is current activity, not the connection's maximum speed.</HelpTip></div><p className={styles.rateValue}>{available ? down.value : '\u2014'}<span>{available ? down.unit : ''}</span></p></div>
+    <div className={styles.rate}><div className={styles.rateCaption}><ArrowUpIcon size={11} /><span>UPLOAD</span><HelpTip label="Upload rate">Data leaving physical network adapters on this computer. One megabyte is eight megabits; internet plans usually use megabits per second.</HelpTip></div><p className={styles.rateValue}>{available ? up.value : '\u2014'}<span>{available ? up.unit : ''}</span></p></div>
     <div className={styles.chart}><Sparkline /><button className={styles.chartButton} type="button" aria-expanded={expanded} onClick={onInfo}>{expanded ? 'Close speed test' : 'Test download speed'} <span aria-hidden="true">↗</span></button></div>
   </div>
 }

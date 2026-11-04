@@ -1,4 +1,5 @@
 .root { min-width: 0; }
+.list { max-height: 360px; max-height: clamp(180px, 38vh, 360px); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .title { font-size: 13px; font-weight: 600; letter-spacing: -.1px; }
 .count { color: var(--text-muted); font: 10px var(--font-mono); font-weight: 400; margin-left: 8px; }

@@ -31,6 +31,7 @@ export const App: React.FC = () => {
   const refresh = () => refreshNetworks().catch(error => useStore.setState({ connectionError: errorMessage(error) }))
 
   useEffect(() => {
+    let active = true
     const unsubUpdates = subscribeToUpdates()
     // Initial load
     ;(async () => {
@@ -41,6 +42,7 @@ export const App: React.FC = () => {
           window.nm.getElevationStatus(),
           window.nm.getCapabilities()
         ])
+        if (!active) return
         const state = useStore.getState()
         const [admin, preferences, streamer, elevation, capabilities] = results
         if (admin.status === 'fulfilled') state.setAdminOk(admin.value)
@@ -52,11 +54,14 @@ export const App: React.FC = () => {
         if (elevation.status === 'fulfilled') state.setElevationStatus(elevation.value)
         if (capabilities.status === 'fulfilled') useStore.setState({ capabilities: capabilities.value })
 
-        // Initial captive portal probe
+        await refresh()
+        if (!active) return
+        // Probe the established snapshot so its initial epoch cannot invalidate
+        // a fast successful response while the first network read is pending.
+        const probeEpoch = useStore.getState().connectionEpoch
         window.nm.checkCaptivePortal().then(status => {
-          useStore.getState().setCaptivePortal(status)
+          if (active && probeEpoch === useStore.getState().connectionEpoch) useStore.getState().setCaptivePortal(status)
         }).catch(() => {})
-      await refresh()
     })()
 
     // Speed subscription
@@ -92,6 +97,7 @@ export const App: React.FC = () => {
     documentVisibility()
 
     return () => {
+      active = false
       unsubUpdates()
       unsubSpeed()
       unsubPing()
@@ -116,7 +122,7 @@ export const App: React.FC = () => {
   // Global customizable keyboard shortcuts dispatcher
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.repeat) return
+      if (e.defaultPrevented || e.repeat || e.isComposing) return
       const state = useStore.getState()
       const shortcuts = state.settings.shortcuts || DEFAULT_SHORTCUTS
 
@@ -192,9 +198,7 @@ export const App: React.FC = () => {
             window.nm.restore(net.guid, net.name).then(async () => {
               await refresh()
               state.addToast(`Restored original name "${net.originalName}"`, 'success')
-            }).catch(() => {
-              state.addToast('Failed to restore original name', 'error')
-            })
+            }).catch(error => state.addToast(errorMessage(error, 'Failed to restore original name'), 'error'))
           }
           break
         }

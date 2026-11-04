@@ -29,10 +29,10 @@ test('the release workflow publishes only versioned native packages after verifi
   assert.match(pkg.scripts.build, /^vite build$/)
   const workflow = read('.github/workflows/release.yml')
   assert.doesNotMatch(workflow, /electron-builder|legacy:|continue-on-error/)
-  assert.match(workflow, /check-release-assets\.cjs/)
+  assert.match(workflow, /prepare-release\.cjs/)
   assert.match(workflow, /npm run test:native/)
   assert.match(workflow, /needs:.*build-release/)
-  assert.match(read('README.md'), new RegExp(`releases/download/v${pkg.version.replaceAll('.', '\\.')}/NetMask_`))
+  assert.match(read('README.md'), new RegExp(`releases/tag/v${pkg.version.replaceAll('.', '\\.')}`))
 })
 
 test('bundled branding and small-window defaults have usable assets', () => {

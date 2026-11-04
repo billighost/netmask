@@ -16,8 +16,9 @@ export const CaptivePortalBanner: React.FC = () => {
   }
   const recheck = async () => {
     if (checking) return
+    const epoch = useStore.getState().connectionEpoch
     setChecking(true)
-    try { const status = await window.nm.checkCaptivePortal(); state.setCaptivePortal(status); state.addToast(status.isCaptive ? 'This network still needs a sign-in.' : 'No Wi-Fi sign-in page detected.', 'info') }
+    try { const status = await window.nm.checkCaptivePortal(); if (epoch !== useStore.getState().connectionEpoch) return; state.setCaptivePortal(status); state.addToast(status.isCaptive ? 'This network still needs a sign-in.' : 'No Wi-Fi sign-in page detected.', 'info') }
     catch (error) { state.addToast(errorMessage(error, 'The connection check could not finish'), 'error') }
     finally { setChecking(false) }
   }

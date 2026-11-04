@@ -58,6 +58,7 @@ impl SpeedTracker {
             up_kbps: (self.up * 1000.0).round() as i64,
             instant_down_m_bps: Some(instant_down),
             instant_up_m_bps: Some(instant_up),
+            available: Some(true),
         }
     }
 }
@@ -215,6 +216,10 @@ fn read_counters() -> Result<Counters, String> {
 
 pub fn get_speed_sample() -> Result<SpeedSample, String> {
     match read_counters() {
+        Ok(counters) if counters.identity.is_empty() => {
+            reset_speed_baseline();
+            Ok(SpeedSample::unavailable())
+        }
         Ok(counters) => Ok(SPEED
             .lock()
             .unwrap_or_else(|e| e.into_inner())

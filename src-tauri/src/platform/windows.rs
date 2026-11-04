@@ -360,7 +360,7 @@ pub fn get_networks(
 
 fn merge_profiles(
     mut profiles: Vec<Profile>,
-    rows: Vec<super::nlm::Profile>,
+    mut rows: Vec<super::nlm::Profile>,
     backup: &HashMap<String, String>,
     connection: Option<&Connection>,
 ) -> Vec<Network> {
@@ -380,6 +380,8 @@ fn merge_profiles(
     }
     let mut networks = Vec::new();
     let mut used_profiles = std::collections::HashSet::new();
+    // The live row gets first choice; historical NLM rows can share an SSID.
+    rows.sort_by_key(|row| !row.live);
     for row in rows {
         let guid = row.guid.as_str();
         let name = row.name.as_str();
@@ -387,18 +389,36 @@ fn merge_profiles(
             continue;
         }
         let original = backup.get(guid).cloned().unwrap_or_else(|| name.into());
-        let profile = profiles.iter().find(|profile| {
-            let interface = guid_string(&profile.interface);
-            row.adapters.contains(&interface)
-                && ([name, original.as_str()]
-                    .iter()
-                    .any(|name| profile.name == *name || profile.ssid == *name)
-                    || (row.live
-                        && connection.is_some_and(|c| {
-                            c.profile == profile.name
-                                && c.interface_guid.as_deref() == Some(interface.as_str())
-                        })))
-        });
+        let candidates: Vec<_> = profiles
+            .iter()
+            .filter(|profile| {
+                if used_profiles.contains(&profile.id) {
+                    return false;
+                }
+                let interface = guid_string(&profile.interface);
+                row.adapters.contains(&interface)
+                    && ([name, original.as_str()]
+                        .iter()
+                        .any(|name| profile.name == *name || profile.ssid == *name)
+                        || (row.live
+                            && connection.is_some_and(|c| {
+                                c.profile == profile.name
+                                    && c.interface_guid.as_deref() == Some(interface.as_str())
+                            })))
+            })
+            .collect();
+        let profile = if row.live {
+            candidates.iter().copied().find(|profile| {
+                connection.is_some_and(|c| {
+                    c.profile == profile.name
+                        && c.interface_guid.as_deref()
+                            == Some(guid_string(&profile.interface).as_str())
+                })
+            })
+        } else {
+            None
+        }
+        .or_else(|| (candidates.len() == 1).then(|| candidates[0]));
         let chosen_guid = profile
             .filter(|profile| backup.contains_key(&profile.id))
             .map(|p| p.id.as_str())
@@ -425,7 +445,8 @@ fn merge_profiles(
             live,
             network_type: if is_wifi { "wifi" } else { "ethernet" }.into(),
             profile: profile.map(|p| p.name.clone()),
-            can_rename: true,
+            can_rename: !chosen_guid.starts_with("wlan:")
+                || profile.is_some_and(|profile| profile.can_rename),
         });
     }
     for profile in profiles
@@ -536,10 +557,14 @@ pub fn wifi_credentials(name: &str) -> Result<(String, String, String), String> 
 }
 
 pub fn profile_randomization(name: &str) -> Result<String, String> {
-    let profile = profiles()?
+    let matches: Vec<_> = profiles()?
         .into_iter()
-        .find(|p| p.name == name)
-        .ok_or("Saved Wi-Fi profile not found")?;
+        .filter(|profile| profile.name.eq_ignore_ascii_case(name))
+        .collect();
+    if matches.len() != 1 {
+        return Err("A unique saved Wi-Fi profile is required to inspect randomization".into());
+    }
+    let profile = &matches[0];
     let xml = profile_xml(&client()?, &profile.interface, &profile.name, false)?;
     Ok(
         if xml_value(&xml, "randomizeEveryDay").as_deref() == Some("true") {
@@ -618,5 +643,46 @@ mod tests {
             " Café &lt;🛜 "
         );
         assert!(xml_value("<keyMaterial>&unknown;</keyMaterial>", "keyMaterial").is_none());
+    }
+
+    #[test]
+    fn historical_rows_cannot_claim_the_live_profiles_recovery_identifier() {
+        let profile = profile("Saved profile");
+        let interface = guid_string(&profile.interface);
+        let mut connection =
+            super::super::macos::parse_connection(&serde_json::Value::Null, "adapter", "SSID");
+        connection.profile = profile.name.clone();
+        connection.interface_guid = Some(interface.clone());
+        let rows = vec![
+            super::super::nlm::Profile {
+                guid: "{00112233-4455-6677-8899-aabbccddeeff}".into(),
+                name: "SSID".into(),
+                live: false,
+                adapters: vec![interface.clone()],
+            },
+            super::super::nlm::Profile {
+                guid: "{11112233-4455-6677-8899-aabbccddeeff}".into(),
+                name: "SSID".into(),
+                live: true,
+                adapters: vec![interface],
+            },
+        ];
+        let backup = HashMap::from([(profile.id.clone(), "Original profile".into())]);
+        let networks = merge_profiles(vec![profile.clone()], rows, &backup, Some(&connection));
+        assert_eq!(
+            networks
+                .iter()
+                .filter(|network| network.guid == profile.id)
+                .count(),
+            1
+        );
+        assert!(
+            networks
+                .iter()
+                .find(|network| network.guid == profile.id)
+                .unwrap()
+                .live
+        );
+        assert_ne!(networks[0].guid, networks[1].guid);
     }
 }

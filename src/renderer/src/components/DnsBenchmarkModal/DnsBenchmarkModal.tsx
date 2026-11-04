@@ -9,8 +9,8 @@ import { errorMessage } from '../../network-state'
 import styles from '../Dialog/Panel.module.css'
 
 export const DnsBenchmarkModal: React.FC = () => {
-  const { open, results, capabilities } = useStore(state => ({
-    open: state.dnsModalOpen, results: state.dnsResults, capabilities: state.capabilities
+  const { open, results, capabilities, epoch } = useStore(state => ({
+    open: state.dnsModalOpen, results: state.dnsResults, capabilities: state.capabilities, epoch: state.connectionEpoch
   }), shallow)
   const [benchmarking, setBenchmarking] = useState(false)
   const [applyingId, setApplyingId] = useState<string | null>(null)
@@ -19,23 +19,24 @@ export const DnsBenchmarkModal: React.FC = () => {
   const state = useStore.getState()
   const runBenchmark = async () => {
     const id = ++request.current
+    const startedOn = useStore.getState().connectionEpoch
     setBenchmarking(true); setError(null); state.setDnsResults(null)
     try {
       const values = await window.nm.benchmarkDns()
-      if (id === request.current) state.setDnsResults(values)
+      if (id === request.current && startedOn === useStore.getState().connectionEpoch) state.setDnsResults(values)
     } catch (error) { if (id === request.current) setError(errorMessage(error)) }
     finally { if (id === request.current) setBenchmarking(false) }
   }
   useEffect(() => {
     if (open) void runBenchmark()
     return () => { request.current++ }
-  }, [open])
+  }, [open, epoch])
   if (!open) return null
   const handleApply = async (preset: DnsResolverResult) => {
     if (applyingId || benchmarking) return
     setApplyingId(preset.id)
     try {
-      if (!await window.nm.applyDns(preset.id)) throw new Error('The operating system did not confirm the DNS setting')
+      if (!await window.nm.applyDns(preset.id, preset.configurationId)) throw new Error('The operating system did not confirm the DNS setting')
       state.addToast(preset.isDhcp ? 'Automatic DNS confirmed' : preset.name + ' DNS confirmed', 'success')
       await runBenchmark()
     } catch (error) { state.addToast(errorMessage(error), 'error') }

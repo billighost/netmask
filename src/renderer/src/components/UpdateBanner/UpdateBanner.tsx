@@ -16,7 +16,7 @@ export const UpdateBanner: React.FC = () => {
     <div className={styles.iconWrap}><SparkleIcon size={16} /></div>
     <div className={styles.content}><div className={styles.titleRow}>
       <span className={styles.badge}>Update available</span><strong className={styles.version}>v{update.version}</strong>
-      <span className={styles.subtext}>{progress ? 'Downloading ' + progress.percent + '%' : ready ? 'Ready to install' : update.name}</span>
+      <span className={styles.subtext}>{progress ? 'Downloading ' + Math.round(progress.percent) + '%' : ready ? 'Ready to install' : update.name}</span>
     </div></div>
     <div className={styles.actions}>
       <button className={styles.notesBtn} onClick={() => void openWebPage(update.url)}>Notes</button>

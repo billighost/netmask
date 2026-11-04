@@ -9,7 +9,7 @@ import { errorMessage } from '../../network-state'
 import styles from '../Dialog/Panel.module.css'
 
 export const RoamingTunerModal: React.FC = () => {
-  const { open, settings, capabilities } = useStore(state => ({ open: state.roamingModalOpen, settings: state.roamingSettings, capabilities: state.capabilities }), shallow)
+  const { open, settings, capabilities, epoch } = useStore(state => ({ open: state.roamingModalOpen, settings: state.roamingSettings, capabilities: state.capabilities, epoch: state.connectionEpoch }), shallow)
   const [band, setBand] = useState('')
   const [roaming, setRoaming] = useState('')
   const [loading, setLoading] = useState(false)
@@ -19,10 +19,11 @@ export const RoamingTunerModal: React.FC = () => {
   const state = useStore.getState()
   const fetchSettings = async () => {
     const id = ++request.current
+    const startedOn = useStore.getState().connectionEpoch
     setLoading(true); setError(null)
     try {
       const value = await window.nm.getRoamingSettings()
-      if (id !== request.current) return
+      if (id !== request.current || startedOn !== useStore.getState().connectionEpoch) return
       state.setRoamingSettings(value); setBand(value.preferredBand); setRoaming(value.roamingAggressiveness)
     } catch (error) { if (id === request.current) setError(errorMessage(error)) }
     finally { if (id === request.current) setLoading(false) }
@@ -31,7 +32,7 @@ export const RoamingTunerModal: React.FC = () => {
     state.setRoamingSettings(null)
     if (open) void fetchSettings()
     return () => { request.current++ }
-  }, [open])
+  }, [open, epoch])
   if (!open) return null
   const supported = settings?.supported && capabilities?.roamingTuning !== false
   const params = {

@@ -12,9 +12,9 @@ import styles from '../Dialog/Panel.module.css'
 const rate = (value?: number) => typeof value === 'number' && Number.isFinite(value) ? value.toFixed(0) + ' Mbps' : 'Unavailable'
 
 export const NetworkDetailsModal: React.FC = () => {
-  const { guid, networks, settings, bssidPeek, capabilities } = useStore(state => ({
+  const { guid, networks, settings, bssidPeek, capabilities, epoch } = useStore(state => ({
     guid: state.detailsModalGuid, networks: state.networks, settings: state.settings,
-    bssidPeek: state.bssidPeek, capabilities: state.capabilities
+    bssidPeek: state.bssidPeek, capabilities: state.capabilities, epoch: state.connectionEpoch
   }), shallow)
   const [details, setDetails] = useState<NetworkDetails | null>(null)
   const [loading, setLoading] = useState(false)
@@ -29,7 +29,7 @@ export const NetworkDetailsModal: React.FC = () => {
       .catch(error => { if (active) setError(errorMessage(error)) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [guid, attempt])
+  }, [guid, attempt, epoch])
   if (!guid) return null
   const state = useStore.getState()
   const target = networks.find(network => network.guid === guid)

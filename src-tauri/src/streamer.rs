@@ -143,12 +143,27 @@ fn activate(state: &mut State, manual: bool) -> Result<(), String> {
     };
     save_record(&Some(record.clone()))?;
     state.record = Some(record.clone());
-    operations::rename(
+    if let Err(error) = operations::rename(
         &record.guid,
         &record.mask,
         Some(&record.previous_name),
         manual,
-    )?;
+    ) {
+        // A rejected change that left the old name intact must permit retry.
+        // If the OS changed the name or cannot be inspected, keep recovery data.
+        let unchanged = settings::read_backup()
+            .and_then(|backup| platform::get_networks(&backup))
+            .is_ok_and(|networks| {
+                networks.iter().any(|network| {
+                    network.guid == record.guid && network.name == record.previous_name
+                })
+            });
+        if unchanged {
+            save_record(&None)?;
+            state.record = None;
+        }
+        return Err(error);
+    }
     state.protected = true;
     state.restore_at = None;
     state.error = None;
@@ -190,9 +205,14 @@ pub fn check_streamer_now() -> StreamerStatus {
     let scan_due = state
         .last_scan
         .is_none_or(|last| now.saturating_duration_since(last) >= Duration::from_secs(5));
+    let auto_enabled = settings::get_settings().auto_cloak_streamer;
     if scan_due {
         state.last_scan = Some(now);
-        match running_broadcast_app() {
+        match if auto_enabled {
+            running_broadcast_app()
+        } else {
+            Ok(None)
+        } {
             Ok(app) => {
                 state.detected_app = app;
                 if state.detected_app.is_none() {
@@ -226,9 +246,7 @@ pub fn check_streamer_now() -> StreamerStatus {
             }
         }
     }
-    let auto = settings::get_settings().auto_cloak_streamer
-        && state.detected_app.is_some()
-        && !state.suppressed;
+    let auto = auto_enabled && state.detected_app.is_some() && !state.suppressed;
     if auto {
         state.restore_at = None;
     }

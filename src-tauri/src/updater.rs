@@ -180,7 +180,8 @@ pub fn parse_release(
             .and_then(|digest| digest.strip_prefix("sha256:"))
             .filter(|digest| digest.len() == 64 && digest.bytes().all(|b| b.is_ascii_hexdigit()))
             .map(|s| s.to_ascii_lowercase());
-        download_url = Some(url.into());
+        // Offer the release page when verification is unavailable.
+        download_url = asset_sha256.as_ref().map(|_| url.into());
         asset_name = Some(name.into());
         asset_size = Some(size as i64);
     }
@@ -387,7 +388,7 @@ pub fn download_update(
     let previous = get_update_status();
     if previous.downloaded_version.as_deref() == Some(update.version.as_str()) {
         if let Some(verified) = VERIFIED.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-            if file_hash(&verified.path)? == (verified.size, verified.sha256.clone()) {
+            if verified_is_intact(verified) {
                 return Ok(DownloadOutcome {
                     success: true,
                     file_path: previous.downloaded_file_path,
@@ -398,6 +399,7 @@ pub fn download_update(
             }
         }
     }
+    *VERIFIED.lock().unwrap_or_else(|e| e.into_inner()) = None;
     {
         let mut status = UPDATE_STATUS.lock().unwrap_or_else(|e| e.into_inner());
         status.is_downloading = true;
@@ -433,9 +435,7 @@ pub fn install_update(requested_path: Option<&str>) -> Result<bool, String> {
     if requested_path.is_some_and(|path| Path::new(path) != verified.path) {
         return Err("Only the verified NetMask installer can be opened".into());
     }
-    if verified.path.is_symlink()
-        || file_hash(&verified.path)? != (verified.size, verified.sha256.clone())
-    {
+    if !verified_is_intact(verified) {
         return Err("The installer changed after downloading; download it again".into());
     }
     #[cfg(windows)]
@@ -473,6 +473,12 @@ pub fn install_update(requested_path: Option<&str>) -> Result<bool, String> {
             .map_err(|_| "Cannot open the Linux package installer")?;
         Ok(false)
     }
+}
+
+fn verified_is_intact(verified: &VerifiedDownload) -> bool {
+    !verified.path.is_symlink()
+        && file_hash(&verified.path)
+            .is_ok_and(|actual| actual == (verified.size, verified.sha256.clone()))
 }
 
 pub fn open_external(value: &str) -> Result<(), String> {
@@ -542,6 +548,23 @@ pub fn open_release_url(value: Option<&str>) -> Result<(), String> {
 mod tests {
     use super::*;
     #[test]
+    fn missing_or_modified_cached_installers_are_retryable() {
+        let path =
+            std::env::temp_dir().join(format!("netmask-update-fixture-{}", std::process::id()));
+        fs::write(&path, b"original fixture").unwrap();
+        let (size, sha256) = file_hash(&path).unwrap();
+        let verified = VerifiedDownload {
+            path: path.clone(),
+            size,
+            sha256,
+        };
+        assert!(verified_is_intact(&verified));
+        fs::write(&path, b"changed fixture").unwrap();
+        assert!(!verified_is_intact(&verified));
+        fs::remove_file(&path).unwrap();
+        assert!(!verified_is_intact(&verified));
+    }
+    #[test]
     fn versions_assets_and_update_urls_do_not_accept_legacy_or_arbitrary_installers() {
         assert!(compare_semver("v2.3.0", "2.2.0").unwrap().is_gt());
         assert!(compare_semver("2.3.0-beta.1", "2.3.0").unwrap().is_lt());
@@ -583,6 +606,14 @@ mod tests {
                 .is_none()
         );
         let mut bad = release;
+        bad["assets"][1]["digest"] = serde_json::Value::Null;
+        assert!(
+            parse_release(&bad, "windows", "x86_64")
+                .unwrap()
+                .unwrap()
+                .download_url
+                .is_none()
+        );
         bad["assets"][1]["browser_download_url"] =
             serde_json::json!("https://example.com/update.exe");
         assert!(parse_release(&bad, "windows", "x86_64").is_err());

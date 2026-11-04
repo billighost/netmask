@@ -92,11 +92,16 @@ pub fn set_mac_randomization(profile: &str, mode: &str) -> Result<bool, String> 
     #[cfg(windows)]
     {
         let profiles = platform::windows::profiles()?;
-        if !profiles.iter().any(|saved| saved.name == profile) {
-            return Err("Saved Wi-Fi profile not found".into());
+        let matches: Vec<_> = profiles
+            .iter()
+            .filter(|saved| saved.name.eq_ignore_ascii_case(profile))
+            .collect();
+        if matches.len() != 1 {
+            return Err("A unique saved Wi-Fi profile is required to change randomization".into());
         }
         let command = format!(
-            "& netsh.exe wlan set profileparameter {} {}; if ($LASTEXITCODE -ne 0) {{ throw 'MAC randomization was rejected' }}",
+            "$adapter = Get-NetAdapter | Where-Object {{ $_.InterfaceGuid.ToString('B') -eq {} }} | Select-Object -First 1; if (-not $adapter) {{ throw 'Wi-Fi adapter unavailable' }}; & netsh.exe wlan set profileparameter {} ('interface=' + $adapter.Name) {}; if ($LASTEXITCODE -ne 0) {{ throw 'MAC randomization was rejected' }}",
+            system::powershell_literal(&platform::windows::guid_string(&matches[0].interface)),
             system::powershell_literal(&format!("name={profile}")),
             system::powershell_literal(&format!("Randomization={mode}"))
         );

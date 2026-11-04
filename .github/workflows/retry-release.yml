@@ -1,0 +1,25 @@
+name: Retry unavailable release runners
+
+on:
+  workflow_run:
+    workflows: ['Release & Multi-OS Distribution']
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: write
+  checks: read
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Retry only confirmed runner-allocation failures
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: node scripts/retry-release.cjs

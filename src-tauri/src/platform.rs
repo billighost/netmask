@@ -4,7 +4,35 @@ use crate::types::{
     Connection, ElevationStatus, Network, NetworkDetails, NetworkSnapshot, PlatformCapabilities,
 };
 use std::collections::HashMap;
+use std::sync::{
+    Mutex,
+    atomic::{AtomicU64, Ordering},
+};
 use std::time::Duration;
+static CONNECTION_KEY: Mutex<Option<Option<String>>> = Mutex::new(None);
+static CONNECTION_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+pub fn connection_generation() -> u64 {
+    CONNECTION_GENERATION.load(Ordering::SeqCst)
+}
+
+fn observe_connection(connection: Option<&Connection>) {
+    let key = connection.map(|connection| {
+        serde_json::json!([
+            connection.ssid,
+            connection.interface_guid,
+            connection.interface_name,
+            connection.bssid
+        ])
+        .to_string()
+    });
+    let mut previous = CONNECTION_KEY.lock().unwrap_or_else(|e| e.into_inner());
+    if previous.as_ref() != Some(&key) {
+        *previous = Some(key);
+        CONNECTION_GENERATION.fetch_add(1, Ordering::SeqCst);
+        crate::speed::reset_speed_baseline();
+    }
+}
 pub mod linux;
 pub mod macos;
 #[cfg(windows)]
@@ -198,11 +226,7 @@ pub fn get_network_snapshot(backup: &HashMap<String, String>) -> Result<NetworkS
     let mut networks = linux::get_networks(backup, connection.as_ref())?;
     #[cfg(target_os = "macos")]
     let mut networks = macos::get_networks(backup, connection.as_ref())?;
-    networks.sort_by(|a, b| {
-        b.live
-            .cmp(&a.live)
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-    });
+    networks.sort_by_cached_key(|network| (!network.live, network.name.to_lowercase()));
     if let Some(current) = connection.as_mut() {
         if let Some(network) = networks.iter().find(|network| {
             network.live
@@ -217,6 +241,7 @@ pub fn get_network_snapshot(backup: &HashMap<String, String>) -> Result<NetworkS
             current.network_guid = Some(network.guid.clone());
         }
     }
+    observe_connection(connection.as_ref());
     Ok(NetworkSnapshot {
         networks,
         connection,
@@ -343,7 +368,14 @@ pub fn reconnect_network(profile: Option<&str>) -> Result<bool, String> {
     {
         let interface = macos::wifi_interface()?;
         system::run("networksetup", &["-setairportnetwork", &interface, profile])?;
-        Ok(true)
+        for _ in 0..10 {
+            let current = system::run("networksetup", &["-getairportnetwork", &interface])?;
+            if current.strip_prefix("Current Wi-Fi Network: ") == Some(profile) {
+                return Ok(true);
+            }
+            std::thread::sleep(Duration::from_millis(300));
+        }
+        Err("macOS has not confirmed the Wi-Fi connection. Check Wi-Fi permissions and saved credentials.".into())
     }
 }
 pub fn get_capabilities() -> PlatformCapabilities {
