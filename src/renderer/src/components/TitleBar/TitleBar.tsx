@@ -23,8 +23,8 @@ export const TitleBar: React.FC = () => {
   const handleClose = () => window.nm.close()
 
   return (
-    <div className={styles.bar} id="title-bar" onDoubleClick={handleMaximize}>
-      <div className={styles.dragRegion} />
+    <div className={styles.bar} id="title-bar" data-tauri-drag-region onDoubleClick={handleMaximize}>
+      <div className={styles.dragRegion} data-tauri-drag-region />
       <div className={styles.left}>
         <NetMaskLogoIcon size={18} className={styles.logo} />
         <span className={styles.title}>NetMask</span>
