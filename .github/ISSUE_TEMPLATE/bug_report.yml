@@ -16,7 +16,7 @@ body:
       options:
         - Windows 11 (x64)
         - Windows 10 (x64)
-        - macOS (Apple Silicon M1/M2/M3)
+        - macOS (Apple silicon)
         - macOS (Intel x64)
         - Linux (Ubuntu / Debian)
         - Linux (Arch / Fedora)
@@ -28,8 +28,8 @@ body:
     id: version
     attributes:
       label: NetMask Version
-      description: Found in Title Bar or Settings (e.g., v2.0.0)
-      placeholder: "v2.0.0"
+      description: Found in the title bar or Settings (e.g., v2.2.1)
+      placeholder: "v2.2.1"
     validations:
       required: true
 

@@ -1,50 +1,38 @@
-# Security Policy & Integrity Guide
+# Security and installation integrity
 
-## Supported Versions
+## Report a vulnerability
 
-We actively provide security patches and updates for the following versions:
+Use [GitHub private vulnerability reporting](https://github.com/billighost/netmask/security/advisories/new) or contact maintainer **Bello Bilal** at `bb2010ng@gmail.com`. Include the affected version, reproduction steps, impact, and any proposed fix. Keep credentials and personal network information out of public issues.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 2.x.x   | :white_check_mark: |
-| 1.x.x   | :x:                |
+Security fixes target the current Tauri release. Historical packages are not evidence that an issue has been fixed; use the latest published release and its notes.
 
----
+## Download and verify
 
-## Reporting a Vulnerability
+Official packages are published at [billighost/netmask/releases](https://github.com/billighost/netmask/releases). The current workflow publishes native packages for Windows x64, both Mac architectures, and Linux x64 with `checksums.txt`.
 
-If you discover a security vulnerability within NetMask, please **do not** report it in a public GitHub issue.
+Compare your download's SHA-256 with the manifest from the same release:
 
-Instead, please send an encrypted or confidential disclosure to the maintainers via:
-- GitHub Private Vulnerability Reporting: [Report a vulnerability](https://github.com/billighost/netmask/security/advisories/new)
+```powershell
+Get-FileHash -Algorithm SHA256 -LiteralPath .\NetMask_2.3.0_x64-setup.exe
+```
 
-Please include:
-- A description of the issue and potential impact
-- Detailed steps or a minimal proof-of-concept to reproduce the vulnerability
-- Any proposed remediations or mitigations
+```sh
+sha256sum NetMask_2.3.0_amd64.deb       # Linux
+shasum -a 256 NetMask_2.3.0_aarch64.dmg # macOS
+```
 
-You will receive an initial response within **48 hours**. We will coordinate a patched release and acknowledge your contribution responsibly.
+Checksums detect changed or incomplete files; they do not replace publisher code signing. This project does not currently claim verified Windows publisher signing or macOS notarization. SmartScreen or Gatekeeper may warn about an unrecognized download. Verify the source and file before making your own installation decision; do not disable system protections globally.
 
----
+## App behavior
 
-## Windows SmartScreen & "Unknown Publisher" Notice
+- Name changes and DNS/driver settings may require operating-system permission. Canceled or failed operations report failure.
+- Original network labels and preferences stay in per-user JSON. Unix storage is private to the account; JSON is not encrypted.
+- QR sharing reads supported saved Wi-Fi credentials only when requested. A standard Wi-Fi QR code contains readable credentials and grants access to that network.
+- Display-name masking and BSSID hiding change what the app or supported local labels show. They do not hide your device from the router or change the router's broadcast SSID.
+- Update downloads use exact native assets from this repository's GitHub releases, HTTPS with restricted redirects, expected size, and GitHub's SHA-256 digest. The app opens only a verified installer and rechecks it before launch.
 
-### Why does Windows show "Unknown Publisher"?
-When you download and run a newly released executable on Windows, Microsoft Defender SmartScreen displays a warning:
-> *"Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting."*
+## Network requests
 
-This is standard Windows behavior for open-source applications that:
-1. **Have not yet accumulated high download volume reputation**: Microsoft SmartScreen requires hundreds or thousands of unique user downloads over time before automatically recognizing a binary hash as trusted.
-2. **Are not signed with an expensive Extended Validation (EV) Hardware Token**: EV code signing certificates cost between $300 to $600 annually and require physical USB cryptographic keys, which is prohibitive for independent open-source projects.
+Visible diagnostics may send ICMP probes to the gateway and an internet target, and an HTTP connectivity probe to Microsoft's `msftconnecttest.com`. The explicit speed test downloads about 3 MB from `speed.cloudflare.com`. DNS benchmarks query public resolvers. Update checks and downloads contact GitHub and its release-asset hosts. These services receive the ordinary network information associated with those requests.
 
-### How to Safely Run NetMask
-1. **Verify Integrity**: Compare the SHA-256 checksum of your downloaded installer against the `checksums.txt` file attached to the [GitHub Release](https://github.com/billighost/netmask/releases).
-2. **Bypass SmartScreen Prompt**:
-   - In the SmartScreen dialog, click **"More info"**.
-   - Click **"Run anyway"**.
-3. **PowerShell Unblock (Alternative)**:
-   ```powershell
-   Unblock-File -Path .\NetMask-Setup-2.0.0.exe
-   ```
-4. **Community & Automated Code Signing**:
-   We are onboarding NetMask to [SignPath.io](https://about.signpath.io/), the non-profit code-signing service for open-source software, to provide free trusted signing in upcoming releases.
+Visible diagnostic polling pauses in the tray. Process detection for enabled display-name automation continues locally. Operating-system permissions, wireless drivers, and desktop environments can limit available fields and controls; missing data is not replaced with invented security information.

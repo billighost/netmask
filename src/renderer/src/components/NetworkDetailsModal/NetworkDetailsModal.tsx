@@ -1,238 +1,78 @@
 import React, { useEffect, useState } from 'react'
+import { shallow } from 'zustand/shallow'
 import { useStore } from '../../store'
 import type { NetworkDetails } from '../../types'
-import { CloseIcon, WifiIcon, CopyIcon, EyeIcon, EyeOffIcon, ShieldIcon, QrCodeIcon } from '../../icons'
-import styles from './NetworkDetailsModal.module.css'
+import { CloseIcon, WifiIcon, CopyIcon, EyeIcon, EyeOffIcon, QrCodeIcon } from '../../icons'
+import { Dialog } from '../Dialog/Dialog'
+import { HelpTip } from '../Controls/HelpTip'
+import { copyText } from '../../network-actions'
+import { errorMessage, maskBssid } from '../../network-state'
+import styles from '../Dialog/Panel.module.css'
 
-function formatBssid(bssid?: any, cloaked = true, mode: 'full' | 'partial' = 'partial', peek = false): string {
-  if (!bssid || typeof bssid !== 'string' || bssid === 'Saved Profile' || bssid === 'Active Interface' || bssid === 'Saved Network') {
-    return typeof bssid === 'string' ? bssid : 'Unknown'
-  }
-  if (!cloaked || peek) {
-    return bssid.toUpperCase()
-  }
-  if (mode === 'full') {
-    return 'XX:XX:XX:XX:XX:XX'
-  }
-  const parts = bssid.trim().split(/[:-]/)
-  if (parts.length === 6) {
-    return `${parts[0].toUpperCase()}:${parts[1].toUpperCase()}:${parts[2].toUpperCase()}:••:••:••`
-  }
-  return 'XX:XX:XX:XX:XX:XX'
-}
-
-function safeRate(rate?: any): number {
-  if (typeof rate === 'number') return isNaN(rate) ? 0 : rate
-  if (typeof rate === 'string') {
-    const parsed = parseFloat(rate)
-    return isNaN(parsed) ? 0 : parsed
-  }
-  return 0
-}
+const rate = (value?: number) => typeof value === 'number' && Number.isFinite(value) ? value.toFixed(0) + ' Mbps' : 'Unavailable'
 
 export const NetworkDetailsModal: React.FC = () => {
-  // Unconditionally call all hooks at the very top of the component (Rules of Hooks)
-  const detailsModalGuid = useStore(s => s.detailsModalGuid)
-  const setDetailsModalGuid = useStore(s => s.setDetailsModalGuid)
-  const settings = useStore(s => s.settings)
-  const bssidPeek = useStore(s => s.bssidPeek)
-  const peekBssid = useStore(s => s.peekBssid)
-  const addToast = useStore(s => s.addToast)
-  const connection = useStore(s => s.connection)
-  const setWifiShareModalProfile = useStore(s => s.setWifiShareModalProfile)
-  const networks = useStore(s => s.networks)
-
+  const { guid, networks, settings, bssidPeek, capabilities } = useStore(state => ({
+    guid: state.detailsModalGuid, networks: state.networks, settings: state.settings,
+    bssidPeek: state.bssidPeek, capabilities: state.capabilities
+  }), shallow)
   const [details, setDetails] = useState<NetworkDetails | null>(null)
   const [loading, setLoading] = useState(false)
-
+  const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
   useEffect(() => {
-    if (!detailsModalGuid) {
-      setDetails(null)
-      return
-    }
-
+    setDetails(null); setError(null)
+    if (!guid) return
     let active = true
     setLoading(true)
-    window.nm.getDetails(detailsModalGuid)
-      .then(d => {
-        if (active) {
-          setDetails(d)
-          setLoading(false)
-        }
-      })
-      .catch(() => {
-        if (active) setLoading(false)
-      })
-
-    return () => {
-      active = false
-    }
-  }, [detailsModalGuid])
-
-  // Early return only after all hooks are declared
-  if (!detailsModalGuid) return null
-
-  const handleCopyBssid = () => {
-    const rawBssid = details?.bssid || connection?.bssid
-    if (!rawBssid) return
-
-    const isProtected = settings?.bssidCloaking && !bssidPeek
-    const textToCopy = formatBssid(rawBssid, isProtected, settings?.bssidMaskMode, bssidPeek)
-    navigator.clipboard.writeText(textToCopy)
-    if (isProtected) {
-      addToast(`Copied cloaked BSSID "${textToCopy}" (Streamer Safe)`, 'info')
-    } else {
-      addToast('Copied real BSSID to clipboard', 'success')
-    }
-  }
-
-  const targetNetwork = networks.find(n => n.guid === detailsModalGuid || n.name === detailsModalGuid)
-  const isTargetLive = Boolean(
-    targetNetwork ? targetNetwork.live : (
-      connection && (
-        connection.profile === detailsModalGuid ||
-        connection.name === detailsModalGuid ||
-        connection.ssid === detailsModalGuid
-      )
-    )
-  )
-
-  const displayName = targetNetwork ? targetNetwork.name : (details?.guid || detailsModalGuid)
-  const rawBssid = isTargetLive ? (details?.bssid || connection?.bssid) : details?.bssid
-  const displayBssid = formatBssid(rawBssid, settings?.bssidCloaking, settings?.bssidMaskMode, bssidPeek)
-  const generation = isTargetLive ? (details?.generation || connection?.generation || 'Wi-Fi') : (details?.generation || 'Wi-Fi')
-  const signalDbm = isTargetLive ? (details?.signalDbm ?? connection?.signalDbm) : undefined
-  const snr = isTargetLive ? (details?.snr ?? connection?.snr) : undefined
-  const channel = isTargetLive ? (details?.channel || connection?.channel || 0) : (details?.channel || 0)
-  const band = isTargetLive ? (details?.band || connection?.band || 'Wi-Fi') : (details?.band || 'Saved Profile')
-  const rxRate = isTargetLive ? (details?.rxRateMbps || connection?.rxRateMbps) : undefined
-  const txRate = isTargetLive ? (details?.txRateMbps || connection?.txRateMbps) : undefined
-
-  const rxNum = safeRate(rxRate)
-  const txNum = safeRate(txRate || rxRate)
-  const linkRateDisplay = isTargetLive && rxNum > 0
-    ? `↓${rxNum.toFixed(0)} / ↑${txNum.toFixed(0)}M`
-    : isTargetLive
-    ? 'Negotiating'
-    : 'Offline'
-
-  const signalClass = signalDbm !== undefined
-    ? signalDbm >= -65
-      ? styles.metricGreen
-      : signalDbm >= -78
-      ? styles.metricAmber
-      : styles.metricRed
-    : ''
-
-  return (
-    <div className={styles.scrim} onClick={() => setDetailsModalGuid(null)}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
-        <div className={styles.header}>
-          <div className={styles.titleGroup}>
-            <WifiIcon size={16} color="var(--accent)" />
-            <span className={styles.title}>Physical Layer RF Diagnostics</span>
-          </div>
-          <button className={styles.closeBtn} onClick={() => setDetailsModalGuid(null)}>
-            <CloseIcon size={14} />
-          </button>
-        </div>
-
-        <div className={styles.body}>
-          <div className={styles.netHeader}>
-            <div className={styles.netName}>{displayName}</div>
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              <span className={styles.genBadge}>{generation}</span>
-              <button
-                type="button"
-                className={styles.shareBtn}
-                onClick={() => setWifiShareModalProfile(displayName)}
-                title="Share Wi-Fi via Encrypted QR Code"
-              >
-                <QrCodeIcon size={12} color="#34d399" />
-                <span>Share</span>
-              </button>
-            </div>
-          </div>
-
-          <div className={styles.grid}>
-            <div className={styles.metricCard}>
-              <div className={styles.metricLabel}>Signal Strength</div>
-              <div className={`${styles.metricValue} ${signalClass}`}>
-                {isTargetLive ? (signalDbm !== undefined ? `${signalDbm} dBm` : `${connection?.signal ?? 0}%`) : 'Inactive'}
-              </div>
-            </div>
-
-            <div className={styles.metricCard}>
-              <div className={styles.metricLabel}>Signal-to-Noise (SNR)</div>
-              <div className={styles.metricValue}>
-                {isTargetLive ? (snr !== undefined ? `${snr} dB` : 'Optimal') : '—'}
-              </div>
-            </div>
-
-            <div className={styles.metricCard}>
-              <div className={styles.metricLabel}>Channel & Band</div>
-              <div className={styles.metricValue}>
-                {channel > 0 ? `Ch ${channel}` : 'Auto'} · {band}
-              </div>
-            </div>
-
-            <div className={styles.metricCard}>
-              <div className={styles.metricLabel}>Link Rates</div>
-              <div className={styles.metricValue}>
-                {linkRateDisplay}
-              </div>
-            </div>
-
-            <div className={styles.metricCard}>
-              <div className={styles.metricLabel}>Authentication</div>
-              <div className={styles.metricValue} style={{ fontSize: '12px' }}>
-                {details?.auth || 'WPA2/WPA3 Personal'}
-              </div>
-            </div>
-
-            <div className={styles.metricCard}>
-              <div className={styles.metricLabel}>State</div>
-              <div className={styles.metricValue} style={{ fontSize: '12px', color: isTargetLive ? 'var(--green)' : 'var(--text-muted)' }}>
-                {isTargetLive ? 'Active now' : (details?.lastConnected || 'Saved Profile')}
-              </div>
-            </div>
-
-            {rawBssid && (
-              <div className={styles.bssidCard}>
-                <div className={styles.bssidLeft}>
-                  <div className={styles.metricLabel}>BSSID (Access Point MAC)</div>
-                  <div className={styles.bssidValue}>{displayBssid}</div>
-                </div>
-                <div className={styles.bssidActions}>
-                  {settings?.bssidCloaking && (
-                    <button
-                      type="button"
-                      className={styles.actionBtn}
-                      onClick={peekBssid}
-                      title={bssidPeek ? 'Real BSSID visible' : 'Peek real BSSID (3s)'}
-                    >
-                      {bssidPeek ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className={styles.actionBtn}
-                    onClick={handleCopyBssid}
-                    title="Copy BSSID"
-                  >
-                    <CopyIcon size={14} />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className={styles.notice}>
-            <ShieldIcon size={13} color="#c084fc" style={{ marginRight: '5px', verticalAlign: 'text-bottom' }} />
-            <strong>Streamer Safe Advice:</strong> BSSID addresses uniquely identify your physical router hardware on global geolocation databases (e.g. WiGLE.net). Keep BSSID cloaking enabled while screen-sharing or broadcasting.
-          </div>
-        </div>
-      </div>
+    window.nm.getDetails(guid).then(value => { if (active) setDetails(value) })
+      .catch(error => { if (active) setError(errorMessage(error)) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [guid, attempt])
+  if (!guid) return null
+  const state = useStore.getState()
+  const target = networks.find(network => network.guid === guid)
+  const rawBssid = details?.bssid
+  const bssid = rawBssid ? (settings.bssidCloaking && !bssidPeek ? maskBssid(rawBssid, settings.bssidMaskMode) : rawBssid.toUpperCase()) : null
+  const metrics = [
+    { label: 'Signal strength', value: details?.signalDbm != null ? details.signalDbm + ' dBm' : 'Unavailable', help: 'How strongly your computer hears the router. A value closer to zero is stronger: −50 dBm is stronger than −80 dBm.' },
+    { label: 'Signal above noise', value: details?.snr != null ? details.snr + ' dB' : 'Unavailable', help: 'How much stronger the useful signal is than the background noise. A larger number generally makes the connection easier to hear.' },
+    { label: 'Channel and band', value: details ? (details.channel > 0 ? 'Channel ' + details.channel + ' · ' : '') + details.band : 'Unavailable', help: 'The radio band and channel your router is using. These come from the connection; changing them usually happens in your router settings.' },
+    { label: 'Download link rate', value: rate(details?.rxRateMbps), help: 'The Wi-Fi rate negotiated for data coming from your router. It is not a measured internet download speed.' },
+    { label: 'Upload link rate', value: rate(details?.txRateMbps), help: 'The Wi-Fi rate negotiated for data going to your router. Mbps means megabits per second; eight megabits make one megabyte.' },
+    { label: 'Wi-Fi security', value: details?.auth || 'Unavailable', help: 'The security method reported for this saved connection, such as WPA2 or WPA3. NetMask does not change the router’s security.' },
+    { label: 'Wi-Fi version', value: details?.generation || details?.radioType || 'Unavailable', help: 'The Wi-Fi standard used by this connection. Your adapter and router decide which version they can use together.' },
+    { label: 'Connection state', value: details?.lastConnected || 'Unavailable', help: 'Whether this is a current connection or a saved profile. A saved profile can have no live radio measurements.' }
+  ]
+  return <Dialog label="Network details" onClose={() => state.setDetailsModalGuid(null)} scrimClass={styles.scrim} modalClass={styles.modal}>
+    <div className={styles.header}>
+      <div className={styles.titleGroup}><WifiIcon size={16} /><span className={styles.title}>Network details</span></div>
+      <button className={styles.closeBtn} aria-label="Close network details" onClick={() => state.setDetailsModalGuid(null)}><CloseIcon size={14} /></button>
     </div>
-  )
+    <div className={styles.body}>
+      <div className={styles.netHeader}>
+        <div className={styles.netName}>{target?.name || 'Network'}</div>
+        {target?.type === 'wifi' && target.profile && capabilities?.wifiSharing !== false && <button className={styles.shareBtn}
+          onClick={() => state.setWifiShareModalProfile(target.profile!)}><QrCodeIcon size={12} />Share Wi-Fi</button>}
+      </div>
+      {loading ? <p role="status">Loading network details…</p> : error ? <div className="nm-error" role="alert">{error}
+        <button className={styles.shareBtn} onClick={() => setAttempt(value => value + 1)}>Try again</button></div> : <>
+        <div className={styles.grid}>
+          {metrics.map(metric => <div key={metric.label} className={styles.metricCard}>
+            <div className={styles.metricLabel}>{metric.label}<HelpTip label={metric.label}>{metric.help}</HelpTip></div><div className={styles.metricValue}>{metric.value}</div>
+          </div>)}
+          {bssid && <div className={styles.bssidCard}>
+            <div className={styles.bssidLeft}><div className={styles.metricLabel}>Access point address<HelpTip label="Access point address">The BSSID identifies the Wi-Fi radio you are connected to. It is a hardware address, not a password.</HelpTip></div><div className={styles.bssidValue}>{bssid}</div></div>
+            <div className={styles.bssidActions}>
+              {settings.bssidCloaking && <button className={styles.actionBtn} aria-label="Reveal BSSID for three seconds" onClick={state.peekBssid}>
+                {bssidPeek ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}</button>}
+              <button className={styles.actionBtn} aria-label="Copy displayed BSSID" onClick={() => void copyText(bssid)}><CopyIcon size={14} /></button>
+            </div>
+          </div>}
+        </div>
+        <div className={styles.notice}>Only values reported for this network appear here. Saved or disconnected profiles may have no radio measurements. BSSID masking changes what NetMask displays.</div>
+      </>}
+    </div>
+  </Dialog>
 }

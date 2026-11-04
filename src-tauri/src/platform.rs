@@ -1,412 +1,555 @@
+use crate::settings;
+use crate::system::{self, powershell, powershell_json, powershell_literal};
+use crate::types::{
+    Connection, ElevationStatus, Network, NetworkDetails, NetworkSnapshot, PlatformCapabilities,
+};
 use std::collections::HashMap;
-use std::process::Command;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-use regex::Regex;
-use crate::types::{Connection, ElevationStatus, Network, NetworkDetails};
+use std::time::Duration;
+pub mod linux;
+pub mod macos;
+#[cfg(windows)]
+pub mod nlm;
+#[cfg(windows)]
+pub mod windows;
 
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-#[cfg(target_os = "windows")]
+pub fn run_cmd_output(program: &str, arguments: &[&str]) -> String {
+    system::run(program, arguments).unwrap_or_default()
+}
+#[cfg(windows)]
+#[link(name = "shell32")]
+unsafe extern "system" {
+    fn IsUserAnAdmin() -> i32;
+}
+#[cfg(windows)]
 #[link(name = "psapi")]
 unsafe extern "system" {
-    fn EmptyWorkingSet(h_process: isize) -> i32;
+    fn EmptyWorkingSet(process: isize) -> i32;
 }
-
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 #[link(name = "kernel32")]
 unsafe extern "system" {
     fn GetCurrentProcess() -> isize;
 }
 
-pub fn trim_working_set() {
-    #[cfg(target_os = "windows")]
-    unsafe {
-        let handle = GetCurrentProcess();
-        EmptyWorkingSet(handle);
-    }
-}
-
-pub fn run_cmd_output(cmd: &str, args: &[&str]) -> String {
-    let mut command = Command::new(cmd);
-    command.args(args);
-    #[cfg(target_os = "windows")]
-    command.creation_flags(CREATE_NO_WINDOW);
-
-    command.output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-        .unwrap_or_default()
-}
-
 pub fn is_admin() -> bool {
-    #[cfg(target_os = "windows")]
+    #[cfg(windows)]
     {
-        let mut cmd = Command::new("fltmc");
-        cmd.creation_flags(CREATE_NO_WINDOW);
-        cmd.status().map(|s| s.success()).unwrap_or(false)
+        unsafe { IsUserAnAdmin() != 0 }
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(unix)]
     {
         unsafe { libc::geteuid() == 0 }
     }
 }
-
-pub fn is_task_configured() -> bool {
-    #[cfg(target_os = "windows")]
+pub fn trim_working_set() -> Result<(), String> {
+    #[cfg(windows)]
     {
-        let mut cmd = Command::new("schtasks.exe");
-        cmd.args(["/query", "/tn", "NetMask_Elevated"]);
-        cmd.creation_flags(CREATE_NO_WINDOW);
-        cmd.status().map(|s| s.success()).unwrap_or(false)
+        if unsafe { EmptyWorkingSet(GetCurrentProcess()) } != 0 {
+            Ok(())
+        } else {
+            Err("Windows could not trim the process working set".into())
+        }
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(windows))]
     {
-        false
+        Err("This platform manages process memory automatically".into())
     }
 }
 
+pub fn show_existing_instance() {
+    #[cfg(windows)]
+    {
+        #[link(name = "user32")]
+        unsafe extern "system" {
+            fn FindWindowW(class: *const u16, title: *const u16) -> *mut std::ffi::c_void;
+            fn ShowWindow(window: *mut std::ffi::c_void, command: i32) -> i32;
+            fn SetForegroundWindow(window: *mut std::ffi::c_void) -> i32;
+        }
+        let title: Vec<u16> = "NetMask".encode_utf16().chain(Some(0)).collect();
+        unsafe {
+            let window = FindWindowW(std::ptr::null(), title.as_ptr());
+            if !window.is_null() {
+                ShowWindow(window, 9);
+                SetForegroundWindow(window);
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = system::run(
+            "osascript",
+            &["-e", "tell application \"NetMask\" to activate"],
+        );
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = system::run("wmctrl", &["-a", "NetMask"]);
+    }
+}
+pub fn is_guid(value: &str) -> bool {
+    let value = value
+        .strip_prefix('{')
+        .and_then(|v| v.strip_suffix('}'))
+        .unwrap_or(value);
+    value.len() == 36
+        && value.bytes().enumerate().all(|(i, b)| {
+            if matches!(i, 8 | 13 | 18 | 23) {
+                b == b'-'
+            } else {
+                b.is_ascii_hexdigit()
+            }
+        })
+}
+pub fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
+    if value.len() % 2 != 0 || !value.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("Invalid Wi-Fi SSID encoding".into());
+    }
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            u8::from_str_radix(std::str::from_utf8(pair).map_err(|_| "Invalid SSID")?, 16)
+                .map_err(|_| "Invalid SSID".into())
+        })
+        .collect()
+}
+pub fn band_from_mhz(frequency: u32) -> &'static str {
+    match frequency {
+        5925..=7125 => "6 GHz",
+        4900..=5895 => "5 GHz",
+        2400..=2500 => "2.4 GHz",
+        _ => "Wi-Fi",
+    }
+}
+pub fn map_radio_to_generation(radio: &str, band: &str) -> String {
+    let radio = radio.to_ascii_lowercase();
+    if radio.contains("802.11be") {
+        "Wi-Fi 7"
+    } else if radio.contains("802.11ax") {
+        if band.starts_with('6') {
+            "Wi-Fi 6E"
+        } else {
+            "Wi-Fi 6"
+        }
+    } else if radio.contains("802.11ac") {
+        "Wi-Fi 5"
+    } else if radio.contains("802.11n") {
+        "Wi-Fi 4"
+    } else {
+        "Wi-Fi"
+    }
+    .into()
+}
+pub fn get_channel_frequency(channel: i32, band: &str) -> String {
+    let mhz = if band.starts_with('6') && (1..=233).contains(&channel) {
+        Some(5950 + channel * 5)
+    } else if band.starts_with("2.4") && channel == 14 {
+        Some(2484)
+    } else if band.starts_with("2.4") && (1..=13).contains(&channel) {
+        Some(2407 + channel * 5)
+    } else if band.starts_with('5') && (32..=177).contains(&channel) {
+        Some(5000 + channel * 5)
+    } else {
+        None
+    };
+    mhz.map(|mhz| format!("{:.3} GHz (Ch {channel})", mhz as f64 / 1000.0))
+        .unwrap_or_else(|| band.into())
+}
+pub fn mask_bssid(value: &str, mode: &str) -> String {
+    let parts: Vec<_> = value.split([':', '-']).collect();
+    if mode == "full"
+        || parts.len() != 6
+        || parts
+            .iter()
+            .any(|p| p.len() != 2 || !p.bytes().all(|b| b.is_ascii_hexdigit()))
+    {
+        "XX:XX:XX:XX:XX:XX".into()
+    } else {
+        format!(
+            "{}:{}:{}:••:••:••",
+            parts[0].to_uppercase(),
+            parts[1].to_uppercase(),
+            parts[2].to_uppercase()
+        )
+    }
+}
+fn raw_connection() -> Result<Option<Connection>, String> {
+    #[cfg(windows)]
+    {
+        windows::get_connection()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        linux::get_connection()
+    }
+    #[cfg(target_os = "macos")]
+    {
+        macos::get_connection()
+    }
+}
+pub fn get_network_snapshot(backup: &HashMap<String, String>) -> Result<NetworkSnapshot, String> {
+    let (mut connection, connection_error) = match raw_connection() {
+        Ok(connection) => (connection, None),
+        Err(error) => (None, Some(error)),
+    };
+    #[cfg(windows)]
+    let mut networks = windows::get_networks(backup, connection.as_ref())?;
+    #[cfg(target_os = "linux")]
+    let mut networks = linux::get_networks(backup, connection.as_ref())?;
+    #[cfg(target_os = "macos")]
+    let mut networks = macos::get_networks(backup, connection.as_ref())?;
+    networks.sort_by(|a, b| {
+        b.live
+            .cmp(&a.live)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    if let Some(current) = connection.as_mut() {
+        if let Some(network) = networks.iter().find(|network| {
+            network.live
+                && network.network_type == "wifi"
+                && (network
+                    .profile
+                    .as_ref()
+                    .is_some_and(|p| p == &current.profile)
+                    || network.original_name == current.ssid)
+        }) {
+            current.name = network.name.clone();
+            current.network_guid = Some(network.guid.clone());
+        }
+    }
+    Ok(NetworkSnapshot {
+        networks,
+        connection,
+        connection_error,
+    })
+}
+pub fn get_current_connection() -> Result<Option<Connection>, String> {
+    let snapshot = get_network_snapshot(&settings::read_backup()?)?;
+    if let Some(error) = snapshot.connection_error {
+        Err(error)
+    } else {
+        Ok(snapshot.connection)
+    }
+}
+pub fn get_networks(backup: &HashMap<String, String>) -> Result<Vec<Network>, String> {
+    get_network_snapshot(backup).map(|snapshot| snapshot.networks)
+}
+pub fn get_network_details(guid: &str) -> Result<NetworkDetails, String> {
+    let snapshot = get_network_snapshot(&settings::read_backup()?)?;
+    let network = snapshot
+        .networks
+        .iter()
+        .find(|n| n.guid == guid || n.profile.as_deref() == Some(guid))
+        .ok_or("Network details are no longer available. Refresh the network list.")?;
+    let current = snapshot
+        .connection
+        .as_ref()
+        .filter(|c| network.live && c.network_guid.as_deref() == Some(network.guid.as_str()));
+    let bssid = current.and_then(|c| c.bssid.clone()).unwrap_or_default();
+    let settings = settings::get_settings();
+    Ok(NetworkDetails {
+        guid: network.guid.clone(),
+        masked_bssid: (!bssid.is_empty()).then(|| mask_bssid(&bssid, &settings.bssid_mask_mode)),
+        bssid,
+        channel: current.and_then(|c| c.channel).unwrap_or(0),
+        auth: current
+            .and_then(|c| c.auth.clone())
+            .unwrap_or_else(|| "Unavailable".into()),
+        band: current.map(|c| c.band.clone()).unwrap_or_else(|| {
+            if network.network_type == "wifi" {
+                "Saved Wi-Fi"
+            } else {
+                "Ethernet"
+            }
+            .into()
+        }),
+        frequency: current
+            .and_then(|c| c.frequency.clone())
+            .unwrap_or_else(|| "Unavailable".into()),
+        generation: current.and_then(|c| c.generation.clone()),
+        signal_dbm: current.and_then(|c| c.signal_dbm),
+        snr: current.and_then(|c| c.snr),
+        radio_type: current.and_then(|c| c.radio_type.clone()),
+        rx_rate_mbps: current.and_then(|c| c.rx_rate_mbps),
+        tx_rate_mbps: current.and_then(|c| c.tx_rate_mbps),
+        last_connected: if network.live {
+            "Active now"
+        } else {
+            "Saved profile"
+        }
+        .into(),
+    })
+}
+pub fn rename_with_mode(
+    guid: &str,
+    new_name: &str,
+    current_name: Option<&str>,
+    allow_prompt: bool,
+) -> Result<(), String> {
+    settings::validate_display_name(new_name)?;
+    if let Some(expected) = current_name {
+        let networks = get_networks(&settings::read_backup()?)?;
+        if !networks
+            .iter()
+            .any(|network| network.guid == guid && network.name == expected)
+        {
+            return Err("The network name changed. Refresh before applying a new name.".into());
+        }
+    }
+    #[cfg(windows)]
+    windows::rename(guid, new_name, allow_prompt)?;
+    #[cfg(target_os = "linux")]
+    linux::rename(guid, new_name, current_name, allow_prompt)?;
+    #[cfg(target_os = "macos")]
+    macos::rename(guid, new_name, current_name, allow_prompt)?;
+    let networks = get_networks(&settings::read_backup()?)?;
+    if networks
+        .iter()
+        .any(|n| n.guid == guid && n.name == new_name)
+    {
+        Ok(())
+    } else {
+        Err("The operating system did not confirm the new display name. The original name is still saved.".into())
+    }
+}
+pub fn rename_network(
+    guid: &str,
+    new_name: &str,
+    current_name: Option<&str>,
+) -> Result<(), String> {
+    rename_with_mode(guid, new_name, current_name, true)
+}
+pub fn reconnect_network(profile: Option<&str>) -> Result<bool, String> {
+    let profile = profile
+        .filter(|p| !p.trim().is_empty())
+        .ok_or("Choose a saved Wi-Fi profile before reconnecting")?;
+    #[cfg(windows)]
+    {
+        system::run("netsh", &["wlan", "connect", &format!("name={profile}")])?;
+        for _ in 0..10 {
+            if windows::get_connection()?.is_some_and(|connection| connection.profile == profile) {
+                return Ok(true);
+            }
+            std::thread::sleep(Duration::from_millis(300));
+        }
+        Err("Windows has not confirmed the Wi-Fi connection".into())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        system::run("nmcli", &["connection", "up", "uuid", profile])?;
+        Ok(true)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let interface = macos::wifi_interface()?;
+        system::run("networksetup", &["-setairportnetwork", &interface, profile])?;
+        Ok(true)
+    }
+}
+pub fn get_capabilities() -> PlatformCapabilities {
+    let windows = cfg!(windows);
+    let managed = !cfg!(target_os = "linux") || system::run("nmcli", &["--version"]).is_ok();
+    PlatformCapabilities {
+        platform: std::env::consts::OS.into(),
+        network_rename: managed,
+        wifi_sharing: managed,
+        dns_configuration: managed,
+        mac_randomization: windows,
+        netbios_control: windows,
+        roaming_tuning: windows,
+        elevation_task: windows,
+        gpu_control: false,
+    }
+}
+pub fn is_task_configured() -> bool {
+    cfg!(windows) && system::run("schtasks.exe", &["/query", "/tn", "NetMask_Elevated"]).is_ok()
+}
 pub fn get_elevation_status() -> ElevationStatus {
     let elevated = is_admin();
-    let task_cfg = is_task_configured();
-    let tier = if task_cfg {
-        "task"
-    } else if elevated {
-        "broker"
-    } else {
-        "jit"
-    };
-
+    let task = is_task_configured();
     ElevationStatus {
         is_elevated: elevated,
-        silent_elevation_enabled: true,
-        task_configured: task_cfg,
-        tier: tier.into(),
+        silent_elevation_enabled: settings::get_settings().silent_elevation,
+        task_configured: task,
+        tier: if elevated {
+            "admin"
+        } else if task {
+            "task"
+        } else {
+            "jit"
+        }
+        .into(),
     }
 }
-
 pub fn setup_silent_elevation() -> (bool, String) {
-    #[cfg(target_os = "windows")]
-    {
-        let exe = std::env::current_exe().unwrap_or_default().to_string_lossy().to_string();
-        if is_admin() {
-            let mut cmd = Command::new("schtasks.exe");
-            cmd.args(["/create", "/tn", "NetMask_Elevated", "/tr", &format!("\"{}\"", exe), "/rl", "HIGHEST", "/sc", "ONLOGON", "/f"]);
-            cmd.creation_flags(CREATE_NO_WINDOW);
-            if cmd.status().map(|s| s.success()).unwrap_or(false) {
-                (true, "Silent elevation task registered successfully".into())
-            } else {
-                (false, "Failed to create elevation task".into())
-            }
-        } else {
-            let ps_cmd = format!(
-                "Start-Process -FilePath 'schtasks.exe' -ArgumentList @('/create', '/tn', 'NetMask_Elevated', '/tr', '\"`\"{}\"`\"', '/rl', 'HIGHEST', '/sc', 'ONLOGON', '/f') -Verb RunAs -Wait -WindowStyle Hidden",
-                exe
-            );
-            let mut cmd = Command::new("powershell.exe");
-            cmd.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_cmd]);
-            cmd.creation_flags(CREATE_NO_WINDOW);
-            let ok = cmd.status().map(|s| s.success()).unwrap_or(false);
-            if ok && is_task_configured() {
-                (true, "Zero-prompt task registered successfully".into())
-            } else {
-                (false, "Elevation prompt was canceled or failed".into())
-            }
-        }
+    if !cfg!(windows) {
+        return (
+            false,
+            "Scheduled elevation tasks are available only on Windows".into(),
+        );
     }
-    #[cfg(not(target_os = "windows"))]
-    {
-        (true, "Platform manages elevation natively".into())
-    }
-}
-
-pub fn remove_silent_elevation() -> (bool, String) {
-    #[cfg(target_os = "windows")]
-    {
-        let mut cmd = Command::new("schtasks.exe");
-        cmd.args(["/delete", "/tn", "NetMask_Elevated", "/f"]);
-        cmd.creation_flags(CREATE_NO_WINDOW);
-        let ok = cmd.status().map(|s| s.success()).unwrap_or(false);
-        (ok, if ok { "Task removed".into() } else { "Task does not exist or deletion failed".into() })
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        (true, "Removed".into())
-    }
-}
-
-pub fn elevate() {
-    #[cfg(target_os = "windows")]
-    {
+    let result: Result<(), String> = (|| {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let user =
+            powershell_json("[Security.Principal.WindowsIdentity]::GetCurrent().User.Value")?
+                .as_str()
+                .ok_or("Cannot determine the current Windows user")?
+                .to_owned();
+        let script = format!(
+            "$action = New-ScheduledTaskAction -Execute {} -Argument '--handoff'; $principal = New-ScheduledTaskPrincipal -UserId {} -LogonType Interactive -RunLevel Highest; $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; Register-ScheduledTask -TaskName 'NetMask_Elevated' -Action $action -Principal $principal -Settings $settings -Force -ErrorAction Stop | Out-Null",
+            powershell_literal(&exe.to_string_lossy()),
+            powershell_literal(&user)
+        );
+        powershell(&script, !is_admin())?;
         if is_task_configured() {
-            let mut cmd = Command::new("schtasks.exe");
-            cmd.args(["/run", "/tn", "NetMask_Elevated"]);
-            cmd.creation_flags(CREATE_NO_WINDOW);
-            let _ = cmd.spawn();
-            std::process::exit(0);
+            Ok(())
         } else {
-            let exe = std::env::current_exe().unwrap_or_default().to_string_lossy().to_string();
-            let ps_cmd = format!("Start-Process -FilePath '{}' -Verb RunAs", exe);
-            let mut cmd = Command::new("powershell.exe");
-            cmd.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_cmd]);
-            cmd.creation_flags(CREATE_NO_WINDOW);
-            let _ = cmd.spawn();
-            std::process::exit(0);
+            Err("Windows did not confirm the elevation task".into())
         }
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        // Linux/macOS
+    })();
+    match result {
+        Ok(()) => (true, "On-demand elevation task registered".into()),
+        Err(error) => (false, error),
     }
 }
-
-pub fn map_radio_to_generation(radio: &str, band: &str) -> String {
-    let r = radio.to_lowercase();
-    let b = band.to_lowercase();
-    if r.contains("802.11be") {
-        "Wi-Fi 7".into()
-    } else if r.contains("802.11ax") {
-        if b.contains('6') { "Wi-Fi 6E".into() } else { "Wi-Fi 6".into() }
-    } else if r.contains("802.11ac") {
-        "Wi-Fi 5".into()
-    } else if r.contains("802.11n") {
-        "Wi-Fi 4".into()
-    } else if r.contains("802.11g") || r.contains("802.11a") || r.contains("802.11b") {
-        "Wi-Fi 3".into()
+pub fn remove_silent_elevation() -> (bool, String) {
+    if !cfg!(windows) {
+        return (
+            false,
+            "Scheduled elevation tasks are available only on Windows".into(),
+        );
+    }
+    match powershell(
+        "Unregister-ScheduledTask -TaskName 'NetMask_Elevated' -Confirm:$false -ErrorAction Stop",
+        !is_admin(),
+    ) {
+        Ok(_) => (true, "Elevation task removed".into()),
+        Err(error) => (false, error),
+    }
+}
+pub fn elevate() -> Result<(), String> {
+    if !cfg!(windows) {
+        return Err("This platform prompts for permission for each supported operation".into());
+    }
+    if is_admin() {
+        return Ok(());
+    }
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let exe = powershell_literal(&exe.to_string_lossy());
+    let script = if settings::get_settings().silent_elevation && is_task_configured() {
+        format!(
+            "$task = Get-ScheduledTask -TaskName 'NetMask_Elevated' -ErrorAction Stop; if ($task.Actions.Execute -ne {exe} -or $task.Actions.Arguments -ne '--handoff') {{ throw 'Elevation task needs to be registered again for this installation.' }}; Start-ScheduledTask -TaskName 'NetMask_Elevated' -ErrorAction Stop"
+        )
     } else {
-        "Wi-Fi".into()
-    }
-}
-
-pub fn get_channel_frequency(channel: i32, band: &str) -> String {
-    if channel <= 0 {
-        return if band.is_empty() { "Wi-Fi".into() } else { band.into() };
-    }
-    if (1..=14).contains(&channel) {
-        let mhz = 2407 + channel * 5;
-        format!("{:.3} GHz (Ch {})", mhz as f64 / 1000.0, channel)
-    } else if (32..=177).contains(&channel) {
-        let mhz = 5000 + channel * 5;
-        format!("{:.3} GHz (Ch {})", mhz as f64 / 1000.0, channel)
-    } else if band.contains('6') {
-        let mhz = 5950 + channel * 5;
-        format!("{:.3} GHz (Ch {})", mhz as f64 / 1000.0, channel)
-    } else {
-        format!("{} (Ch {})", band, channel)
-    }
-}
-
-pub fn get_current_connection() -> Option<Connection> {
-    #[cfg(target_os = "windows")]
-    {
-        let out = run_cmd_output("netsh", &["wlan", "show", "interfaces"]);
-        let re_ssid = Regex::new(r"(?m)^\s*SSID\s*:\s*(.+)$").ok()?;
-        let ssid_caps = re_ssid.captures(&out)?;
-        let ssid = ssid_caps.get(1)?.as_str().trim().to_string();
-
-        let get_field = |pat: &str| -> Option<String> {
-            Regex::new(pat).ok().and_then(|re| {
-                re.captures(&out).and_then(|c| c.get(1).map(|m| m.as_str().trim().to_string()))
-            })
-        };
-
-        let profile = get_field(r"(?m)^\s*Profile\s*:\s*(.+)$").unwrap_or_else(|| ssid.clone());
-        let bssid = get_field(r"(?m)^\s*BSSID\s*:\s*(.+)$");
-        let signal_str = get_field(r"(?m)^\s*Signal\s*:\s*(\d+)%").unwrap_or_default();
-        let signal: i32 = signal_str.parse().unwrap_or(0);
-        let radio = get_field(r"(?m)^\s*Radio type\s*:\s*(.+)$").unwrap_or_default();
-        let mut band = get_field(r"(?m)^\s*Band\s*:\s*(.+)$").unwrap_or_default();
-        if band.is_empty() {
-            band = if radio.contains("802.11ax") || radio.contains("802.11ac") {
-                "5 GHz".into()
-            } else if radio.contains("802.11g") || radio.contains("802.11n") {
-                "2.4 GHz".into()
-            } else {
-                "Wi-Fi".into()
-            };
-        }
-
-        let chan_str = get_field(r"(?m)^\s*Channel\s*:\s*(\d+)");
-        let channel = chan_str.and_then(|s| s.parse().ok());
-        let signal_dbm = Some(signal / 2 - 100);
-        let snr = Some(std::cmp::max(0, signal_dbm.unwrap_or(0) + 95));
-        let generation = Some(map_radio_to_generation(&radio, &band));
-        let frequency = channel.map(|ch| get_channel_frequency(ch, &band)).or(Some(band.clone()));
-
-        let rx_rate = get_field(r"(?m)^\s*Receive rate \(Mbps\)\s*:\s*([\d.]+)").and_then(|s| s.parse().ok());
-        let tx_rate = get_field(r"(?m)^\s*Transmit rate \(Mbps\)\s*:\s*([\d.]+)").and_then(|s| s.parse().ok());
-
-        Some(Connection {
-            name: if !profile.is_empty() { profile.clone() } else { ssid.clone() },
-            ssid,
-            profile,
-            signal,
-            signal_dbm,
-            snr,
-            channel,
-            frequency,
-            band,
-            generation,
-            radio_type: Some(radio),
-            bssid,
-            rx_rate_mbps: rx_rate,
-            tx_rate_mbps: tx_rate,
-        })
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        None
-    }
-}
-
-pub fn get_networks(backup: &HashMap<String, String>) -> Vec<Network> {
-    let mut nets = Vec::new();
-    let conn = get_current_connection();
-
-    #[cfg(target_os = "windows")]
-    {
-        let reg_out = run_cmd_output("reg", &["query", "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList\\Profiles", "/s"]);
-        if reg_out.contains("HKEY_LOCAL_MACHINE") {
-            let re_guid = Regex::new(r"\{[0-9A-Fa-f-]{36}\}").unwrap();
-            let re_pn = Regex::new(r"(?m)ProfileName\s+REG_SZ\s+(.+)$").unwrap();
-            let re_nt = Regex::new(r"(?m)NameType\s+REG_DWORD\s+0x([0-9a-fA-F]+)").unwrap();
-
-            for block in reg_out.split("HKEY_LOCAL_MACHINE") {
-                if let Some(gm) = re_guid.find(block) {
-                    let guid = gm.as_str().to_string();
-                    if let Some(pm) = re_pn.captures(block) {
-                        let profile_name = pm.get(1).unwrap().as_str().trim().to_string();
-                        let name_type = re_nt.captures(block)
-                            .and_then(|c| u32::from_str_radix(c.get(1).unwrap().as_str(), 16).ok())
-                            .unwrap_or(0);
-                        let net_type = if name_type == 71 { "wifi" } else { "ethernet" };
-                        let original = backup.get(&guid).cloned().unwrap_or_else(|| profile_name.clone());
-
-                        let is_live = if let Some(ref c) = conn {
-                            c.profile.eq_ignore_ascii_case(&profile_name)
-                                || c.ssid.eq_ignore_ascii_case(&profile_name)
-                                || c.profile.eq_ignore_ascii_case(&original)
-                                || c.ssid.eq_ignore_ascii_case(&original)
-                                || c.name.eq_ignore_ascii_case(&profile_name)
-                                || c.name.eq_ignore_ascii_case(&original)
-                        } else {
-                            false
-                        };
-
-                        nets.push(Network {
-                            guid: guid.clone(),
-                            name: profile_name.clone(),
-                            original_name: original.clone(),
-                            renamed: profile_name != original,
-                            live: is_live,
-                            network_type: net_type.into(),
-                        });
-                    }
-                }
-            }
-        }
-
-        // Fallback: netsh wlan show profiles
-        if nets.is_empty() {
-            let prof_out = run_cmd_output("netsh", &["wlan", "show", "profiles"]);
-            let re_prof = Regex::new(r":\s*(.+)$").unwrap();
-            for line in prof_out.lines() {
-                if line.contains("All User Profile") || line.contains("User Profile") {
-                    if let Some(cap) = re_prof.captures(line) {
-                        let name = cap.get(1).unwrap().as_str().trim().to_string();
-                        let guid = format!("wlan-{}", name);
-                        let orig = backup.get(&guid).cloned().unwrap_or_else(|| name.clone());
-                        let is_live = conn.as_ref().map(|c| c.profile.eq_ignore_ascii_case(&name) || c.ssid.eq_ignore_ascii_case(&name)).unwrap_or(false);
-                        nets.push(Network {
-                            guid: guid.clone(),
-                            name: name.clone(),
-                            original_name: orig.clone(),
-                            renamed: name != orig,
-                            live: is_live,
-                            network_type: "wifi".into(),
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    nets
-}
-
-pub fn get_network_details(guid: &str) -> NetworkDetails {
-    let conn = get_current_connection();
-    let bssid = conn.as_ref().and_then(|c| c.bssid.clone()).unwrap_or_else(|| "00:00:00:00:00:00".into());
-    let channel = conn.as_ref().and_then(|c| c.channel).unwrap_or(0);
-    let band = conn.as_ref().map(|c| c.band.clone()).unwrap_or_else(|| "Wi-Fi".into());
-    let freq = conn.as_ref().and_then(|c| c.frequency.clone()).unwrap_or_else(|| band.clone());
-    let gen_val = conn.as_ref().and_then(|c| c.generation.clone());
-    let sig_dbm = conn.as_ref().and_then(|c| c.signal_dbm);
-    let snr = conn.as_ref().and_then(|c| c.snr);
-    let radio = conn.as_ref().and_then(|c| c.radio_type.clone());
-    let rx = conn.as_ref().and_then(|c| c.rx_rate_mbps);
-    let tx = conn.as_ref().and_then(|c| c.tx_rate_mbps);
-
-    // masked BSSID
-    let masked = if bssid.len() >= 8 {
-        format!("XX:XX:XX:{}", &bssid[9..])
-    } else {
-        bssid.clone()
+        format!(
+            "Start-Process -FilePath {exe} -ArgumentList '--handoff' -Verb RunAs -PassThru -WindowStyle Hidden | Out-Null"
+        )
     };
-
-    NetworkDetails {
-        guid: guid.into(),
-        bssid,
-        masked_bssid: Some(masked),
-        channel,
-        auth: "WPA2-Personal".into(),
-        band,
-        frequency: freq,
-        generation: gen_val,
-        signal_dbm: sig_dbm,
-        snr,
-        radio_type: radio,
-        rx_rate_mbps: rx,
-        tx_rate_mbps: tx,
-        last_connected: "Active Now".into(),
-    }
+    let script = system::encode_powershell(&format!("$ErrorActionPreference = 'Stop'; {script}"));
+    system::run_checked(
+        "powershell.exe",
+        &[
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-EncodedCommand",
+            &script,
+        ],
+        Duration::from_secs(120),
+    )?;
+    Ok(())
 }
-
-pub fn rename_network(guid: &str, new_name: &str, _current_display_name: Option<&str>) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
+pub fn set_launch_on_startup(enabled: bool) -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    #[cfg(windows)]
     {
-        if guid.starts_with('{') && guid.ends_with('}') {
-            let key = format!("HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList\\Profiles\\{}", guid);
-            let mut cmd = Command::new("reg");
-            cmd.args(["add", &key, "/v", "ProfileName", "/t", "REG_SZ", "/d", new_name, "/f"]);
-            cmd.creation_flags(CREATE_NO_WINDOW);
-            if cmd.status().map(|s| s.success()).unwrap_or(false) {
-                return Ok(());
-            }
-            // If failed due to permissions, try elevated
-            let ps_script = format!("reg add '{}' /v ProfileName /t REG_SZ /d '{}' /f", key, new_name.replace('\'', "''"));
-            let mut el_cmd = Command::new("powershell.exe");
-            el_cmd.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &format!("Start-Process cmd -ArgumentList '/c {}' -Verb RunAs -Wait -WindowStyle Hidden", ps_script)]);
-            el_cmd.creation_flags(CREATE_NO_WINDOW);
-            let _ = el_cmd.status();
+        let key = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+        if enabled {
+            system::run(
+                "reg.exe",
+                &[
+                    "add",
+                    key,
+                    "/v",
+                    "NetMask",
+                    "/t",
+                    "REG_SZ",
+                    "/d",
+                    &format!("\"{}\" --minimized", exe.to_string_lossy()),
+                    "/f",
+                ],
+            )?;
+        } else if system::run("reg.exe", &["query", key, "/v", "NetMask"]).is_ok() {
+            system::run("reg.exe", &["delete", key, "/v", "NetMask", "/f"])?;
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let directory = std::path::PathBuf::from(
+            std::env::var_os("HOME").ok_or("Home directory is unavailable")?,
+        )
+        .join("Library/LaunchAgents");
+        let file = directory.join("com.billighost.netmask.plist");
+        if enabled {
+            std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+            let plist = format!(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist version=\"1.0\"><dict><key>Label</key><string>com.billighost.netmask</string><key>ProgramArguments</key><array><string>{}</string><string>--minimized</string></array><key>RunAtLoad</key><true/></dict></plist>",
+                system::xml_escape(&exe.to_string_lossy())
+            );
+            std::fs::write(file, plist).map_err(|e| e.to_string())?;
+        } else if file.exists() {
+            std::fs::remove_file(file).map_err(|e| e.to_string())?;
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let base = std::env::var_os("XDG_CONFIG_HOME")
+            .map(std::path::PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .unwrap_or_else(|| {
+                std::path::PathBuf::from(std::env::var_os("HOME").unwrap_or_default())
+                    .join(".config")
+            });
+        let directory = base.join("autostart");
+        let file = directory.join("netmask.desktop");
+        if enabled {
+            std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+            let quoted = exe
+                .to_string_lossy()
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('$', "\\$")
+                .replace(char::from(96), &format!("\\{}", char::from(96)))
+                .replace('%', "%%");
+            std::fs::write(file, format!("[Desktop Entry]\nType=Application\nName=NetMask\nExec=\"{quoted}\" --minimized\nTerminal=false\nX-GNOME-Autostart-enabled=true\n")).map_err(|e| e.to_string())?;
+        } else if file.exists() {
+            std::fs::remove_file(file).map_err(|e| e.to_string())?;
         }
     }
     Ok(())
 }
-
-pub fn reconnect_network(profile: Option<&str>) -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        let _ = run_cmd_output("netsh", &["wlan", "disconnect"]);
-        std::thread::sleep(std::time::Duration::from_millis(600));
-        if let Some(prof) = profile {
-            let out = run_cmd_output("netsh", &["wlan", "connect", &format!("name={}", prof)]);
-            return out.contains("successfully") || out.contains("completed");
-        }
-        true
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn radio_bands_do_not_confuse_overlapping_6ghz_channels() {
+        assert_eq!(get_channel_frequency(37, "6 GHz"), "6.135 GHz (Ch 37)");
+        assert_eq!(get_channel_frequency(14, "2.4 GHz"), "2.484 GHz (Ch 14)");
+        assert_eq!(band_from_mhz(6115), "6 GHz");
+        assert_eq!(map_radio_to_generation("802.11ax", "6 GHz"), "Wi-Fi 6E");
+        assert_eq!(map_radio_to_generation("802.11ax", "2.4 GHz"), "Wi-Fi 6");
     }
-    #[cfg(not(target_os = "windows"))]
-    {
-        true
+    #[test]
+    fn identifiers_and_bssid_masks_reject_malformed_input() {
+        assert!(is_guid("{00112233-4455-6677-8899-aabbccddeeff}"));
+        assert!(!is_guid("{../../Software}"));
+        assert!(!is_guid("{zz112233-4455-6677-8899-aabbccddeeff}"));
+        assert_eq!(
+            mask_bssid("9A:B3:E0:F6:36:C3", "partial"),
+            "9A:B3:E0:••:••:••"
+        );
+        assert_eq!(mask_bssid("bad", "partial"), "XX:XX:XX:XX:XX:XX");
+        assert_eq!(decode_hex("436166C3A9").unwrap(), "Café".as_bytes());
     }
 }

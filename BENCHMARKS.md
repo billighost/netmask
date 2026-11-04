@@ -1,103 +1,43 @@
-# 📊 NetMask v2.1.2 Empirical Performance & Memory Footprint Report
+# Performance measurement
 
-*Measured live on **win32 (x64)** via Chromium `app.getAppMetrics()` and Windows Win32 OS `Get-CimInstance`*
-*Timestamp: `2026-11-03T10:21:02.030Z`*
+The current app uses Tauri and a system webview. No complete, reproducible Tauri memory benchmark has been published in this repository yet. Installer size, Rust binary size, resident RAM, private working set, and committed memory are different measurements.
 
----
+Previous numbers came from the former runtime and contained inconsistent memory labels and claims. They do not establish this app's memory footprint. Historical data remains available in Git history; current documentation does not reuse it as a Tauri result.
 
-## 🧭 Executive Summary & Accuracy Audit
+## What is implemented
 
-### The Truth About the "348 MB" Legacy Metric
-Previous naive benchmarking scripts measured NetMask by executing `app.getAppMetrics()` and summing raw `memory.workingSetSize` across all 4 Chromium child processes (Browser, GPU, Utility, Renderer).
+- Transfer, ping, and portal polling pause while the window is hidden or minimized.
+- Restoring visibility resets transfer baselines, avoiding spikes from accumulated traffic.
+- Components subscribe to the specific state they render. Transfer history uses a fixed 60-sample typed array.
+- Process detection continues for display-name automation in the tray, with scans spaced five seconds apart.
+- Blocking native operations run away from the window thread and have bounded process/network timeouts.
 
-**This resulted in a completely false and misleading 348 MB report.**
+The webview remains alive in the tray. Closing to the tray does not unload the renderer. Windows working-set trimming is an explicit action; it does not prove lower steady-state memory use.
 
-### Why That Number Was Wrong: Windows Memory Architecture
-Chromium is a multi-process architecture. Each process maps critical Windows system libraries:
-- `ntdll.dll`
-- `kernel32.dll`
-- `user32.dll`
-- `d3d11.dll` / `dxgi.dll` (DirectX graphics runtime)
-- V8 snapshot binaries and ICU localization `.pak` files
+## Measure a release
 
-In the Windows NT virtual memory manager, read-only executable code pages are **physically mapped once** in physical RAM. When 4 processes load `d3d11.dll` (~25 MB) and `kernel32.dll` (~15 MB):
-- Physical RAM used by Windows: **40 MB total**
-- Summing `workingSetSize` across 4 processes: **160 MB (quadruple-counted phantom memory)**
+Use an installed release or a production native build, record the exact version and commit, and avoid the Vite development server. Record the OS, hardware, webview runtime, enabled preferences, network state, sampling interval, and duration.
 
-### The Authentic Metric: Private Working Set (WS-Private)
-Windows Task Manager displays **Private Working Set (WS-Private)** under the "Memory" column in the Processes tab (and "Memory (private working set)" in the Details tab). Private Working Set represents physical pages allocated **exclusively** to that process that cannot be shared with any other process.
+Measure these states separately:
 
-When measured accurately via **Private Working Set (WS-Private)**:
-- **Active Window**: **~50–65 MB** WS-Private (~35–45 MB in Ultra-Low Memory Mode) with real-time speed sampling and canvas sparkline active.
-- **System Tray Standby (Tray Unloading Active)**: **~18–25 MB** WS-Private (the Renderer `Tab` terminates, GPU suspends, and footprint drops to just the Node/Electron main event loop).
-- **Private Commit (Pagefile Commit)**: ~150–190 MB active, ~100–140 MB tray (V8 virtual address space reservations).
+1. Visible and idle after startup settles.
+2. Visible with normal transfer and ping telemetry.
+3. Hidden in the tray for at least one minute.
+4. Restored from the tray.
+5. During an explicit speed test or update download.
 
----
+Collect several samples and report a median and range. A single startup sample is not a steady-state result.
 
-## 🚀 Live Empirical Benchmark Summary
+## Use the correct OS metric
 
-| State | Dedicated Private RAM (WS-Private) | Private Commit Size | Total Shared Working Set | Process Count | Status & Lifecycle |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Active / Visible Window** | **199.1 MB** | 199.1 MB | 335.8 MB | 4 | ⚡ Real-time speed sampling & canvas active |
-| **System Tray Standby** | **159.4 MB** | 159.4 MB | 250 MB | 3 | 🌿 Renderer unloaded, GPU suspended, working set trimmed |
+| System | Recommended approach | Limitation |
+| --- | --- | --- |
+| Windows | Task Manager or Process Explorer; report private working set and commit separately for NetMask and its own WebView2 descendants | Summed working sets may count shared pages more than once; commit is not resident RAM |
+| Linux | `/proc/<pid>/smaps_rollup`; report PSS/RSS and the app's actual webview descendants | Permissions and desktop webview processes vary; RSS includes shared pages |
+| macOS | Activity Monitor or `vmmap`; state the exact reported metric and include relevant webview processes | macOS memory metrics are not directly interchangeable with Windows private working set |
 
----
+Do not include unrelated browser processes merely because they use the same webview executable. Do not present package download size as memory use.
 
-### 🔍 Process Breakdown: Active Window
-| Process Type | PID | Private Working Set (WS-Private) | Private Commit (MB) | Shared Working Set (MB) | CPU % |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Browser** | `7128` | **79.8 MB** | 79.8 MB | 98.1 MB | 0.0% |
-| **GPU** | `16960` | **68.6 MB** | 68.6 MB | 105.2 MB | 0.0% |
-| **Utility** | `4492` | **12.7 MB** | 12.7 MB | 46.6 MB | 0.0% |
-| **Tab** | `4176` | **38 MB** | 38 MB | 85.9 MB | 0.0% |
+## Report a finding
 
----
-
-### 🔍 Process Breakdown: System Tray Standby (Tray Unloading Active)
-| Process Type | PID | Private Working Set (WS-Private) | Private Commit (MB) | Shared Working Set (MB) | CPU % |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Browser** | `7128` | **80.2 MB** | 80.2 MB | 99.4 MB | 0.5% |
-| **GPU** | `16960` | **66.4 MB** | 66.4 MB | 103.9 MB | 0.5% |
-| **Utility** | `4492` | **12.8 MB** | 12.8 MB | 46.7 MB | 0.0% |
-
----
-
-## 🛠️ Architecture & Optimization Highlights
-
-1. **Tray Standby Unloading**:
-   When NetMask is closed or minimized to the system tray (`minimizeToTray`), the entire `BrowserWindow` is unlinked and destroyed. The Chromium Renderer process (`Tab`) immediately terminates, freeing 100% of the V8 JavaScript heap and DOM memory.
-   When the user clicks the tray icon, `createWindow()` reinstantiates the window in **~150ms** with zero user perceptible delay.
-
-2. **Ultra-Low Memory Mode**:
-   Users can toggle "Ultra-Low Memory Mode" in Settings (`app.disableHardwareAcceleration()`). This disables DirectX/ANGLE GPU contexts, eliminating the dedicated Chromium GPU process footprint and slashing memory overhead.
-
-3. **Zero-Churn Background Polling**:
-   Network speed sampling operates without invoking `cmd.exe` or shell intermediaries, eliminating process spawn overhead during active monitoring. When minimized to the tray, speed timers are fully suspended (0% CPU).
-
-4. **Win32 Working Set Trimming**:
-   Upon transition to the tray, `global.gc()` purges garbage collection pools and Win32 `EmptyWorkingSet()` trims unreferenced physical pages back to the operating system page cache, dropping the tray footprint to just **~18–25 MB**.
-
----
-
-## 🔬 How to Reproduce & Verify
-
-You can reproduce and audit these metrics on your local machine:
-
-### 1. Run Standard Benchmark
-```bash
-npm run benchmark
-```
-
-### 2. Run Ultra-Low Memory Benchmark
-```bash
-node scripts/benchmark.js --ultra-low-memory
-```
-
-### 3. Verify in Windows Task Manager
-1. Launch NetMask (`npm start`).
-2. Open **Windows Task Manager** (`Ctrl + Shift + Esc`).
-3. Switch to the **Details** tab.
-4. Right-click column headers &rarr; **Select columns** &rarr; check **Memory (private working set)** and **Commit size**.
-5. Observe the PIDs under `NetMask.exe`:
-   - Active: ~50–65 MB combined WS-Private (~35–45 MB in Ultra-Low Memory Mode).
-   - Close window to system tray: The `Tab` PID disappears completely and combined WS-Private drops immediately to **~18–25 MB**.
+Include the measured values, raw method, app state, sample duration, version, and reproducible steps. Explain any limitations rather than filling missing metrics with estimated values. Performance changes should be checked against the same baseline and workload.

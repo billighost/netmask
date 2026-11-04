@@ -1,749 +1,194 @@
 import React, { useEffect, useState } from 'react'
+import { shallow } from 'zustand/shallow'
 import { useStore } from '../../store'
-import {
-  SunIcon, MoonIcon, CloseIcon, RestoreIcon, LockIcon, ShieldIcon, BoltIcon,
-  KeyboardIcon, GithubIcon, MailIcon, ExternalLinkIcon, CheckmarkCircleIcon,
-  DownloadIcon, SparkleIcon, RefreshIcon, WifiIcon, DnsIcon, RadioIcon
-} from '../../icons'
-import type { UpdateInfo, DownloadProgress } from '../../types'
+import { SunIcon, MoonIcon, NetMaskLogoIcon, CloseIcon, RestoreIcon, LockIcon, ShieldIcon, BoltIcon, KeyboardIcon, GithubIcon, MailIcon, DownloadIcon, RefreshIcon, DnsIcon, RadioIcon } from '../../icons'
+import { Dialog } from '../Dialog/Dialog'
+import { Toggle } from '../Controls/Toggle'
+import { Select } from '../Controls/Select'
+import { HelpTip } from '../Controls/HelpTip'
+import { copyText, refreshNetworks, toggleStreamer } from '../../network-actions'
+import { checkAppUpdate, downloadAppUpdate, installAppUpdate, openWebPage } from '../../update-actions'
+import { errorMessage } from '../../network-state'
 import styles from './SettingsModal.module.css'
 
-const Toggle: React.FC<{ on: boolean; onChange: (v: boolean) => void; label: string; sub?: string }> = ({ on, onChange, label, sub }) => (
-  <div className={styles.toggleRow} onClick={() => onChange(!on)}>
-    <div>
-      <div className={styles.toggleLabel}>{label}</div>
-      {sub && <div className={styles.toggleSub}>{sub}</div>}
-    </div>
-    <button
-      className={`${styles.toggle} ${on ? styles.toggleOn : ''}`}
-      onClick={e => { e.stopPropagation(); onChange(!on) }}
-      role="switch"
-      aria-checked={on}
-    >
-      <span className={styles.toggleThumb} />
-    </button>
-  </div>
-)
-
 export const SettingsModal: React.FC = () => {
-  const {
-    settingsOpen, setSettingsOpen, settings, updateSetting,
-    networks, addToast, streamerStatus, elevationStatus, setElevationStatus,
-    setShortcutsModalOpen, downloadProgress, setDownloadProgress,
-    downloadedVersion, setDownloadedVersion,
-    setPrivacyCloakModalOpen, setDnsModalOpen, setRoamingModalOpen
-  } = useStore()
-
+  const { open, settings, capabilities, elevation, streamer, streamerBusy, update, downloading, progress, downloaded } = useStore(state => ({
+    open: state.settingsOpen, settings: state.settings, capabilities: state.capabilities, elevation: state.elevationStatus,
+    streamer: state.streamerStatus, streamerBusy: state.streamerBusy, update: state.updateInfo, downloading: state.updateDownloading, progress: state.downloadProgress, downloaded: state.downloadedVersion
+  }), shallow)
+  const [version, setVersion] = useState('…')
+  const [checking, setChecking] = useState(false)
+  const [updateStatus, setUpdateStatus] = useState('')
   const [elevating, setElevating] = useState(false)
   const [trimming, setTrimming] = useState(false)
-
-  // Update checking state
-  const [checkingUpdate, setCheckingUpdate] = useState(false)
-  const [updateResult, setUpdateResult] = useState<UpdateInfo | 'up-to-date' | 'error' | null>(null)
-  const [downloading, setDownloading] = useState(false)
-  const [appVersion, setAppVersion] = useState('2.1.2')
-
+  const [dataBusy, setDataBusy] = useState(false)
+  const [maskName, setMaskName] = useState(settings.streamerMaskName)
+  const [tab, setTab] = useState<'general' | 'privacy' | 'tools' | 'about'>('general')
+  const state = useStore.getState()
+  useEffect(() => { window.nm.getVersion().then(setVersion).catch(() => setVersion('Unavailable')) }, [])
+  useEffect(() => { setMaskName(settings.streamerMaskName) }, [settings.streamerMaskName])
   useEffect(() => {
-    window.nm.getVersion?.().then(setAppVersion).catch(() => {})
-    window.nm.getUpdateStatus?.().then((status) => {
-      if (!status) return
-      if (status.downloadedVersion) setDownloadedVersion(status.downloadedVersion)
-      if (status.progress) setDownloadProgress(status.progress)
-    }).catch(() => {})
-  }, [])
+    if (open) window.nm.getElevationStatus().then(state.setElevationStatus).catch(error => state.addToast(errorMessage(error), 'error'))
+  }, [open])
+  if (!open) return null
 
-  useEffect(() => {
-    if (settingsOpen) {
-      window.nm.getElevationStatus().then(status => {
-        setElevationStatus(status)
-      }).catch(() => {})
-    }
-  }, [settingsOpen])
-
-  useEffect(() => {
-    const unsubProgress = window.nm.onUpdateProgress((p) => {
-      setDownloadProgress(p)
-    })
-    const unsubDownloaded = window.nm.onUpdateDownloaded((info) => {
-      setDownloading(false)
-      setDownloadedVersion(info.version)
-      setDownloadProgress(null)
-      addToast(`NetMask v${info.version} downloaded and ready to install!`, 'success')
-    })
-    return () => {
-      unsubProgress()
-      unsubDownloaded()
-    }
-  }, [])
-
-  if (!settingsOpen) return null
-
-  const handleSetupTaskElevation = async () => {
+  const taskAction = async (remove = false) => {
     if (elevating) return
     setElevating(true)
     try {
-      const res = await window.nm.setupSilentElevation()
-      const updated = await window.nm.getElevationStatus()
-      setElevationStatus(updated)
-      if (res.success) {
-        addToast(res.message || 'Zero-prompt elevation task configured!', 'success')
-      } else {
-        addToast(res.message || 'Failed to configure elevation task', 'error')
-      }
-    } catch {
-      addToast('Error configuring silent elevation', 'error')
-    } finally {
-      setElevating(false)
-    }
+      const result = await (remove ? window.nm.removeSilentElevation() : window.nm.setupSilentElevation())
+      if (!result.success) throw new Error(result.message || 'The elevation task could not be configured')
+      state.setElevationStatus(await window.nm.getElevationStatus())
+      state.addToast(result.message || 'Elevation task updated', 'success')
+    } catch (error) { state.addToast(errorMessage(error), 'error') }
+    finally { setElevating(false) }
   }
-
-  const handleRemoveTaskElevation = async () => {
-    if (elevating) return
+  const elevate = async () => {
     setElevating(true)
-    try {
-      const res = await window.nm.removeSilentElevation()
-      const updated = await window.nm.getElevationStatus()
-      setElevationStatus(updated)
-      if (res.success) {
-        addToast(res.message || 'Elevation task removed. Falling back to On-Demand JIT.', 'info')
-      } else {
-        addToast(res.message || 'Failed to remove elevation task', 'error')
-      }
-    } catch {
-      addToast('Error removing elevation task', 'error')
-    } finally {
-      setElevating(false)
-    }
+    try { await window.nm.elevate() } catch (error) { state.addToast(errorMessage(error), 'error') }
+    finally { setElevating(false) }
   }
-
-  const handleTrimMemory = async () => {
-    if (trimming) return
+  const trim = async () => {
     setTrimming(true)
-    try {
-      await window.nm.trimMemory()
-      addToast('Working set memory trimmed to minimum', 'success')
-    } catch {
-      addToast('Failed to trim memory', 'error')
-    } finally {
-      setTrimming(false)
-    }
+    try { await window.nm.trimMemory(); state.addToast('Windows working set trimmed', 'success') }
+    catch (error) { state.addToast(errorMessage(error), 'error') }
+    finally { setTrimming(false) }
   }
-
-  const handleExport = async () => {
+  const exportBackup = async () => {
+    setDataBusy(true)
     try {
       const json = await window.nm.exportBackup()
-      const blob = new Blob([json], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'netmask-backup.json'
-      a.click()
-      URL.revokeObjectURL(url)
-      addToast('Backup exported', 'success')
-    } catch { addToast('Export failed', 'error') }
+      const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
+      const link = document.createElement('a')
+      link.href = url; link.download = 'netmask-backup.json'; link.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      state.addToast('Backup exported', 'success')
+    } catch (error) { state.addToast(errorMessage(error), 'error') }
+    finally { setDataBusy(false) }
   }
-
-  const handleImport = () => {
+  const importBackup = () => {
     const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.json'
+    input.type = 'file'; input.accept = '.json,application/json'
     input.onchange = async () => {
       const file = input.files?.[0]
       if (!file) return
+      setDataBusy(true)
       try {
-        const text = await file.text()
-        await window.nm.importBackup(text)
-        addToast('Backup imported', 'success')
-      } catch { addToast('Import failed — invalid file', 'error') }
+        if (file.size > 1024 * 1024) throw new Error('Choose a backup smaller than 1 MiB')
+        await window.nm.importBackup(await file.text())
+        await refreshNetworks(true)
+        state.addToast('Recovery records imported', 'success')
+      } catch (error) { state.addToast(errorMessage(error), 'error') }
+      finally { setDataBusy(false) }
     }
     input.click()
   }
-
-  const handleRestoreAll = async () => {
-    const renamedCount = networks.filter(n => n.renamed).length
-    if (!renamedCount) { addToast('No renamed networks to restore', 'info'); return }
-    try {
-      await window.nm.restoreAll()
-      const [nets, conn] = await Promise.all([window.nm.getNetworks(), window.nm.getConnection()])
-      useStore.getState().setNetworks(nets)
-      useStore.getState().setConnection(conn)
-      addToast(`Restored ${renamedCount} network${renamedCount > 1 ? 's' : ''}`, 'success')
-    } catch { addToast('Restore all failed', 'error') }
+  const restoreAll = async () => {
+    if (!state.networks.some(network => network.renamed)) { state.addToast('No renamed networks to restore', 'info'); return }
+    setDataBusy(true)
+    try { await window.nm.restoreAll(); state.addToast('Original display names restored', 'success') }
+    catch (error) { state.addToast(errorMessage(error), 'error') }
+    finally { await refreshNetworks(true).catch(error => state.addToast(errorMessage(error), 'error')); setDataBusy(false) }
   }
-
-  const handleCheckUpdate = async () => {
-    if (checkingUpdate) return
-    setCheckingUpdate(true)
-    setUpdateResult(null)
-    try {
-      const found = await window.nm.checkUpdate()
-      if (found) {
-        setUpdateResult(found)
-        addToast(`NetMask v${found.version} is available!`, 'info')
-      } else {
-        setUpdateResult('up-to-date')
-        addToast("You're on the latest version of NetMask", 'success')
-      }
-    } catch {
-      setUpdateResult('error')
-      addToast('Could not reach GitHub release server', 'error')
-    } finally {
-      setCheckingUpdate(false)
-    }
+  const checkUpdate = async () => {
+    setChecking(true); setUpdateStatus('')
+    try { const info = await checkAppUpdate(); setUpdateStatus(info ? 'A new release is available.' : 'You are running the latest release.') }
+    catch (error) { setUpdateStatus(errorMessage(error, 'The update check could not finish')) }
+    finally { setChecking(false) }
   }
-
-  const handleDownloadUpdate = async (info: UpdateInfo) => {
-    if (downloading) return
-    setDownloading(true)
-    addToast(`Downloading NetMask v${info.version}...`, 'info')
-    try {
-      const res = await window.nm.downloadUpdate(info.downloadUrl)
-      if (res.success) {
-        if (res.alreadyDownloaded || (res.filePath && !res.inProgress)) {
-          setDownloadedVersion(info.version)
-          addToast(`NetMask v${info.version} downloaded and ready to install!`, 'success')
-        } else if (res.inProgress) {
-          addToast(`Downloading NetMask v${info.version}...`, 'info')
-        } else {
-          setDownloadedVersion(info.version)
-          addToast(`NetMask v${info.version} downloaded!`, 'success')
-        }
-      } else {
-        addToast(res.error || 'Failed to download update', 'error')
-      }
-    } catch (err: any) {
-      addToast(err?.message || 'Download error', 'error')
-    } finally {
-      if (!downloadProgress) {
-        setDownloading(false)
-      }
-    }
+  const saveMask = async () => {
+    const name = maskName.trim()
+    if (!name || Array.from(name).length > 128 || /[\x00-\x1f\x7f]/.test(name)) { state.addToast('Use a name of up to 128 characters without control characters.', 'error'); setMaskName(settings.streamerMaskName); return }
+    if (name !== settings.streamerMaskName) await state.updateSetting('streamerMaskName', name)
   }
-
-  const handleInstallUpdate = async () => {
-    try {
-      addToast('Launching updater and restarting NetMask...', 'info')
-      await window.nm.installUpdate()
-    } catch (err: any) {
-      addToast(err?.message || 'Failed to launch installer', 'error')
-    }
-  }
-
-  const handleCopyEmail = () => {
-    navigator.clipboard.writeText('bb2010ng@gmail.com')
-    addToast('Copied bb2010ng@gmail.com to clipboard!', 'success')
-  }
-
-  const intervalOptions = [
-    { label: '10 seconds', value: 10 },
-    { label: '30 seconds', value: 30 },
-    { label: '1 minute', value: 60 },
-    { label: 'Off', value: 0 },
+  const toolButtons = [
+    { label: 'Keyboard controls', icon: <KeyboardIcon size={14} />, action: () => state.setShortcutsModalOpen(true), disabled: false },
+    { label: 'Device identity', icon: <ShieldIcon size={14} />, action: () => state.setPrivacyCloakModalOpen(true), disabled: false },
+    { label: 'Compare DNS resolvers', icon: <DnsIcon size={14} />, action: () => state.setDnsModalOpen(true), disabled: false },
+    { label: 'Wi-Fi adapter settings', icon: <RadioIcon size={14} />, action: () => state.setRoamingModalOpen(true), disabled: capabilities?.roamingTuning === false }
   ]
-
-  const maskStyleOptions = [
-    { label: 'Partial (9A:B3:E0:••:••:••)', value: 'partial' as const },
-    { label: 'Full (XX:XX:XX:XX:XX:XX)', value: 'full' as const },
-  ]
-
-  const tier = elevationStatus?.tier || (elevationStatus?.isElevated ? 'broker' : 'jit')
-
-  return (
-    <div className={styles.scrim} onClick={() => setSettingsOpen(false)}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
-        <div className={styles.header}>
-          <div className={styles.title}>Settings</div>
-          <button className={styles.closeBtn} onClick={() => setSettingsOpen(false)}>
-            <CloseIcon size={14} />
-          </button>
-        </div>
-
-        <div className={styles.body}>
-          {/* Controls & Keyboard Mapping */}
-          <div className={styles.section}>
-            <div className={styles.sectionLabel}>Keyboard Controls & Shortcuts</div>
-            <div className={styles.actionCard}>
-              <div className={styles.actionCardHeader}>
-                <div>
-                  <div className={styles.toggleLabel}>Keyboard Shortcuts Mapping</div>
-                  <div className={styles.toggleSub}>
-                    Customize hotkeys for renaming, navigation, streamer cloak, and diagnostics
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                className={`${styles.elevBtn} ${styles.elevBtnPrimary}`}
-                onClick={() => setShortcutsModalOpen(true)}
-              >
-                <KeyboardIcon size={14} />
-                <span>Configure Keyboard Controls</span>
-              </button>
-            </div>
+  const ready = downloaded && (!update || downloaded === update.version)
+  const tabs = [{ id: 'general' as const, label: 'General' }, { id: 'privacy' as const, label: 'Privacy' }, { id: 'tools' as const, label: 'Tools' }, { id: 'about' as const, label: 'About' }]
+  const intervalOptions = [10, 30, 60, 0].map(value => ({ value, label: value ? 'Every ' + value + ' seconds' : 'Only when I refresh' }))
+  if (![10, 30, 60, 0].includes(settings.autoRefreshInterval)) intervalOptions.push({ value: settings.autoRefreshInterval, label: 'Every ' + settings.autoRefreshInterval + ' seconds' })
+  return <Dialog label="Settings" onClose={() => state.setSettingsOpen(false)} scrimClass={styles.scrim} modalClass={styles.modal}>
+    <header className={styles.header}><div><p className={styles.eyebrow}>MAKE YOURSELF AT HOME</p><h2 className={styles.title}>Settings</h2></div>
+      <button type="button" className={styles.closeBtn} aria-label="Close settings" onClick={() => state.setSettingsOpen(false)}><CloseIcon size={15} /></button></header>
+    <nav className={styles.tabs} role="tablist" aria-label="Settings sections">{tabs.map((item, index) => <button key={item.id} id={'settings-tab-' + item.id} type="button"
+      role="tab" aria-selected={tab === item.id} aria-controls="settings-panel" tabIndex={tab === item.id ? 0 : -1} className={styles.tab + (tab === item.id ? ' ' + styles.tabActive : '')}
+      onClick={() => setTab(item.id)} onKeyDown={event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+        event.preventDefault(); event.stopPropagation()
+        const target = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+        setTab(tabs[target].id); document.getElementById('settings-tab-' + tabs[target].id)?.focus()
+      }}>{item.label}</button>)}</nav>
+    <div id="settings-panel" role="tabpanel" aria-labelledby={'settings-tab-' + tab} className={styles.body}>
+      {tab === 'general' && <>
+        <section className={styles.section}><h3 className={styles.sectionTitle}>Everyday use</h3>
+          <Toggle label="Close to the tray" sub="Keep NetMask available in the background." help="Closing the window leaves NetMask in the system tray. Display-name privacy can keep running there; live speed and ping readings pause. Choose Quit in the tray menu to exit." on={settings.minimizeToTray} onChange={value => void state.updateSetting('minimizeToTray', value)} />
+          <Toggle label="Open when I sign in" sub="Start quietly in the system tray." on={settings.launchOnStartup} onChange={value => void state.updateSetting('launchOnStartup', value)} />
+          <div className={styles.field}><label className="nm-field-label" htmlFor="auto-refresh-interval">Refresh saved networks <HelpTip label="Network refresh">Checks the saved profiles and current connection again. This does not reconnect your Wi-Fi. Live transfer readings have their own update timer.</HelpTip></label>
+            <Select id="auto-refresh-interval" label="Refresh saved networks" value={settings.autoRefreshInterval} options={intervalOptions} onChange={value => void state.updateSetting('autoRefreshInterval', value)} /></div>
+        </section>
+        <section className={styles.section}><h3 className={styles.sectionTitle}>Look and feel</h3>
+          <div className={styles.themeRow}><span className="nm-field-label">Fieldnotes theme</span><div className={styles.themeGroup} role="group" aria-label="Fieldnotes theme">
+            {(['light', 'dark'] as const).map(theme => <button key={theme} type="button" className={styles.themeButton + (settings.theme === theme ? ' ' + styles.themeActive : '')} aria-pressed={settings.theme === theme} onClick={() => void state.updateSetting('theme', theme)}>{theme === 'light' ? <SunIcon size={13} /> : <MoonIcon size={13} />}{theme === 'light' ? 'Paper' : 'Dark'}</button>)}
+          </div></div>
+          <Toggle label="Show Ethernet networks" sub="Include saved wired connections in the list." on={settings.showEthernet} onChange={value => void state.updateSetting('showEthernet', value)} />
+        </section>
+        <p className={styles.note}>Your choices save as you change them.</p>
+      </>}
+      {tab === 'privacy' && <>
+        <section className={styles.section}><h3 className={styles.sectionTitle}>Names on your screen</h3>
+          <p className={styles.note}>{streamer.isCloaked ? 'Your private display name is active.' : streamer.detectedApp ? streamer.detectedApp + ' is running.' : 'Your usual display name is showing.'}</p>
+          <button type="button" className={styles.button} disabled={capabilities?.networkRename === false || streamerBusy} onClick={() => void toggleStreamer()}><ShieldIcon size={13} />{streamerBusy ? 'Updating…' : streamer.isCloaked ? 'Restore my display name' : 'Use my private name'}</button>
+          {streamer.error && <p className="nm-error" role="status">{streamer.error}</p>}
+          <Toggle label="Use a private name with broadcast apps" sub="Recognizes OBS, Discord, Zoom, Teams, and Twitch Studio." help="Looks for supported apps that are running. It cannot tell whether you are actually recording or broadcasting. After the app closes, NetMask waits briefly before restoring your previous name." on={settings.autoCloakStreamer} disabled={capabilities?.networkRename === false} onChange={value => void state.updateSetting('autoCloakStreamer', value)} />
+          <div className={styles.field}><label className="nm-field-label" htmlFor="streamer-mask-name">My private display name</label><input id="streamer-mask-name" className={styles.textInput} maxLength={256} value={maskName} onChange={event => setMaskName(event.target.value)} onBlur={() => void saveMask()} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() } }} /></div>
+        </section>
+        <section className={styles.section}><h3 className={styles.sectionTitle}>Router address</h3>
+          <Toggle label="Hide the access point address" sub="Mask the router's BSSID inside NetMask." help="The BSSID identifies a Wi-Fi radio. Hiding it only changes what NetMask displays; it does not alter the router or the network." on={settings.bssidCloaking} onChange={value => void state.updateSetting('bssidCloaking', value)} />
+          <div className={styles.field}><label className="nm-field-label" htmlFor="bssid-mask-style">How much to hide</label><Select id="bssid-mask-style" label="How much of the access point address to hide" value={settings.bssidMaskMode} disabled={!settings.bssidCloaking}
+            options={[{ value: 'partial', label: 'The last half', description: 'Keep the manufacturer prefix visible.' }, { value: 'full', label: 'The whole address', description: 'Hide every part of the address.' }]} onChange={value => void state.updateSetting('bssidMaskMode', value)} /></div>
+        </section>
+      </>}
+      {tab === 'tools' && <>
+        <section className={styles.section}><h3 className={styles.sectionTitle}>Take a closer look</h3><div className={styles.toolGrid}>
+          {toolButtons.map(tool => <button key={tool.label} type="button" className={styles.toolButton} disabled={tool.disabled} onClick={tool.action}>{tool.icon}<span>{tool.label}</span><span aria-hidden="true">↗</span></button>)}
+        </div></section>
+        <section className={styles.section}><h3 className={styles.sectionTitle}>Keep your originals <HelpTip label="Recovery records">Before a name changes, NetMask saves the original on this device. Export makes a copy you can keep. Import adds recovery records and keeps originals that are already saved.</HelpTip></h3>
+          <p className={styles.note}>Original names stay on this device. Keep a backup somewhere you trust.</p>
+          <div className={styles.buttonGroup}><button type="button" className={styles.button} disabled={dataBusy} onClick={() => void exportBackup()}>Export backup</button><button type="button" className={styles.button} disabled={dataBusy} onClick={importBackup}>Import backup</button></div>
+          <button type="button" className={styles.button + ' ' + styles.danger} disabled={dataBusy || capabilities?.networkRename === false} onClick={() => void restoreAll()}><RestoreIcon size={13} />{dataBusy ? 'Working…' : 'Restore all original names'}</button>
+        </section>
+        {capabilities?.elevationTask && <section className={styles.section}><h3 className={styles.sectionTitle}>Windows permissions <HelpTip label="Administrator permission">Windows protects saved network labels and some adapter settings. NetMask asks for permission when one of those changes needs it. A registered task is an optional way to open an administrator copy.</HelpTip></h3>
+          <p className={styles.note}>{elevation?.isElevated ? 'NetMask has administrator permission.' : elevation?.taskConfigured ? 'Your permission task is registered.' : 'Windows asks when administrator permission is needed.'}</p>
+          <Toggle label="Use the registered permission task" sub="Open an administrator copy when you ask." on={settings.silentElevation} onChange={value => void state.updateSetting('silentElevation', value)} />
+          <div className={styles.buttonGroup}><button type="button" className={styles.button} disabled={elevating} onClick={() => void taskAction()}><LockIcon size={13} />{elevation?.taskConfigured ? 'Register again' : 'Register task'}</button>
+            {elevation?.taskConfigured && <button type="button" className={styles.button} disabled={elevating} onClick={() => void taskAction(true)}>Remove task</button>}
+            {!elevation?.isElevated && <button type="button" className={styles.button} disabled={elevating} onClick={() => void elevate()}>Run as administrator</button>}
           </div>
-
-          {/* Advanced Network & Identity Tools */}
-          <div className={styles.section}>
-            <div className={styles.sectionLabel}>Advanced Network & Privacy Tools</div>
-
-            <div className={styles.actionCard} style={{ marginBottom: '8px' }}>
-              <div className={styles.actionCardHeader}>
-                <div>
-                  <div className={styles.toggleLabel}>Hotspot Device Identity & Privacy Cloak</div>
-                  <div className={styles.toggleSub}>
-                    Control hardware MAC address randomization and silence NetBIOS UDP 137 broadcasts
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                className={`${styles.elevBtn} ${styles.elevBtnPrimary}`}
-                onClick={() => setPrivacyCloakModalOpen(true)}
-              >
-                <ShieldIcon size={14} />
-                <span>Open Privacy Cloak Suite</span>
-              </button>
-            </div>
-
-            <div className={styles.actionCard} style={{ marginBottom: '8px' }}>
-              <div className={styles.actionCardHeader}>
-                <div>
-                  <div className={styles.toggleLabel}>Fastest DNS Benchmarker & Switcher</div>
-                  <div className={styles.toggleSub}>
-                    Benchmark live latency to Cloudflare, Google, Quad9, and AdGuard, then apply in 1 click
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                className={styles.elevBtn}
-                onClick={() => setDnsModalOpen(true)}
-              >
-                <DnsIcon size={14} />
-                <span>Benchmark DNS Resolvers</span>
-              </button>
-            </div>
-
-            <div className={styles.actionCard}>
-              <div className={styles.actionCardHeader}>
-                <div>
-                  <div className={styles.toggleLabel}>Wi-Fi Roaming & Band Steering Tuner</div>
-                  <div className={styles.toggleSub}>
-                    Eliminate in-game ping spikes by tuning Preferred Band and Roaming Aggressiveness
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                className={styles.elevBtn}
-                onClick={() => setRoamingModalOpen(true)}
-              >
-                <RadioIcon size={14} />
-                <span>Tune Roaming & Band Steering</span>
-              </button>
-            </div>
+        </section>}
+        {capabilities?.platform === 'windows' && <section className={styles.section}><h3 className={styles.sectionTitle}>Memory <HelpTip label="Release unused memory">Asks Windows to trim NetMask's working set. Windows may bring that memory back when the app needs it; this does not change your network or promise lower memory use permanently.</HelpTip></h3>
+          <button type="button" className={styles.button} disabled={trimming} onClick={() => void trim()}><BoltIcon size={13} />{trimming ? 'Releasing…' : 'Release unused memory'}</button></section>}
+      </>}
+      {tab === 'about' && <>
+        <section className={styles.brandCard}><NetMaskLogoIcon size={48} /><div><h3>NetMask</h3><p>A little room for your network.</p><span>Version {version} · Fieldnotes + Orbit</span></div></section>
+        <section className={styles.authorCard}><div className={styles.authorHeading}><span className={styles.authorMonogram} aria-hidden="true">BB</span><div><p className={styles.eyebrow}>CREATOR & MAINTAINER</p><h3>Bello Bilal</h3></div></div>
+          <p className={styles.authorBio}>Made and maintained by Bello Bilal. Open source, under the MIT license.</p>
+          <div className={styles.authorLinks}><button type="button" onClick={() => void openWebPage('https://github.com/billighost/netmask')}><GithubIcon size={14} /><span>billighost/netmask</span><span aria-hidden="true">↗</span></button><button type="button" onClick={() => void copyText('bb2010ng@gmail.com', 'Maintainer email copied')}><MailIcon size={14} /><span>bb2010ng@gmail.com</span><span className={styles.copyLabel}>Copy</span></button></div>
+        </section>
+        <section className={styles.section}><h3 className={styles.sectionTitle}>Updates</h3>
+          <p className={styles.note}>{ready ? 'Version ' + downloaded + ' is ready to install.' : update ? 'Version ' + update.version + ' is available.' : updateStatus || 'Check for a new release on GitHub.'}</p>
+          {progress && <div className={styles.progressBox}><p>{progress.percent}% · {(progress.transferred / 1e6).toFixed(1)} of {(progress.total / 1e6).toFixed(1)} MB</p><progress aria-label="Update download" max={100} value={progress.percent} /></div>}
+          <div className={styles.buttonGroup}><button type="button" className={styles.button} disabled={checking || downloading} onClick={() => void checkUpdate()}><RefreshIcon size={13} />{checking ? 'Checking…' : 'Check for updates'}</button>
+            {ready ? <button type="button" className={styles.button + ' ' + styles.primary} onClick={() => void installAppUpdate()}><DownloadIcon size={13} />Open installer</button> : update && <button type="button" className={styles.button + ' ' + styles.primary} disabled={downloading} onClick={() => void downloadAppUpdate(update)}><DownloadIcon size={13} />{downloading ? 'Downloading…' : update.downloadUrl ? 'Download update' : 'View release'}</button>}
           </div>
-
-          {/* Software Updates */}
-          <div className={styles.section}>
-            <div className={styles.sectionLabel}>Updates & Releases</div>
-            <div className={styles.updateStatusCard}>
-              <div className={styles.updateRow}>
-                <div>
-                  <div className={styles.updateVersion}>NetMask v{appVersion}</div>
-                  <div className={styles.updateSub}>
-                    {downloadedVersion
-                      ? `Version v${downloadedVersion} is downloaded and ready to install!`
-                      : updateResult && typeof updateResult === 'object'
-                      ? `New update v${updateResult.version} available`
-                      : updateResult === 'up-to-date'
-                      ? "You're running the latest release"
-                      : updateResult === 'error'
-                      ? 'Update check failed — check network'
-                      : 'Checks GitHub releases for new updates'}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className={styles.elevBtn}
-                  disabled={checkingUpdate || downloading}
-                  onClick={handleCheckUpdate}
-                  title="Check GitHub for the latest release of NetMask"
-                >
-                  {checkingUpdate ? (
-                    <span className={styles.spinner} />
-                  ) : (
-                    <RefreshIcon size={13} />
-                  )}
-                  <span>{checkingUpdate ? 'Checking…' : 'Check for Updates'}</span>
-                </button>
-              </div>
-
-              {/* Progress bar during in-app update download */}
-              {downloadProgress && (
-                <div className={styles.progressBox}>
-                  <div className={styles.progressInfo}>
-                    <span>Downloading update: {downloadProgress.percent}%</span>
-                    <span>
-                      {(downloadProgress.transferred / (1024 * 1024)).toFixed(1)} MB /{' '}
-                      {(downloadProgress.total / (1024 * 1024)).toFixed(1)} MB
-                      {downloadProgress.bytesPerSecond > 0 &&
-                        ` (${(downloadProgress.bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s)`}
-                    </span>
-                  </div>
-                  <div className={styles.progressBarWrap}>
-                    <div
-                      className={styles.progressBarFill}
-                      style={{ width: `${downloadProgress.percent}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Downloaded state: prompt to install */}
-              {downloadedVersion && (
-                <div className={styles.btnRow}>
-                  <button
-                    type="button"
-                    className={`${styles.elevBtn} ${styles.elevBtnPrimary}`}
-                    onClick={handleInstallUpdate}
-                  >
-                    <DownloadIcon size={13} />
-                    <span>Restart & Install v{downloadedVersion}</span>
-                  </button>
-                </div>
-              )}
-
-              {/* Update Available Banner within Settings */}
-              {updateResult && typeof updateResult === 'object' && !downloadedVersion && (
-                <div className={styles.btnRow}>
-                  <button
-                    type="button"
-                    className={`${styles.elevBtn} ${styles.elevBtnPrimary}`}
-                    disabled={downloading}
-                    onClick={() => handleDownloadUpdate(updateResult)}
-                  >
-                    {downloading ? <span className={styles.spinner} /> : <DownloadIcon size={13} />}
-                    <span>{downloading ? 'Downloading…' : `Update to v${updateResult.version}`}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.elevBtn}
-                    onClick={() => window.nm.openReleaseUrl(updateResult.url)}
-                  >
-                    <ExternalLinkIcon size={12} />
-                    <span>View Notes</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Privilege & Cascading Elevation */}
-          <div className={styles.section}>
-            <div className={styles.sectionLabel}>Privilege & Elevation</div>
-            <div className={styles.badgeRow}>
-              <div className={styles.toggleLabel}>Cascading Architecture</div>
-              <span className={`${styles.badge} ${
-                tier === 'task' ? styles.badgeSuccess : tier === 'broker' ? styles.badgeSuccess : styles.badgeWarning
-              }`}>
-                {tier === 'task'
-                  ? 'Zero-Prompt Task Configured'
-                  : tier === 'broker'
-                  ? 'Elevated Broker Active'
-                  : 'On-Demand JIT Elevation'}
-              </span>
-            </div>
-
-            <Toggle
-              label="Silent Admin Elevation"
-              sub="Automatically elevate via Windows Task Scheduler without UAC prompts"
-              on={settings.silentElevation}
-              onChange={v => updateSetting('silentElevation', v)}
-            />
-
-            <div className={styles.btnRow}>
-              <button
-                type="button"
-                className={`${styles.elevBtn} ${!elevationStatus?.taskConfigured ? styles.elevBtnPrimary : ''}`}
-                disabled={elevating}
-                onClick={handleSetupTaskElevation}
-              >
-                <LockIcon size={13} />
-                <span>{elevationStatus?.taskConfigured ? 'Re-register Task' : 'Register Task (1-Click)'}</span>
-              </button>
-              {elevationStatus?.taskConfigured && !elevationStatus?.isElevated && (
-                <button
-                  type="button"
-                  className={`${styles.elevBtn} ${styles.elevBtnPrimary}`}
-                  onClick={() => window.nm.elevate()}
-                  title="Switch immediately to the elevated instance with zero prompts"
-                >
-                  <BoltIcon size={13} />
-                  <span>Elevate Silently</span>
-                </button>
-              )}
-              {elevationStatus?.taskConfigured && (
-                <button
-                  type="button"
-                  className={styles.elevBtn}
-                  disabled={elevating}
-                  onClick={handleRemoveTaskElevation}
-                >
-                  <span>Remove Task</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Streamer Safe Mode */}
-          <div className={styles.section}>
-            <div className={styles.sectionLabel}>Streamer Safe & Privacy Mode</div>
-
-            <div className={styles.badgeRow}>
-              <div className={styles.toggleLabel}>Broadcast Software</div>
-              <span className={`${styles.badge} ${streamerStatus.detectedApp ? styles.badgePurple : styles.badgeMuted}`}>
-                {streamerStatus.detectedApp ? `● ${streamerStatus.detectedApp} Detected` : 'No broadcast app active'}
-              </span>
-            </div>
-
-            <div className={styles.badgeRow}>
-              <div className={styles.toggleLabel}>Manual Network Cloak</div>
-              <button
-                type="button"
-                className={`${styles.elevBtn} ${streamerStatus.isCloaked ? styles.elevBtnPrimary : ''}`}
-                onClick={async () => {
-                  try {
-                    const s = await window.nm.toggleStreamerCloak()
-                    useStore.getState().setStreamerStatus(s)
-                    const [nets, conn] = await Promise.all([window.nm.getNetworks(), window.nm.getConnection()])
-                    useStore.getState().setNetworks(nets)
-                    useStore.getState().setConnection(conn)
-                    addToast(s.isCloaked ? 'Stream Safe Cloak Activated' : 'Stream Safe Cloak Deactivated', 'info')
-                  } catch {}
-                }}
-              >
-                <ShieldIcon size={13} />
-                <span>{streamerStatus.isCloaked ? 'Cloaked (Click to Uncloak)' : 'Cloak Network Now'}</span>
-              </button>
-            </div>
-
-            <Toggle
-              label="Auto-Cloak on Stream"
-              sub="Automatically mask network name when OBS, Discord, Zoom, Teams or Twitch Studio is running"
-              on={settings.autoCloakStreamer}
-              onChange={v => updateSetting('autoCloakStreamer', v)}
-            />
-
-            <div className={styles.inputRow}>
-              <div className={styles.toggleLabel}>Streamer Cloak Name</div>
-              <input
-                type="text"
-                className={styles.textInput}
-                maxLength={40}
-                value={settings.streamerMaskName}
-                placeholder="StreamSafe-Fiber-Pro"
-                onChange={e => updateSetting('streamerMaskName', e.target.value)}
-              />
-            </div>
-
-            <Toggle
-              label="BSSID Cloaking"
-              sub="Mask router hardware MAC address to protect against WiGLE geolocation doxing"
-              on={settings.bssidCloaking}
-              onChange={v => updateSetting('bssidCloaking', v)}
-            />
-
-            <div className={styles.selectRow}>
-              <div className={styles.toggleLabel}>BSSID Mask Style</div>
-              <select
-                className={styles.select}
-                value={settings.bssidMaskMode}
-                onChange={e => updateSetting('bssidMaskMode', e.target.value as 'full' | 'partial')}
-              >
-                {maskStyleOptions.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Performance & Memory */}
-          <div className={styles.section}>
-            <div className={styles.sectionLabel}>Performance & Memory</div>
-            <Toggle
-              label="Ultra-Low Memory Mode"
-              sub="Disable GPU hardware acceleration completely. Reduces active RAM to <30-40MB. (Requires restart)"
-              on={settings.ultraLowMemory}
-              onChange={v => {
-                updateSetting('ultraLowMemory', v)
-                addToast(v ? 'Ultra-Low Memory Mode enabled (takes effect on restart)' : 'Standard GPU mode enabled (takes effect on restart)', 'info')
-              }}
-            />
-            <div className={styles.btnRow}>
-              <button
-                type="button"
-                className={styles.elevBtn}
-                disabled={trimming}
-                onClick={handleTrimMemory}
-                title="Trims process working set and runs immediate garbage collection"
-              >
-                <BoltIcon size={13} color="var(--accent)" />
-                <span>Trim Memory Now</span>
-              </button>
-            </div>
-          </div>
-
-          {/* General */}
-          <div className={styles.section}>
-            <div className={styles.sectionLabel}>General</div>
-            <Toggle
-              label="Launch on startup"
-              sub="Start NetMask when your computer starts"
-              on={settings.launchOnStartup}
-              onChange={v => updateSetting('launchOnStartup', v)}
-            />
-            <Toggle
-              label="Minimize to tray on close"
-              sub="Keep running lightweight in the system tray"
-              on={settings.minimizeToTray}
-              onChange={v => updateSetting('minimizeToTray', v)}
-            />
-            <div className={styles.selectRow}>
-              <div className={styles.toggleLabel}>Auto-refresh interval</div>
-              <select
-                className={styles.select}
-                value={settings.autoRefreshInterval}
-                onChange={e => updateSetting('autoRefreshInterval', Number(e.target.value))}
-              >
-                {intervalOptions.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Appearance */}
-          <div className={styles.section}>
-            <div className={styles.sectionLabel}>Appearance</div>
-            <div className={styles.themeRow}>
-              <div className={styles.toggleLabel}>Theme</div>
-              <div className={styles.themePill}>
-                <button
-                  className={`${styles.themeOpt} ${settings.theme === 'dark' ? styles.themeActive : ''}`}
-                  onClick={() => updateSetting('theme', 'dark')}
-                >
-                  <MoonIcon size={13} />
-                  <span>Dark</span>
-                </button>
-                <button
-                  className={`${styles.themeOpt} ${settings.theme === 'light' ? styles.themeActive : ''}`}
-                  onClick={() => updateSetting('theme', 'light')}
-                >
-                  <SunIcon size={13} />
-                  <span>Light</span>
-                </button>
-              </div>
-            </div>
-            <Toggle
-              label="Show Ethernet profiles"
-              sub="Display Ethernet entries in the network list"
-              on={settings.showEthernet}
-              onChange={v => updateSetting('showEthernet', v)}
-            />
-          </div>
-
-          {/* Data */}
-          <div className={styles.section}>
-            <div className={styles.sectionLabel}>Data & Backups</div>
-            <div className={styles.dataRow}>
-              <button className={styles.dataBtn} onClick={handleExport}>Export backup</button>
-              <button className={styles.dataBtn} onClick={handleImport}>Import backup</button>
-            </div>
-            <button className={`${styles.dataBtn} ${styles.dataBtnDanger}`} onClick={handleRestoreAll}>
-              <RestoreIcon size={13} />
-              Restore all networks to original names
-            </button>
-          </div>
-
-          {/* Author & Maintainer Section */}
-          <div className={styles.section}>
-            <div className={styles.sectionLabel}>Author & Developer</div>
-            <div className={styles.authorCard}>
-              <div className={styles.authorTop}>
-                <div className={styles.authorAvatar}>BB</div>
-                <div className={styles.authorDetails}>
-                  <div className={styles.authorNameRow}>
-                    <span className={styles.authorName}>Bello Bilal</span>
-                    <span className={styles.authorBadge}>Creator & Maintainer</span>
-                  </div>
-                  <div className={styles.authorBio}>
-                    Lead creator and developer of NetMask.
-                  </div>
-                </div>
-              </div>
-
-              <div className={styles.authorLinks}>
-                <div className={styles.authorLinkItem}>
-                  <div className={styles.authorLinkLeft}>
-                    <GithubIcon size={14} color="var(--text-secondary)" />
-                    <span>GitHub: <strong>billighost</strong></span>
-                  </div>
-                  <button
-                    type="button"
-                    className={styles.authorLinkBtn}
-                    onClick={() => window.nm.openReleaseUrl('https://github.com/billighost')}
-                    title="Open Bello Bilal's GitHub profile"
-                  >
-                    <span>View Profile</span>
-                    <ExternalLinkIcon size={11} />
-                  </button>
-                </div>
-
-                <div className={styles.authorLinkItem}>
-                  <div className={styles.authorLinkLeft}>
-                    <MailIcon size={14} color="var(--text-secondary)" />
-                    <span>Email: <strong>bb2010ng@gmail.com</strong></span>
-                  </div>
-                  <button
-                    type="button"
-                    className={styles.authorLinkBtn}
-                    onClick={handleCopyEmail}
-                    title="Copy maintainer email address"
-                  >
-                    <span>Copy Email</span>
-                  </button>
-                </div>
-
-                <div className={styles.authorLinkItem}>
-                  <div className={styles.authorLinkLeft}>
-                    <WifiIcon size={14} color="var(--accent)" />
-                    <span>Repository: <strong>billighost/netmask</strong></span>
-                  </div>
-                  <button
-                    type="button"
-                    className={styles.authorLinkBtn}
-                    onClick={() => window.nm.openReleaseUrl('https://github.com/billighost/netmask')}
-                    title="Open NetMask repository on GitHub"
-                  >
-                    <span>Visit Repo</span>
-                    <ExternalLinkIcon size={11} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* About */}
-          <div className={styles.section}>
-            <div className={styles.sectionLabel}>About</div>
-            <div className={styles.about}>
-              <div className={styles.aboutName}>NetMask <span>v{appVersion}</span></div>
-              <div className={styles.aboutSub}>Cross-platform network identity & RF diagnostics utility</div>
-            </div>
-          </div>
-        </div>
-      </div>
+          {update && <button type="button" className={styles.textButton} onClick={() => void openWebPage(update.url)}>Read release notes ↗</button>}
+        </section>
+        <button type="button" className={styles.textButton} onClick={() => void openWebPage('https://github.com/billighost/netmask/blob/main/LICENSE')}>Read the MIT license ↗</button>
+      </>}
+      <footer className={styles.footer}><button type="button" className={styles.button + ' ' + styles.primary} onClick={() => state.setSettingsOpen(false)}>Done</button></footer>
     </div>
-  )
+  </Dialog>
 }

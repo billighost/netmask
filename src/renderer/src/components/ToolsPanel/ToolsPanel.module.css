@@ -1,0 +1,6 @@
+.root { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 15px; border-top: 1px solid var(--border); }
+.tool { display: flex; align-items: center; gap: 8px; min-width: 0; text-align: left; padding: 12px 3px; border-bottom: 1px solid var(--border); color: var(--text-secondary); font-size: 10px; }
+.tool:hover:not(:disabled) { color: var(--accent); background: var(--bg-surface-hover); }
+.tool > span { overflow-wrap: anywhere; }
+.arrow { margin-left: auto; font-size: 11px; color: var(--note); }
+@media (min-width: 800px) { .root { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 25px; } }

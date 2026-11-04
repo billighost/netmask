@@ -1,183 +1,74 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { shallow } from 'zustand/shallow'
 import { useStore } from '../../store'
 import type { DnsResolverResult } from '../../types'
-import { CloseIcon, DnsIcon, BoltIcon, CheckIcon, RefreshIcon, ShieldIcon } from '../../icons'
-import styles from './DnsBenchmarkModal.module.css'
+import { CloseIcon, DnsIcon, BoltIcon, CheckIcon, RefreshIcon } from '../../icons'
+import { Dialog } from '../Dialog/Dialog'
+import { HelpTip } from '../Controls/HelpTip'
+import { errorMessage } from '../../network-state'
+import styles from '../Dialog/Panel.module.css'
 
 export const DnsBenchmarkModal: React.FC = () => {
-  const { dnsModalOpen, setDnsModalOpen, dnsResults, setDnsResults, addToast } = useStore()
+  const { open, results, capabilities } = useStore(state => ({
+    open: state.dnsModalOpen, results: state.dnsResults, capabilities: state.capabilities
+  }), shallow)
   const [benchmarking, setBenchmarking] = useState(false)
   const [applyingId, setApplyingId] = useState<string | null>(null)
-
+  const [error, setError] = useState<string | null>(null)
+  const request = useRef(0)
+  const state = useStore.getState()
   const runBenchmark = async () => {
-    if (benchmarking) return
-    setBenchmarking(true)
+    const id = ++request.current
+    setBenchmarking(true); setError(null); state.setDnsResults(null)
     try {
-      const results = await window.nm.benchmarkDns()
-      setDnsResults(results)
-      const fastest = results.find(r => r.isFastest)
-      if (fastest) {
-        addToast(`Fastest DNS: ${fastest.name} (${fastest.latencyMs} ms)`, 'success')
-      }
-    } catch {
-      addToast('Failed to benchmark DNS resolvers', 'error')
-    } finally {
-      setBenchmarking(false)
-    }
+      const values = await window.nm.benchmarkDns()
+      if (id === request.current) state.setDnsResults(values)
+    } catch (error) { if (id === request.current) setError(errorMessage(error)) }
+    finally { if (id === request.current) setBenchmarking(false) }
   }
-
   useEffect(() => {
-    if (dnsModalOpen && !dnsResults) {
-      runBenchmark()
-    }
-  }, [dnsModalOpen])
-
-  if (!dnsModalOpen) return null
-
+    if (open) void runBenchmark()
+    return () => { request.current++ }
+  }, [open])
+  if (!open) return null
   const handleApply = async (preset: DnsResolverResult) => {
-    if (applyingId) return
+    if (applyingId || benchmarking) return
     setApplyingId(preset.id)
     try {
-      const ok = await window.nm.applyDns(preset.id)
-      if (ok) {
-        addToast(`Applied ${preset.name} (${preset.primary}) successfully!`, 'success')
-        // Refresh benchmark list
-        const updated = await window.nm.benchmarkDns()
-        setDnsResults(updated)
-      } else {
-        addToast(`Failed to apply ${preset.name}. Elevation required.`, 'error')
-      }
-    } catch {
-      addToast('Error applying DNS settings', 'error')
-    } finally {
-      setApplyingId(null)
-    }
+      if (!await window.nm.applyDns(preset.id)) throw new Error('The operating system did not confirm the DNS setting')
+      state.addToast(preset.isDhcp ? 'Automatic DNS confirmed' : preset.name + ' DNS confirmed', 'success')
+      await runBenchmark()
+    } catch (error) { state.addToast(errorMessage(error), 'error') }
+    finally { setApplyingId(null) }
   }
-
-  const fastest = dnsResults?.find(r => r.isFastest)
-
-  return (
-    <div className={styles.scrim} onClick={() => setDnsModalOpen(false)}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
-        <div className={styles.header}>
-          <div className={styles.titleGroup}>
-            <DnsIcon size={16} color="var(--accent)" />
-            <span className={styles.title}>Fastest DNS Benchmarker & Switcher</span>
-          </div>
-          <button className={styles.closeBtn} onClick={() => setDnsModalOpen(false)}>
-            <CloseIcon size={14} />
-          </button>
-        </div>
-
-        <div className={styles.body}>
-          <div className={styles.topBar}>
-            <div className={styles.topInfo}>
-              <div className={styles.topTitle}>1-Click Low-Latency Resolver</div>
-              <div className={styles.topSub}>
-                Test live resolution response times and switch active adapter DNS in 1 click
-              </div>
-            </div>
-
-            <div className={styles.topActions}>
-              <button
-                type="button"
-                className={styles.benchBtn}
-                disabled={benchmarking}
-                onClick={runBenchmark}
-                title="Test real-time resolution speed to all DNS resolvers"
-              >
-                {benchmarking ? <span className={styles.spinner} /> : <RefreshIcon size={13} />}
-                <span>{benchmarking ? 'Testing…' : 'Benchmark'}</span>
-              </button>
-
-              {fastest && !fastest.isCurrent && (
-                <button
-                  type="button"
-                  className={styles.fastestBtn}
-                  disabled={Boolean(applyingId)}
-                  onClick={() => handleApply(fastest)}
-                  title={`Apply fastest DNS: ${fastest.name} (${fastest.latencyMs}ms)`}
-                >
-                  <BoltIcon size={13} />
-                  <span>Apply Fastest ({fastest.latencyMs}ms)</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className={styles.list}>
-            {dnsResults ? (
-              dnsResults.map((r) => {
-                const isApplying = applyingId === r.id
-                return (
-                  <div key={r.id} className={`${styles.item} ${r.isCurrent ? styles.itemCurrent : ''}`}>
-                    <div className={styles.itemLeft}>
-                      <div className={styles.itemNameRow}>
-                        <span className={styles.itemName}>{r.name}</span>
-                        {r.isCurrent && (
-                          <span className={styles.currentBadge}>
-                            <CheckIcon size={11} color="var(--green)" /> Active
-                          </span>
-                        )}
-                        {r.isFastest && (
-                          <span className={styles.fastestBadge}>
-                            <BoltIcon size={11} /> Fastest
-                          </span>
-                        )}
-                      </div>
-                      <div className={styles.itemSub}>{r.description}</div>
-                      <div className={styles.itemIps}>
-                        <span>Primary: <strong>{r.primary}</strong></span>
-                        {r.secondary && <span>Secondary: <strong>{r.secondary}</strong></span>}
-                      </div>
-                    </div>
-
-                    <div className={styles.itemRight}>
-                      <div className={styles.latencyWrap}>
-                        <span className={`${styles.latencyNum} ${
-                          r.latencyMs === null
-                            ? styles.latencyMuted
-                            : r.latencyMs <= 40
-                            ? styles.latencyGreen
-                            : r.latencyMs <= 100
-                            ? styles.latencyAmber
-                            : styles.latencyRed
-                        }`}>
-                          {r.latencyMs !== null ? `${r.latencyMs} ms` : '—'}
-                        </span>
-                      </div>
-
-                      <button
-                        type="button"
-                        className={`${styles.applyBtn} ${r.isCurrent ? styles.applyBtnCurrent : ''}`}
-                        disabled={r.isCurrent || Boolean(applyingId)}
-                        onClick={() => handleApply(r)}
-                      >
-                        {isApplying ? (
-                          <span className={styles.spinner} />
-                        ) : r.isCurrent ? (
-                          <>
-                            <CheckIcon size={12} />
-                            <span>In Use</span>
-                          </>
-                        ) : (
-                          <span>Apply</span>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )
-              })
-            ) : (
-              <div className={styles.loadingWrap}>
-                <div className={styles.spinner} />
-                <span>Benchmarking DNS resolvers (Cloudflare, Google, Quad9, AdGuard)...</span>
-              </div>
-            )}
-          </div>
+  const fastest = results?.find(result => result.isFastest && !result.isDhcp)
+  const canApply = capabilities?.dnsConfiguration !== false
+  return <Dialog label="Compare DNS" onClose={() => state.setDnsModalOpen(false)} scrimClass={styles.scrim} modalClass={styles.modal}>
+    <div className={styles.header}><div className={styles.titleGroup}><DnsIcon size={16} /><span className={styles.title}>Compare DNS</span></div>
+      <button className={styles.closeBtn} aria-label="Close DNS resolvers" onClick={() => state.setDnsModalOpen(false)}><CloseIcon size={14} /></button></div>
+    <div className={styles.body}>
+      <div className={styles.topBar}><div className={styles.topInfo}><div className={styles.topTitle}>A quicker lookup.<HelpTip label="DNS">DNS turns a website name into the address your computer connects to. This test compares how quickly each service answers. It does not change your connection until you choose Use DNS.</HelpTip></div>
+        <p className={styles.topSub}>Compare lookup times on this connection. A quicker answer can help sites begin loading sooner.</p></div>
+        <div className={styles.topActions}>
+          <button className={styles.benchBtn} disabled={benchmarking || Boolean(applyingId)} onClick={() => void runBenchmark()}><RefreshIcon size={13} />{benchmarking ? 'Testing…' : 'Test again'}</button>
+          {fastest && !fastest.isCurrent && canApply && <button className={styles.fastestBtn} disabled={Boolean(applyingId) || benchmarking} onClick={() => void handleApply(fastest)}><BoltIcon size={13} />Use fastest</button>}
         </div>
       </div>
+      {!canApply && <p className={styles.topSub}>DNS configuration is unavailable on this platform.</p>}
+      <div className={styles.list}>
+        {benchmarking ? <div className={styles.loadingWrap} role="status"><div className={styles.spinner} />Querying DNS resolvers…</div>
+          : error ? <div className="nm-error" role="alert">{error}</div>
+          : results?.map(result => <div key={result.id} className={styles.item + (result.isCurrent ? ' ' + styles.itemCurrent : '')}>
+            <div className={styles.itemLeft}><div className={styles.itemNameRow}><span className={styles.itemName}>{result.name}</span>
+              {result.isCurrent && <span className={styles.currentBadge}><CheckIcon size={11} />Current</span>}
+              {result.isFastest && <span className={styles.fastestBadge}>Fastest</span>}</div>
+              <p className={styles.itemSub}>{result.description}</p>
+              <div className={styles.itemIps}>{result.isDhcp ? 'Assigned by the network' : result.primary + (result.secondary ? ' · ' + result.secondary : '')}</div></div>
+            <div className={styles.itemRight}><div className={styles.latencyWrap}><span className={styles.latencyNum}>{result.latencyMs !== null ? result.latencyMs + ' ms' : result.isDhcp ? '—' : 'No response'}</span></div>
+              <button className={styles.applyBtn} disabled={!canApply || result.isCurrent || Boolean(applyingId)} onClick={() => void handleApply(result)}>
+                {applyingId === result.id ? 'Applying…' : result.isCurrent ? 'In use' : 'Use DNS'}</button></div>
+          </div>)}
+      </div>
     </div>
-  )
+  </Dialog>
 }
-

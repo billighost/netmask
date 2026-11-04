@@ -1,455 +1,82 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore, getSpeedRingBuffer } from '../../store'
-import { WifiIcon, InfoIcon, ArrowDownIcon, ArrowUpIcon, CopyIcon, EyeIcon, EyeOffIcon, ShieldIcon, DnsIcon, RadioIcon, QrCodeIcon, PulseIcon } from '../../icons'
+import { WifiIcon, ArrowDownIcon, ArrowUpIcon } from '../../icons'
+import { HelpTip } from '../Controls/HelpTip'
 import { SpeedInfoPanel } from '../SpeedInfoPanel/SpeedInfoPanel'
 import styles from './HeroCard.module.css'
 
-function formatSpeed(mbps: number, kbps?: number): { value: string; unit: string } {
-  if (mbps < 0.0005 && (!kbps || kbps < 1)) return { value: '0', unit: 'KB/s' }
-  if (mbps < 1) {
-    const kb = kbps !== undefined ? kbps : Math.round(mbps * 1024)
-    return { value: String(Math.max(1, kb)), unit: 'KB/s' }
-  }
-  if (mbps >= 1000) return { value: (mbps / 1024).toFixed(2), unit: 'GB/s' }
-  return { value: mbps >= 10 ? mbps.toFixed(1) : mbps.toFixed(2), unit: 'MB/s' }
-}
-
-function formatBssid(bssid?: string, cloaked = true, mode: 'full' | 'partial' = 'partial', peek = false): string {
-  if (!bssid || bssid === 'Saved Profile' || bssid === 'Active Interface' || bssid === 'Saved Network') {
-    return bssid || 'Connected'
-  }
-  if (!cloaked || peek) {
-    return bssid.toUpperCase()
-  }
-  if (mode === 'full') {
-    return 'XX:XX:XX:XX:XX:XX'
-  }
-  const parts = bssid.trim().split(/[:-]/)
-  if (parts.length === 6) {
-    return `${parts[0].toUpperCase()}:${parts[1].toUpperCase()}:${parts[2].toUpperCase()}:••:••:••`
-  }
-  return 'XX:XX:XX:XX:XX:XX'
+function speed(value: number): { value: string; unit: string } {
+  if (!Number.isFinite(value) || value <= 0) return { value: '0', unit: 'KB/s' }
+  if (value < 1) return { value: String(Math.round(value * 1000)), unit: 'KB/s' }
+  if (value >= 1000) return { value: (value / 1000).toFixed(2), unit: 'GB/s' }
+  return { value: value.toFixed(value >= 10 ? 1 : 2), unit: 'MB/s' }
 }
 
 const Sparkline: React.FC = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const speedTick = useStore(s => s.speedTick)
-
+  const ref = useRef<HTMLCanvasElement>(null)
+  const tick = useStore(state => state.speedTick)
+  const theme = useStore(state => state.settings.theme)
   const draw = useCallback(() => {
-    if (typeof document !== 'undefined' && document.hidden) return
-    const canvas = canvasRef.current
-    if (!canvas) return
+    const canvas = ref.current
+    if (!canvas || document.hidden) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-
     const buffer = getSpeedRingBuffer()
-    const w = canvas.width
-    const h = canvas.height
-    ctx.clearRect(0, 0, w, h)
-
-    let maxVal = 0.5
-    for (let i = 0; i < 60; i++) {
-      if (buffer[i] > maxVal) maxVal = buffer[i]
-    }
-
-    const peak = Math.max(maxVal, 0.1)
-    const pts = []
-    for (let i = 0; i < 60; i++) {
-      pts.push({
-        x: (i / 59) * w,
-        y: h - (buffer[i] / peak) * (h - 4) - 2
-      })
-    }
-
-    // Gradient fill
-    const grad = ctx.createLinearGradient(0, 0, 0, h)
-    grad.addColorStop(0, 'rgba(79,142,247,0.35)')
-    grad.addColorStop(1, 'rgba(79,142,247,0)')
-
+    const width = canvas.width, height = canvas.height
+    const peak = Math.max(.1, ...buffer)
+    const color = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
+    ctx.clearRect(0, 0, width, height)
     ctx.beginPath()
-    ctx.moveTo(pts[0].x, h)
-    pts.forEach(p => ctx.lineTo(p.x, p.y))
-    ctx.lineTo(pts[pts.length - 1].x, h)
-    ctx.closePath()
-    ctx.fillStyle = grad
-    ctx.fill()
-
-    // Smooth sparkline path
+    ctx.moveTo(0, height)
+    for (let index = 0; index < buffer.length; index++) ctx.lineTo(index / 59 * width, height - buffer[index] / peak * (height - 6) - 3)
+    ctx.lineTo(width, height); ctx.closePath()
+    ctx.globalAlpha = .08; ctx.fillStyle = color; ctx.fill(); ctx.globalAlpha = 1
     ctx.beginPath()
-    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y))
-    ctx.strokeStyle = 'rgba(79,142,247,0.85)'
-    ctx.lineWidth = 1.5
-    ctx.lineJoin = 'round'
-    ctx.stroke()
+    for (let index = 0; index < buffer.length; index++) {
+      const x = index / 59 * width, y = height - buffer[index] / peak * (height - 6) - 3
+      if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+    }
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke()
   }, [])
-
-  useEffect(() => {
-    draw()
-  }, [speedTick, draw])
-
-  useEffect(() => {
-    const handleVis = () => {
-      if (!document.hidden) draw()
-    }
-    document.addEventListener('visibilitychange', handleVis)
-    return () => document.removeEventListener('visibilitychange', handleVis)
-  }, [draw])
-
-  return <canvas ref={canvasRef} className={styles.sparkline} width={200} height={40} />
+  useEffect(() => { draw() }, [tick, theme, draw])
+  return <canvas ref={ref} className={styles.sparkline} width={240} height={70} role="img" aria-label="Recent download activity" />
 }
 
-const SpeedDisplay: React.FC<{ onToggleInfo: () => void; infoOpen: boolean }> = ({ onToggleInfo, infoOpen }) => {
-  // Selective Zustand subscriptions: re-render ONLY this lightweight element every second
-  const downMBps = useStore(s => s.speed.downMBps)
-  const upMBps = useStore(s => s.speed.upMBps)
-  const downKbps = useStore(s => s.speed.downKbps)
-  const upKbps = useStore(s => s.speed.upKbps)
-
-  const down = formatSpeed(downMBps, downKbps)
-  const up = formatSpeed(upMBps, upKbps)
-
-  return (
-    <div className={styles.speedRow}>
-      <div className={styles.speedItem}>
-        <div className={styles.speedLabel}>
-          <ArrowDownIcon size={13} color="var(--green)" />
-          <span>Download</span>
-        </div>
-        <div className={styles.speedValue}>
-          <span className={styles.speedNum}>{down.value}</span>
-          <span className={styles.speedUnit}>{down.unit}</span>
-        </div>
-      </div>
-
-      <div className={styles.speedDivider} />
-
-      <div className={styles.speedItem}>
-        <div className={styles.speedLabel}>
-          <ArrowUpIcon size={13} color="var(--accent)" />
-          <span>Upload</span>
-        </div>
-        <div className={styles.speedValue}>
-          <span className={styles.speedNum}>{up.value}</span>
-          <span className={styles.speedUnit}>{up.unit}</span>
-        </div>
-      </div>
-
-      <button
-        className={styles.infoBtn}
-        title="Connection capabilities & speed test"
-        onClick={onToggleInfo}
-      >
-        <InfoIcon size={15} color={infoOpen ? 'var(--accent)' : 'var(--text-muted)'} />
-      </button>
-    </div>
-  )
+const LiveRates: React.FC<{ onInfo: () => void; expanded: boolean }> = ({ onInfo, expanded }) => {
+  const down = speed(useStore(state => state.speed.downMBps))
+  const up = speed(useStore(state => state.speed.upMBps))
+  return <div className={styles.transfer}>
+    <div className={styles.rate}><div className={styles.rateCaption}><ArrowDownIcon size={11} /><span>DOWNLOAD</span><HelpTip label="Download rate">Data arriving on the active network adapter right now. MB/s means megabytes each second. This is current activity, not the connection's maximum speed.</HelpTip></div><p className={styles.rateValue}>{down.value}<span>{down.unit}</span></p></div>
+    <div className={styles.rate}><div className={styles.rateCaption}><ArrowUpIcon size={11} /><span>UPLOAD</span><HelpTip label="Upload rate">Data leaving the active network adapter right now. One megabyte is eight megabits; internet plans usually use megabits per second.</HelpTip></div><p className={styles.rateValue}>{up.value}<span>{up.unit}</span></p></div>
+    <div className={styles.chart}><Sparkline /><button className={styles.chartButton} type="button" aria-expanded={expanded} onClick={onInfo}>{expanded ? 'Close speed test' : 'Test download speed'} <span aria-hidden="true">↗</span></button></div>
+  </div>
 }
 
-const PingTelemetryDisplay: React.FC = () => {
-  const telemetry = useStore(s => s.pingTelemetry)
-
-  const gwMs = telemetry?.gatewayMs
-  const inetMs = telemetry?.internetMs
-  const jitter = telemetry?.jitterMs
-
-  return (
-    <div className={styles.telemetryRow}>
-      <div className={styles.telemetryItem} title="Local Gateway Hop Latency (Router ping)">
-        <span className={styles.telemetryLabel}>Router</span>
-        <span className={`${styles.telemetryValue} ${
-          gwMs === null || gwMs === undefined
-            ? styles.telemetryMuted
-            : gwMs <= 5
-            ? styles.telemetryGreen
-            : gwMs <= 20
-            ? styles.telemetryAmber
-            : styles.telemetryRed
-        }`}>
-          {gwMs !== null && gwMs !== undefined ? `${gwMs}ms` : '—'}
-        </span>
-      </div>
-
-      <div className={styles.telemetryDivider} />
-
-      <div className={styles.telemetryItem} title="Global Internet Edge Latency (1.1.1.1 RTT)">
-        <span className={styles.telemetryLabel}>Internet</span>
-        <span className={`${styles.telemetryValue} ${
-          inetMs === null || inetMs === undefined
-            ? styles.telemetryMuted
-            : inetMs <= 50
-            ? styles.telemetryGreen
-            : inetMs <= 120
-            ? styles.telemetryAmber
-            : styles.telemetryRed
-        }`}>
-          {inetMs !== null && inetMs !== undefined ? `${inetMs}ms` : '—'}
-        </span>
-      </div>
-
-      <div className={styles.telemetryDivider} />
-
-      <div className={styles.telemetryItem} title="Packet Delay Variation / Jitter">
-        <span className={styles.telemetryLabel}>Jitter</span>
-        <span className={`${styles.telemetryValue} ${
-          jitter === null || jitter === undefined
-            ? styles.telemetryMuted
-            : jitter <= 3
-            ? styles.telemetryGreen
-            : jitter <= 10
-            ? styles.telemetryAmber
-            : styles.telemetryRed
-        }`}>
-          {jitter !== null && jitter !== undefined ? `±${jitter}ms` : '—'}
-        </span>
-      </div>
-    </div>
-  )
+const Latency: React.FC = () => {
+  const telemetry = useStore(state => state.pingTelemetry)
+  const values = [
+    { label: 'Router', value: telemetry?.gatewayMs, help: 'Time for a small message to reach your router and come back. A lower number means a quicker local response.' },
+    { label: 'Internet', value: telemetry?.internetMs, help: 'Time for a small message to reach 1.1.1.1 on the internet and return. It is one test destination, not a guarantee for every site.' },
+    { label: 'Jitter', value: telemetry?.jitterMs, help: 'How much the response time varies between recent tests. A smaller number means a steadier connection for calls and games.' }
+  ]
+  return <div className={styles.latency}>{values.map(item => <div className={styles.latencyItem} key={item.label}><span>{item.label}<HelpTip label={item.label}>{item.help}</HelpTip></span><strong>{item.value == null ? '—' : item.value + ' ms'}</strong></div>)}</div>
 }
 
 export const HeroCard: React.FC = () => {
-  const connection = useStore(s => s.connection)
-  const streamerStatus = useStore(s => s.streamerStatus)
-  const settings = useStore(s => s.settings)
-  const bssidPeek = useStore(s => s.bssidPeek)
-  const peekBssid = useStore(s => s.peekBssid)
-  const setDetailsModalGuid = useStore(s => s.setDetailsModalGuid)
-  const setPrivacyCloakModalOpen = useStore(s => s.setPrivacyCloakModalOpen)
-  const setDnsModalOpen = useStore(s => s.setDnsModalOpen)
-  const setRoamingModalOpen = useStore(s => s.setRoamingModalOpen)
-  const setWifiShareModalProfile = useStore(s => s.setWifiShareModalProfile)
-  const addToast = useStore(s => s.addToast)
-
+  const connection = useStore(state => state.connection)
+  const error = useStore(state => state.connectionError)
+  const cloaked = useStore(state => state.streamerStatus.isCloaked)
   const [infoOpen, setInfoOpen] = useState(false)
-
-  const handleToggleStreamerCloak = async () => {
-    try {
-      const s = await window.nm.toggleStreamerCloak()
-      useStore.getState().setStreamerStatus(s)
-      const [nets, conn] = await Promise.all([window.nm.getNetworks(), window.nm.getConnection()])
-      useStore.getState().setNetworks(nets)
-      useStore.getState().setConnection(conn)
-      addToast(s.isCloaked ? 'Stream Safe Cloak Activated' : 'Stream Safe Cloak Deactivated', 'info')
-    } catch {
-      addToast('Failed to toggle Stream Safe cloak', 'error')
-    }
-  }
-
-  const handleCopyBssid = useCallback(() => {
-    if (!connection?.bssid) {
-      addToast('No BSSID available', 'info')
-      return
-    }
-    const isProtected = settings.bssidCloaking && !bssidPeek
-    const textToCopy = formatBssid(connection.bssid, isProtected, settings.bssidMaskMode, bssidPeek)
-    navigator.clipboard.writeText(textToCopy)
-    if (isProtected) {
-      addToast(`Copied cloaked BSSID "${textToCopy}" (Streamer Safe)`, 'info')
-    } else {
-      addToast('Copied real BSSID to clipboard', 'success')
-    }
-  }, [connection?.bssid, settings.bssidCloaking, settings.bssidMaskMode, bssidPeek, addToast])
-
-  const signalDbmClass = connection?.signalDbm !== undefined
-    ? connection.signalDbm >= -65
-      ? styles.rfBadgeSignalGreen
-      : connection.signalDbm >= -78
-      ? styles.rfBadgeSignalAmber
-      : styles.rfBadgeSignalRed
-    : ''
-
-  const isRenamed = Boolean(connection && connection.name !== connection.ssid)
-
-  return (
-    <div className={`${styles.card} surface-noise`}>
-      {/* Connection status row */}
-      <div className={styles.statusRow}>
-        <span className={`${styles.dot} ${connection ? styles.dotLive : styles.dotOff}`} />
-        <span className={styles.statusText}>
-          {connection ? 'Connected' : 'Not connected'}
-        </span>
-        {connection && (
-          <div className={styles.metaBadges}>
-            {connection.generation && (
-              <span className={`${styles.rfBadge} ${styles.rfBadgeGen}`}>{connection.generation}</span>
-            )}
-            <span className={styles.band}>{connection.band}</span>
-            {connection.rxRateMbps && (
-              <span className={styles.linkRate}>{connection.rxRateMbps.toFixed(0)} Mbps</span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Network display name */}
-      <div className={styles.netName}>
-        {connection ? connection.name : 'No Wi-Fi'}
-      </div>
-
-      {/* Streamer Safe Active Badge */}
-      {streamerStatus.isCloaked && (
-        <button
-          type="button"
-          className={styles.streamerBadge}
-          onClick={handleToggleStreamerCloak}
-          title="Stream Safe Active. Click to uncloak immediately."
-        >
-          <span className={styles.streamerDot} />
-          <span>
-            Stream Safe: {streamerStatus.detectedApp ? `${streamerStatus.detectedApp} Detected` : 'Active'}
-          </span>
-        </button>
-      )}
-
-      {/* Streamer Cooldown Badge */}
-      {streamerStatus.cooldownSeconds > 0 && !streamerStatus.detectedApp && (
-        <button
-          type="button"
-          className={`${styles.streamerBadge} ${styles.cooldownBadge}`}
-          onClick={handleToggleStreamerCloak}
-          title="Stream closed. Cooldown active. Click to restore original name immediately."
-        >
-          <span className={styles.streamerDot} />
-          <span>Stream Safe: Restoring in {streamerStatus.cooldownSeconds}s</span>
-        </button>
-      )}
-
-      {/* Real SSID indicator */}
-      {connection && isRenamed && (
-        <div className={styles.realName}>
-          Real SSID: <strong>{connection.ssid}</strong>
-          &nbsp;&nbsp;
-          <span className={styles.shieldBadge}>Masked</span>
-        </div>
-      )}
-      {connection && !isRenamed && (
-        <div className={styles.realName}>Showing real network name</div>
-      )}
-
-      {/* RF Physical Layer Diagnostics Badges */}
-      {connection && (
-        <div className={styles.rfGrid}>
-          {connection.signalDbm !== undefined && (
-            <span className={`${styles.rfBadge} ${signalDbmClass}`} title="Wi-Fi Signal Strength in dBm">
-              {connection.signalDbm} dBm
-            </span>
-          )}
-          {connection.snr !== undefined && (
-            <span className={styles.rfBadge} title="Signal-to-Noise Ratio (SNR)">
-              {connection.snr} dB SNR
-            </span>
-          )}
-          {connection.channel !== undefined && connection.channel > 0 && (
-            <span className={styles.rfBadge} title={`Operating Wi-Fi Channel: ${connection.channel}`}>
-              Ch {connection.channel}
-            </span>
-          )}
-          {connection.radioType && (
-            <span className={styles.rfBadge} title={`Radio protocol: ${connection.radioType}`}>
-              {connection.radioType}
-            </span>
-          )}
-          <button
-            type="button"
-            className={styles.detailsBtn}
-            onClick={() => setDetailsModalGuid(connection.profile || connection.ssid || connection.name)}
-            title="Inspect RF physical layer diagnostics and security parameters"
-          >
-            Diagnostics ↗
-          </button>
-        </div>
-      )}
-
-      {/* BSSID Cloaking & Privacy Bar */}
-      {connection?.bssid && (
-        <div className={styles.bssidRow}>
-          <ShieldIcon size={13} color="var(--accent)" />
-          <span className={styles.bssidLabel}>BSSID:</span>
-          <span className={`${styles.bssidText} ${bssidPeek ? styles.bssidPeekActive : ''}`}>
-            {formatBssid(connection.bssid, settings.bssidCloaking, settings.bssidMaskMode, bssidPeek)}
-          </span>
-          {settings.bssidCloaking && (
-            <button
-              type="button"
-              className={`${styles.peekBtn} ${bssidPeek ? styles.peekBtnActive : ''}`}
-              onClick={peekBssid}
-              title={bssidPeek ? 'Real BSSID visible (3s peek)' : 'Peek real BSSID for 3 seconds'}
-            >
-              {bssidPeek ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
-            </button>
-          )}
-          <button
-            type="button"
-            className={styles.bssidCopyBtn}
-            onClick={handleCopyBssid}
-            title={settings.bssidCloaking && !bssidPeek ? 'Copy cloaked BSSID (Protected)' : 'Copy BSSID'}
-          >
-            <CopyIcon size={13} />
-          </button>
-        </div>
-      )}
-
-      {/* Quick Power Tools Action Row */}
-      <div className={styles.quickToolsRow}>
-        <button
-          type="button"
-          className={styles.quickToolBtn}
-          onClick={() => setPrivacyCloakModalOpen(true)}
-          title="Hotspot Device Identity & Privacy Cloak Suite"
-        >
-          <ShieldIcon size={12} color="#c084fc" />
-          <span>Cloak</span>
-        </button>
-
-        <button
-          type="button"
-          className={styles.quickToolBtn}
-          onClick={() => setDnsModalOpen(true)}
-          title="1-Click Fastest DNS Benchmarker & Switcher"
-        >
-          <DnsIcon size={12} color="var(--accent)" />
-          <span>Fast DNS</span>
-        </button>
-
-        <button
-          type="button"
-          className={styles.quickToolBtn}
-          onClick={() => setRoamingModalOpen(true)}
-          title="Wi-Fi Roaming & Band Steering Tuner"
-        >
-          <RadioIcon size={12} color="#38bdf8" />
-          <span>Tuner</span>
-        </button>
-
-        {connection && (
-          <button
-            type="button"
-            className={styles.quickToolBtn}
-            onClick={() => setWifiShareModalProfile(connection.profile || connection.ssid || connection.name)}
-            title="Instant Wi-Fi Share via Encrypted QR Code"
-          >
-            <QrCodeIcon size={12} color="#34d399" />
-            <span>Share</span>
-          </button>
-        )}
-      </div>
-
-      {/* Speed panel */}
-      <div className={styles.speedPanel}>
-        <div className={styles.speedHeader}>
-          <span className={styles.speedSectionTitle}>Live telemetry</span>
-          {connection?.rxRateMbps && (
-            <span className={styles.linkSub}>Wi-Fi Link: {connection.rxRateMbps.toFixed(0)} Mbps</span>
-          )}
-        </div>
-
-        <SpeedDisplay onToggleInfo={() => setInfoOpen(v => !v)} infoOpen={infoOpen} />
-        <PingTelemetryDisplay />
-        <Sparkline />
-      </div>
-
-      {infoOpen && (
-        <SpeedInfoPanel onClose={() => setInfoOpen(false)} />
-      )}
-    </div>
-  )
+  const renamed = Boolean(connection && connection.name !== connection.ssid)
+  return <section className={styles.card} aria-labelledby="connection-name">
+    <div className={styles.connectionLabel}><span className={styles.eyebrow}>YOUR CONNECTION</span><span className={styles.liveLabel}><span className={styles.dot + (connection ? ' ' + styles.dotLive : '')} />{connection ? 'Connected' : error ? 'Unavailable' : 'Not connected'}</span></div>
+    <div className={styles.heroTop}><div><h1 id="connection-name" className={styles.netName}>{connection?.name || (error ? 'Connection unavailable' : 'Connect to Wi-Fi')}</h1>
+      <p className={styles.realName}>{!connection ? 'Saved networks stay available below.' : cloaked ? 'A private display name is active.' : renamed ? 'Wi-Fi name: ' + connection.ssid : 'Your network, on this computer.'}</p>
+    </div><span className={styles.heroIcon} aria-hidden="true"><WifiIcon size={23} /></span></div>
+    {error && <p className={styles.error} role="status">{error}</p>}
+    <LiveRates onInfo={() => setInfoOpen(value => !value)} expanded={infoOpen} />
+    <Latency />
+    {connection && <div className={styles.linkInfo}><span>{[connection.generation, connection.band].filter(Boolean).join(' · ') || 'Wi-Fi connection'}</span>{connection.rxRateMbps != null && <span>{Math.round(connection.rxRateMbps)} Mbps link <HelpTip label="Wi-Fi link rate">The speed your computer and router negotiated over Wi-Fi. Actual internet downloads are usually slower and depend on your internet plan, signal, and traffic.</HelpTip></span>}</div>}
+    {infoOpen && <SpeedInfoPanel onClose={() => setInfoOpen(false)} />}
+  </section>
 }

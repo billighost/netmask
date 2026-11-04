@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Twenty transparent NetMask logo directions, with original marks, combinations, and desktop icon downloads.">
+  <title>NetMask — 20 logo directions</title>
+  <link rel="stylesheet" href="gallery.css">
+  <script src="catalog.js" defer></script>
+  <script src="gallery.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#logo-grid">Skip to the logos</a>
+  <header class="masthead page-width">
+    <a class="wordmark" href="index.html" aria-label="NetMask logo gallery"><img class="wordmark-logo" data-art="orbit" src="logos/orbit/mark.svg" width="27" height="27" alt="">NetMask<span class="collection">Identity studies</span></a>
+    <div class="header-actions">
+      <a class="preview-link" href="../ui-preview/app.html?mode=fieldnotes" target="_blank" rel="noopener">Fieldnotes preview <span aria-hidden="true">↗</span></a>
+      <div class="theme-control" role="group" aria-label="Preview background">
+        <button id="light" type="button" aria-pressed="true">Paper</button>
+        <button id="dark" type="button" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-width">
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">NETMASK / FIELDNOTES / 20 DIRECTIONS</p>
+        <h1 id="page-title">A small mark.<br>A clearer identity.</h1>
+      </div>
+      <div class="intro-note">
+        <p>Orbit, option 15, is our selected mark.</p>
+        <p>Folded labels, wireless signals, quiet eyes, and an N of our own — mixed into new marks. The collection remains here as a reference. Compare alternatives in the app and on the desktop.</p>
+        <div class="palette" aria-label="Fieldnotes palette: forest green, warm paper, terracotta"><span class="palette-green"></span><span class="palette-paper"></span><span class="palette-orange"></span><span>Drawn for Fieldnotes</span></div>
+      </div>
+    </section>
+
+    <section class="workspace" aria-label="Explore logo directions">
+      <div class="toolbar">
+        <div class="filters" role="group" aria-label="Logo collection">
+          <button type="button" data-filter="all" aria-pressed="true">All <span>20</span></button>
+          <button type="button" data-filter="original" aria-pressed="false">Originals <span>4</span></button>
+          <button type="button" data-filter="hybrid" aria-pressed="false">New directions <span>16</span></button>
+          <button type="button" data-filter="favorites" aria-pressed="false">Shortlist <span id="shortlist-count">0</span></button>
+        </div>
+        <button id="compare-button" class="compare-button" type="button" aria-expanded="false" aria-controls="compare-panel" disabled>Compare favorites <span aria-hidden="true">↗</span></button>
+      </div>
+      <div class="selection-row">
+        <p id="selection" role="status" aria-live="polite" aria-atomic="true">Shortlist a few marks. Then tell me the numbers you like.</p>
+        <button id="clear-shortlist" class="text-button" type="button" hidden>Clear shortlist</button>
+      </div>
+
+      <section id="compare-panel" class="compare-panel" aria-labelledby="compare-heading" hidden>
+        <div class="compare-heading"><div><p class="eyebrow">YOUR SHORTLIST</p><h2 id="compare-heading" tabindex="-1">The marks, in everyday use.</h2></div><p>The same title bar and desktop shortcut, with each identity.</p></div>
+        <div id="compare-grid" class="compare-grid"></div>
+      </section>
+
+      <div class="collection-note"><p id="collection-label">THE COMPLETE COLLECTION</p><span id="visible-count" aria-live="polite">20 marks</span></div>
+      <section id="logo-grid" class="grid" aria-label="20 logo directions" tabindex="-1"></section>
+      <p id="empty-state" class="empty-state" hidden>Your shortlist is empty. Add a few favorites from the full collection.</p>
+      <noscript><p>This gallery needs JavaScript to show all 20 directions. You can also open the SVG and desktop icons in the <a href="logos/">logos folder</a>.</p></noscript>
+    </section>
+  </main>
+
+  <footer class="page-footer page-width">
+    <p>Transparent artwork. The checkerboard only shows where the background is clear.</p>
+    <p>SVG · PNG · Windows ICO · macOS ICNS <span aria-hidden="true">/</span> <a href="README.md">About the files</a></p>
+  </footer>
+</body>
+</html>

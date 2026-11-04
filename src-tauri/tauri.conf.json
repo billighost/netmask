@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "NetMask",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "identifier": "com.billighost.netmask",
   "build": {
     "frontendDist": "../dist",
@@ -16,8 +16,8 @@
         "title": "NetMask",
         "width": 440,
         "height": 700,
-        "minWidth": 380,
-        "minHeight": 460,
+        "minWidth": 320,
+        "minHeight": 200,
         "resizable": true,
         "fullscreen": false,
         "decorations": false,
@@ -25,17 +25,58 @@
         "shadow": true
       }
     ],
-    "trayIcon": {
-      "iconPath": "icons/32x32.png",
-      "iconAsTemplate": true
-    },
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+      "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data:; connect-src ipc: http://ipc.localhost http://localhost:5173 ws://localhost:5173; object-src 'none'; base-uri 'self'"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Bello Bilal",
+    "homepage": "https://github.com/billighost/netmask",
+    "category": "Utility",
+    "shortDescription": "Manage local network display names.",
+    "longDescription": "Local network names, Wi-Fi diagnostics, and display privacy controls.",
+    "windows": {
+      "allowDowngrades": false,
+      "nsis": {
+        "installMode": "currentUser",
+        "headerImage": "installer/nsis-header.bmp",
+        "sidebarImage": "installer/nsis-sidebar.bmp",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "installerHooks": "installer/hooks.nsh",
+        "startMenuFolder": "NetMask",
+        "languages": [
+          "English"
+        ],
+        "displayLanguageSelector": false,
+        "compression": "lzma"
+      },
+      "wix": {
+        "bannerPath": "installer/wix-banner.bmp",
+        "dialogImagePath": "installer/wix-dialog.bmp"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "dmg": {
+        "background": "installer/dmg-background.png",
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "appPosition": {
+          "x": 180,
+          "y": 200
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 200
+        }
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

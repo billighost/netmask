@@ -4,53 +4,25 @@ import { WifiIcon, EthernetIcon } from '../../icons'
 import type { Network } from '../../types'
 import styles from './NetworkRow.module.css'
 
-interface Props {
-  net: Network
-  index: number
-}
-
-export const NetworkRow: React.FC<Props> = ({ net, index }) => {
-  const { selectedGuid, selectNetwork, setContextMenu } = useStore()
-  const isSelected = selectedGuid === net.guid
-
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault()
-    setContextMenu({ x: e.clientX, y: e.clientY, guid: net.guid })
-  }
-
-  return (
-    <div
-      className={`${styles.row} ${isSelected ? styles.selected : ''}`}
-      style={{ animationDelay: `${index * 35}ms` }}
-      onClick={() => selectNetwork(net.guid)}
-      onContextMenu={handleContextMenu}
-    >
-      <div
-        className={`${styles.icon} ${isSelected ? styles.iconSelected : ''} ${net.live ? styles.iconLive : ''}`}
-        title={net.type === 'wifi' ? (net.live ? 'Active Wi-Fi connection' : 'Saved Wi-Fi network') : 'Ethernet'}
-      >
-        {net.type === 'wifi'
-          ? <WifiIcon size={16} />
-          : <EthernetIcon size={16} />
+export const NetworkRow: React.FC<{ net: Network; index: number }> = ({ net, index }) => {
+  const selectedGuid = useStore(state => state.selectedGuid)
+  const select = useStore(state => state.selectNetwork)
+  const menu = useStore(state => state.setContextMenu)
+  const privateNames = useStore(state => state.streamerStatus.isCloaked)
+  const selected = selectedGuid === net.guid
+  return <div className={styles.row + (selected ? ' ' + styles.selected : '')} role="listitem" onContextMenu={event => { event.preventDefault(); select(net.guid); menu({ x: event.clientX, y: event.clientY, guid: net.guid }) }}>
+    <button type="button" className={styles.selectButton} aria-pressed={selected} tabIndex={selected || (!selectedGuid && index === 0) ? 0 : -1}
+      data-network-guid={net.guid} onClick={() => select(net.guid)} onKeyDown={event => {
+        if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+          event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); menu({ x: bounds.left, y: bounds.bottom, guid: net.guid })
         }
-      </div>
-
-      <div className={styles.meta}>
-        <div className={styles.name}>{net.name}</div>
-        <div className={styles.sub}>
-          {net.renamed
-            ? <>Originally <span>{net.originalName}</span></>
-            : 'Original name'
-          }
-        </div>
-      </div>
-
-      <div className={styles.tags}>
-        {net.live && <span className={`${styles.tag} ${styles.liveTag}`}>Connected</span>}
-        {net.renamed && <span className={`${styles.tag} ${styles.renamedTag}`}>Renamed</span>}
-        {net.type === 'ethernet' && <span className={`${styles.tag} ${styles.ethTag}`}>Ethernet</span>}
-      </div>
-    </div>
-  )
+      }}>
+      <span className={styles.icon + (net.live ? ' ' + styles.iconLive : '')}>{net.type === 'wifi' ? <WifiIcon size={16} /> : <EthernetIcon size={16} />}</span>
+      <span className={styles.meta}><span className={styles.name}>{net.name}</span><span className={styles.sub}>{net.renamed && !privateNames ? 'Originally ' + net.originalName : net.renamed ? 'Local display name' : net.type === 'ethernet' ? 'Wired connection' : 'Saved Wi-Fi network'}</span></span>
+      {net.live && <span className={styles.tags}><span className={styles.liveTag}>Connected</span></span>}
+    </button>
+    <button type="button" className={styles.menuButton} aria-label={'Actions for ' + net.name} tabIndex={selected ? 0 : -1}
+      onClick={event => { select(net.guid); const bounds = event.currentTarget.getBoundingClientRect(); menu({ x: bounds.right, y: bounds.bottom, guid: net.guid }) }}>⋯</button>
+  </div>
 }
 

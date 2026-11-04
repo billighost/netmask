@@ -1,162 +1,561 @@
-use regex::Regex;
 use crate::types::DnsResolverResult;
-use crate::platform::run_cmd_output;
-use crate::ping::probe_tcp_latency;
+use crate::{platform, settings, system};
+use std::net::{IpAddr, SocketAddr, UdpSocket};
+use std::sync::atomic::{AtomicU16, Ordering};
+use std::time::{Duration, Instant};
 
-struct DnsPreset {
+struct Preset {
     id: &'static str,
     name: &'static str,
     provider: &'static str,
     primary: &'static str,
     secondary: Option<&'static str>,
     description: &'static str,
-    is_dhcp: bool,
 }
-
-const PRESETS: &[DnsPreset] = &[
-    DnsPreset {
+const PRESETS: &[Preset] = &[
+    Preset {
         id: "cloudflare",
         name: "Cloudflare DNS",
-        provider: "Cloudflare 1.1.1.1",
+        provider: "Cloudflare",
         primary: "1.1.1.1",
         secondary: Some("1.0.0.1"),
-        description: "Fastest global resolution with privacy-first zero-logging",
-        is_dhcp: false,
+        description: "Public DNS operated by Cloudflare",
     },
-    DnsPreset {
+    Preset {
         id: "google",
         name: "Google Public DNS",
-        provider: "Google 8.8.8.8",
+        provider: "Google",
         primary: "8.8.8.8",
         secondary: Some("8.8.4.4"),
-        description: "Global infrastructure with high reliability and low latency",
-        is_dhcp: false,
+        description: "Public DNS operated by Google",
     },
-    DnsPreset {
+    Preset {
         id: "quad9",
         name: "Quad9 Security DNS",
-        provider: "Quad9 9.9.9.9",
+        provider: "Quad9",
         primary: "9.9.9.9",
         secondary: Some("149.112.112.112"),
-        description: "Automated threat blocking against malware and phishing",
-        is_dhcp: false,
+        description: "Blocks known malicious domains",
     },
-    DnsPreset {
+    Preset {
         id: "adguard",
         name: "AdGuard Default DNS",
-        provider: "AdGuard 94.140.14.14",
+        provider: "AdGuard",
         primary: "94.140.14.14",
         secondary: Some("94.140.14.15"),
-        description: "Blocks intrusive banner ads, trackers, and malicious domains",
-        is_dhcp: false,
+        description: "Filters advertising and tracking domains",
     },
-    DnsPreset {
+    Preset {
         id: "dhcp",
         name: "Automatic (DHCP)",
-        provider: "Router / ISP Default",
+        provider: "Router / ISP",
         primary: "Automatic",
         secondary: None,
-        description: "Default DNS assigned by local router DHCP server",
-        is_dhcp: true,
+        description: "Use DNS assigned by your network",
     },
 ];
+static QUERY_ID: AtomicU16 = AtomicU16::new(0x4e4d);
 
-pub fn get_current_dns(interface_name: Option<&str>) -> (String, Option<String>, bool) {
-    let iface = interface_name.unwrap_or("Wi-Fi");
-    let out = run_cmd_output("netsh", &["interface", "ip", "show", "dns", &format!("name={}", iface)]);
-    let is_dhcp = out.contains("DHCP");
-
-    let re_ip = Regex::new(r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b").unwrap();
-    let ips: Vec<String> = re_ip.find_iter(&out).map(|m| m.as_str().to_string()).collect();
-
-    let primary = if is_dhcp && ips.is_empty() {
-        "Automatic".to_string()
-    } else {
-        ips.first().cloned().unwrap_or_else(|| "Automatic".to_string())
-    };
-    let secondary = ips.get(1).cloned();
-
-    (primary, secondary, is_dhcp)
+fn query_packet(id: u16) -> Vec<u8> {
+    let mut packet = vec![(id >> 8) as u8, id as u8, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0];
+    packet.extend_from_slice(b"\x07example\x03com\0\0\x01\0\x01");
+    packet
 }
 
-pub fn benchmark_dns() -> Vec<DnsResolverResult> {
-    let (current_primary, _, is_dhcp) = get_current_dns(Some("Wi-Fi"));
-    let mut results = Vec::new();
-
-    for p in PRESETS {
-        let is_curr = if p.is_dhcp {
-            is_dhcp
-        } else {
-            !is_dhcp && current_primary == p.primary
-        };
-
-        let latency = if p.is_dhcp {
-            if is_dhcp && current_primary != "Automatic" {
-                probe_tcp_latency(&current_primary, 53, 1500)
-            } else {
-                None
+fn dns_name(packet: &[u8], start: usize) -> Option<(Vec<u8>, usize)> {
+    let mut name = Vec::new();
+    let mut offset = start;
+    let mut end = None;
+    for _ in 0..128 {
+        let length = *packet.get(offset)? as usize;
+        if length & 0xc0 == 0xc0 {
+            let target = ((length & 0x3f) << 8) | *packet.get(offset + 1)? as usize;
+            // DNS compression points to a preceding name, never into itself.
+            if target < 12 || target >= offset {
+                return None;
             }
+            end.get_or_insert(offset + 2);
+            offset = target;
+        } else if length == 0 {
+            return Some((name, end.unwrap_or(offset + 1)));
         } else {
-            probe_tcp_latency(p.primary, 53, 1500)
-        };
-
-        results.push(DnsResolverResult {
-            id: p.id.into(),
-            name: p.name.into(),
-            provider: p.provider.into(),
-            primary: p.primary.into(),
-            secondary: p.secondary.map(|s| s.into()),
-            description: p.description.into(),
-            is_dhcp: Some(p.is_dhcp),
-            latency_ms: latency,
-            is_current: is_curr,
-            is_fastest: Some(false),
-        });
-    }
-
-    // Determine fastest
-    let mut min_ms = i64::MAX;
-    let mut fastest_idx = None;
-    for (i, r) in results.iter().enumerate() {
-        if let Some(ms) = r.latency_ms {
-            if ms < min_ms {
-                min_ms = ms;
-                fastest_idx = Some(i);
+            if length > 63 || name.len() + length + 1 > 255 {
+                return None;
             }
+            name.push(length as u8);
+            name.extend(
+                packet
+                    .get(offset + 1..offset + length + 1)?
+                    .iter()
+                    .map(u8::to_ascii_lowercase),
+            );
+            offset += length + 1;
         }
     }
-    if let Some(idx) = fastest_idx {
-        results[idx].is_fastest = Some(true);
-    }
-
-    results
+    None
 }
 
-pub fn apply_dns(resolver_id: &str) -> bool {
-    let preset = PRESETS.iter().find(|p| p.id == resolver_id);
-    let p = match preset {
-        Some(p) => p,
-        None => return false,
-    };
-
-    let iface = "Wi-Fi";
-    let script = if p.is_dhcp {
-        format!("netsh interface ip set dns name=\"{}\" dhcp", iface)
-    } else {
-        let mut s = format!("netsh interface ip set dns name=\"{}\" static {} validate=no", iface, p.primary);
-        if let Some(sec) = p.secondary {
-            s.push_str(&format!(" ; netsh interface ip add dns name=\"{}\" {} index=2 validate=no", iface, sec));
-        }
-        s
-    };
-
-    let mut cmd = std::process::Command::new("powershell.exe");
-    cmd.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &format!("Start-Process cmd -ArgumentList '/c {}' -Verb RunAs -Wait -WindowStyle Hidden", script.replace('\'', "''"))]);
-    #[cfg(target_os = "windows")]
+pub fn valid_dns_response(query: &[u8], response: &[u8]) -> bool {
+    if query.len() < 12
+        || response.len() < query.len()
+        || response[..2] != query[..2]
+        || response[2] & 0x80 == 0
+        || response[2] & 0x7a != 0
+        || response[3] & 0x4f != 0
+        || response[4..6] != [0, 1]
+        || response[12..query.len()] != query[12..]
     {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000);
+        return false;
     }
-    cmd.status().map(|s| s.success()).unwrap_or(false)
+    let answers = u16::from_be_bytes([response[6], response[7]]) as usize;
+    if answers == 0 || answers > 64 {
+        return false;
+    }
+    let Some((question, _)) = dns_name(query, 12) else {
+        return false;
+    };
+    let mut names = vec![question];
+    let mut offset = query.len();
+    let mut answered = false;
+    for _ in 0..answers {
+        let Some((owner, header)) = dns_name(response, offset) else {
+            return false;
+        };
+        let Some(record) = response.get(header..header + 10) else {
+            return false;
+        };
+        let record_type = u16::from_be_bytes([record[0], record[1]]);
+        let class = u16::from_be_bytes([record[2], record[3]]);
+        let length = u16::from_be_bytes([record[8], record[9]]) as usize;
+        let data = header + 10;
+        let end = data + length;
+        if response.get(data..end).is_none() {
+            return false;
+        }
+        if class == 1 && names.contains(&owner) {
+            if record_type == 1 && length == 4 {
+                answered = true;
+            }
+            if record_type == 5 {
+                let Some((alias, consumed)) = dns_name(response, data) else {
+                    return false;
+                };
+                if consumed != end {
+                    return false;
+                }
+                names.push(alias);
+            }
+        }
+        offset = end;
+    }
+    answered
 }
 
+pub fn probe_dns(address: SocketAddr, timeout: Duration) -> Option<i64> {
+    let socket = UdpSocket::bind(if address.is_ipv4() {
+        "0.0.0.0:0"
+    } else {
+        "[::]:0"
+    })
+    .ok()?;
+    socket.connect(address).ok()?;
+    let query = query_packet(QUERY_ID.fetch_add(1, Ordering::Relaxed));
+    let start = Instant::now();
+    socket.send(&query).ok()?;
+    let mut buffer = [0u8; 4096];
+    loop {
+        let remaining = timeout.checked_sub(start.elapsed())?;
+        if remaining.is_zero() {
+            return None;
+        }
+        socket.set_read_timeout(Some(remaining)).ok()?;
+        let size = socket.recv(&mut buffer).ok()?;
+        if valid_dns_response(&query, &buffer[..size]) {
+            return Some(start.elapsed().as_millis() as i64);
+        }
+    }
+}
+
+fn median_latency(ip: &str) -> Option<i64> {
+    let address = SocketAddr::new(ip.parse::<IpAddr>().ok()?, 53);
+    let mut samples: Vec<_> = (0..3)
+        .filter_map(|_| probe_dns(address, Duration::from_millis(800)))
+        .collect();
+    if samples.len() < 2 {
+        return None;
+    }
+    samples.sort();
+    Some(samples[samples.len() / 2])
+}
+
+#[derive(Clone)]
+struct Configuration {
+    target: String,
+    interface: String,
+    servers: Vec<String>,
+    effective: Vec<String>,
+    automatic: bool,
+    ignore_auto: bool,
+}
+
+fn addresses(value: &str) -> Vec<String> {
+    value
+        .split([',', ' ', '\n', ';'])
+        .filter_map(|ip| ip.trim().parse::<IpAddr>().ok())
+        .map(|ip| ip.to_string())
+        .collect()
+}
+
+#[cfg(windows)]
+fn configuration(interface: Option<&str>) -> Result<Configuration, String> {
+    let select = if let Some(name) = interface {
+        format!(
+            "$adapter = Get-NetAdapter | Where-Object {{ $_.Name -eq {} }} | Select-Object -First 1;",
+            system::powershell_literal(name)
+        )
+    } else {
+        "$route = Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop | Sort-Object @{ Expression = { $_.RouteMetric + (Get-NetIPInterface -AddressFamily IPv4 -InterfaceIndex $_.InterfaceIndex).InterfaceMetric } } | Select-Object -First 1; $adapter = Get-NetAdapter -InterfaceIndex $route.InterfaceIndex -ErrorAction Stop;".into()
+    };
+    let data = system::powershell_json(&format!(
+        "{select} if (-not $adapter) {{ throw 'No active network adapter' }}; $key = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\' + $adapter.InterfaceGuid.ToString('B'); $manual = (Get-ItemProperty -LiteralPath $key -ErrorAction Stop).NameServer; [pscustomobject]@{{ target = [string]$adapter.InterfaceIndex; interface = $adapter.Name; manual = [string]$manual; servers = @((Get-DnsClientServerAddress -InterfaceIndex $adapter.InterfaceIndex -AddressFamily IPv4 -ErrorAction Stop).ServerAddresses) }}"
+    ))?;
+    let manual = addresses(data["manual"].as_str().unwrap_or(""));
+    let effective = data["servers"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(Configuration {
+        target: data["target"]
+            .as_str()
+            .ok_or("Adapter index unavailable")?
+            .into(),
+        interface: data["interface"]
+            .as_str()
+            .ok_or("Adapter name unavailable")?
+            .into(),
+        automatic: manual.is_empty(),
+        servers: manual,
+        effective,
+        ignore_auto: false,
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn configuration(interface: Option<&str>) -> Result<Configuration, String> {
+    let route = system::run("ip", &["-json", "route", "show", "default"])
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+    let default_device = route
+        .as_ref()
+        .and_then(|v| v.as_array())
+        .and_then(|a| a.iter().min_by_key(|r| r["metric"].as_u64().unwrap_or(0)))
+        .and_then(|r| r["dev"].as_str());
+    let chosen = interface.or(default_device);
+    let output = system::run(
+        "nmcli",
+        &[
+            "-t",
+            "-f",
+            "UUID,TYPE,DEVICE",
+            "connection",
+            "show",
+            "--active",
+        ],
+    )?;
+    let fields = output
+        .lines()
+        .map(platform::linux::split_fields)
+        .find(|f| {
+            f.len() >= 3
+                && matches!(
+                    f[1].as_str(),
+                    "802-11-wireless" | "wifi" | "802-3-ethernet" | "ethernet"
+                )
+                && chosen.is_none_or(|name| name == f[2])
+        })
+        .ok_or("No active NetworkManager connection is available")?;
+    let target = fields[0].clone();
+    let interface = fields[2].clone();
+    let manual = system::run(
+        "nmcli",
+        &["-g", "ipv4.dns", "connection", "show", "uuid", &target],
+    )?;
+    let servers = addresses(&manual);
+    let ignore_auto = system::run(
+        "nmcli",
+        &[
+            "-g",
+            "ipv4.ignore-auto-dns",
+            "connection",
+            "show",
+            "uuid",
+            &target,
+        ],
+    )? == "yes";
+    let effective = addresses(&system::run(
+        "nmcli",
+        &["-g", "IP4.DNS", "device", "show", &interface],
+    )?);
+    Ok(Configuration {
+        target,
+        interface,
+        automatic: !ignore_auto && servers.is_empty(),
+        servers,
+        effective,
+        ignore_auto,
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn configuration(interface: Option<&str>) -> Result<Configuration, String> {
+    let output = system::run("route", &["-n", "get", "default"])?;
+    let device = interface
+        .map(str::to_owned)
+        .or_else(|| {
+            output.lines().find_map(|line| {
+                line.trim()
+                    .strip_prefix("interface:")
+                    .map(|s| s.trim().to_owned())
+            })
+        })
+        .ok_or("The active macOS interface is unavailable")?;
+    let service = platform::macos::service_for_device(&device)?;
+    let servers = addresses(&system::run("networksetup", &["-getdnsservers", &service])?);
+    let automatic = servers.is_empty();
+    let effective = if automatic {
+        system::run("ipconfig", &["getoption", &device, "domain_name_server"])
+            .map(|s| addresses(&s))
+            .unwrap_or_default()
+    } else {
+        servers.clone()
+    };
+    Ok(Configuration {
+        target: service,
+        interface: device,
+        servers,
+        effective,
+        automatic,
+        ignore_auto: false,
+    })
+}
+
+pub fn get_current_dns(interface: Option<&str>) -> Result<(String, Option<String>, bool), String> {
+    let config = configuration(interface)?;
+    let primary = config.effective.first().cloned().unwrap_or_else(|| {
+        if config.automatic {
+            "Automatic"
+        } else {
+            "Unavailable"
+        }
+        .into()
+    });
+    Ok((primary, config.effective.get(1).cloned(), config.automatic))
+}
+
+pub fn benchmark_dns() -> Result<Vec<DnsResolverResult>, String> {
+    let config = configuration(None)?;
+    let current = config.effective.first().cloned();
+    let mut results = std::thread::scope(|scope| {
+        let handles: Vec<_> = PRESETS
+            .iter()
+            .map(|preset| {
+                let primary = if preset.id == "dhcp" {
+                    current.clone()
+                } else {
+                    Some(preset.primary.into())
+                };
+                let is_current = if preset.id == "dhcp" {
+                    config.automatic
+                } else {
+                    !config.automatic && current.as_deref() == Some(preset.primary)
+                };
+                scope.spawn(move || DnsResolverResult {
+                    id: preset.id.into(),
+                    name: preset.name.into(),
+                    provider: preset.provider.into(),
+                    primary: preset.primary.into(),
+                    secondary: preset.secondary.map(str::to_owned),
+                    description: preset.description.into(),
+                    is_dhcp: Some(preset.id == "dhcp"),
+                    latency_ms: primary.as_deref().and_then(median_latency),
+                    is_current,
+                    is_fastest: Some(false),
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| {
+                handle
+                    .join()
+                    .map_err(|_| "DNS benchmark worker failed".to_owned())
+            })
+            .collect::<Result<Vec<_>, _>>()
+    })?;
+    if let Some(index) = results
+        .iter()
+        .enumerate()
+        .filter_map(|(i, r)| r.latency_ms.map(|ms| (i, ms)))
+        .min_by_key(|(_, ms)| *ms)
+        .map(|(i, _)| i)
+    {
+        results[index].is_fastest = Some(true);
+    }
+    Ok(results)
+}
+
+#[cfg(windows)]
+fn apply_configuration(config: &Configuration) -> Result<(), String> {
+    let index: u32 = config.target.parse().map_err(|_| "Invalid adapter index")?;
+    let command = if config.automatic {
+        format!(
+            "Set-DnsClientServerAddress -InterfaceIndex {index} -ResetServerAddresses -ErrorAction Stop"
+        )
+    } else {
+        format!(
+            "Set-DnsClientServerAddress -InterfaceIndex {index} -ServerAddresses @({}) -ErrorAction Stop",
+            config
+                .servers
+                .iter()
+                .map(|ip| system::powershell_literal(ip))
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    };
+    system::powershell(&command, !platform::is_admin())?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn apply_configuration(config: &Configuration) -> Result<(), String> {
+    let joined = config.servers.join(",");
+    let args = [
+        "connection",
+        "modify",
+        "uuid",
+        config.target.as_str(),
+        "ipv4.ignore-auto-dns",
+        if config.ignore_auto { "yes" } else { "no" },
+        "ipv4.dns",
+        joined.as_str(),
+    ];
+    if system::run("nmcli", &args).is_err() {
+        let mut elevated = vec!["nmcli"];
+        elevated.extend(args);
+        system::run_checked("pkexec", &elevated, Duration::from_secs(120))?;
+    }
+    let reapply = ["device", "reapply", config.interface.as_str()];
+    if system::run("nmcli", &reapply).is_err() {
+        let mut elevated = vec!["nmcli"];
+        elevated.extend(reapply);
+        system::run_checked("pkexec", &elevated, Duration::from_secs(120))?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn apply_configuration(config: &Configuration) -> Result<(), String> {
+    let mut args = vec!["-setdnsservers", config.target.as_str()];
+    if config.automatic {
+        args.push("Empty");
+    } else {
+        args.extend(config.servers.iter().map(String::as_str));
+    }
+    platform::macos::privileged_networksetup(&args, true)
+}
+
+pub fn apply_dns(resolver_id: &str) -> Result<bool, String> {
+    let preset = PRESETS
+        .iter()
+        .find(|p| p.id == resolver_id)
+        .ok_or("Unknown DNS resolver")?;
+    settings::storage().with_lock("dns-mutations", || {
+        let previous = configuration(None)?;
+        let mut updated = previous.clone();
+        updated.automatic = preset.id == "dhcp";
+        updated.ignore_auto = !updated.automatic;
+        updated.servers = if updated.automatic { Vec::new() } else { std::iter::once(preset.primary).chain(preset.secondary).map(str::to_owned).collect() };
+        let result = apply_configuration(&updated).and_then(|_| {
+            let verified = configuration(Some(&updated.interface))?;
+            if verified.target != updated.target || verified.automatic != updated.automatic || (!updated.automatic && verified.servers != updated.servers) {
+                Err("The operating system did not confirm the DNS change".into())
+            } else { Ok(true) }
+        });
+        match result {
+            Ok(success) => Ok(success),
+            Err(error) => {
+                let rollback = apply_configuration(&previous);
+                Err(match rollback { Ok(_) => format!("{error}. Previous DNS settings restored."), Err(_) => format!("{error}. Previous DNS settings could not be restored; check your network settings.") })
+            }
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn dns_measurement_requires_a_matching_successful_answer() {
+        let query = query_packet(1234);
+        let mut response = query.clone();
+        response[2] = 0x81;
+        response[3] = 0x80;
+        response[7] = 1;
+        assert!(!valid_dns_response(&query, &response));
+        response.extend_from_slice(b"\xc0\x0c\0\x01\0\x01\0\0\0\x3c\0\x04\x5d\xb8\xd8\x22");
+        assert!(valid_dns_response(&query, &response));
+        for length in 0..response.len() {
+            assert!(!valid_dns_response(&query, &response[..length]));
+        }
+        response[1] ^= 1;
+        assert!(!valid_dns_response(&query, &response));
+        response[1] ^= 1;
+        response[2] |= 2;
+        assert!(!valid_dns_response(&query, &response));
+        response[2] &= !2;
+        response[3] |= 3;
+        assert!(!valid_dns_response(&query, &response));
+        assert!(!valid_dns_response(&query, &response[..8]));
+    }
+    #[test]
+    fn benchmark_uses_udp_queries_instead_of_tcp_connection_time() {
+        let server = UdpSocket::bind("127.0.0.1:0").unwrap();
+        server
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let address = server.local_addr().unwrap();
+        let worker = std::thread::spawn(move || {
+            let mut buffer = [0u8; 1024];
+            let (length, peer) = server.recv_from(&mut buffer).unwrap();
+            assert_eq!(&buffer[12..length], b"\x07example\x03com\0\0\x01\0\x01");
+            let mut response = buffer[..length].to_vec();
+            response[2] = 0x81;
+            response[3] = 0x80;
+            response[7] = 1;
+            response.extend_from_slice(b"\xc0\x0c\0\x01\0\x01\0\0\0\x3c\0\x04\x5d\xb8\xd8\x22");
+            server.send_to(&response, peer).unwrap();
+        });
+        assert!(probe_dns(address, Duration::from_secs(2)).is_some());
+        worker.join().unwrap();
+    }
+    #[test]
+    fn malformed_or_unrelated_answer_records_are_rejected() {
+        let query = query_packet(7);
+        let mut response = query.clone();
+        response[2] = 0x85;
+        response[3] = 0x80;
+        response[7] = 1;
+        response.extend_from_slice(b"\xc0\x0c\0\x01\0\x01\0\0\0\x3c\0\x04\x5d\xb8\xd8\x22");
+        assert!(valid_dns_response(&query, &response)); // Authoritative answers are valid too.
+        response[query.len() + 11] = 255;
+        assert!(!valid_dns_response(&query, &response));
+        response[query.len() + 11] = 4;
+        response[query.len() + 1] = query.len() as u8; // Self-referencing compression.
+        assert!(!valid_dns_response(&query, &response));
+        assert!(!valid_dns_response(&[], &response));
+    }
+}

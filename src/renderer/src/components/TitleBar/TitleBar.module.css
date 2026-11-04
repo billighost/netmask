@@ -1,85 +1,12 @@
-.bar {
-  position: relative;
-  height: 46px;
-  flex: none;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  padding: 0 8px 0 16px;
-  border-bottom: 1px solid var(--border);
-  -webkit-app-region: drag;
-  app-region: drag;
-  user-select: none;
-}
-
-.dragRegion {
-  position: absolute;
-  inset: 0;
-  -webkit-app-region: drag;
-}
-
-.left {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  z-index: 1;
-}
-
-.logo {
-  flex-shrink: 0;
-}
-
-
-.title {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  color: var(--text-primary);
-}
-
-.versionBadge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: rgba(79, 142, 247, 0.12);
-  color: var(--accent);
-  border: 1px solid rgba(79, 142, 247, 0.28);
-  letter-spacing: 0.02em;
-  user-select: none;
-}
-
-.controls {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  z-index: 1;
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
-}
-
-.ctrlBtn {
-  width: 30px;
-  height: 26px;
-  border-radius: var(--radius-sm);
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background var(--t-fast), color var(--t-fast);
-}
-
-.ctrlBtn:hover {
-  background: var(--bg-surface-2);
-  color: var(--text-primary);
-}
-
-.closeBtn:hover {
-  background: var(--red-dim);
-  color: var(--red);
-}
+.bar { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: 0 0 42px; height: 42px; border-bottom: 1px solid var(--border); padding: 0 5px 0 16px; background: var(--bg-app); user-select: none; }
+.dragRegion { position: absolute; inset: 0; z-index: 0; }
+.left { pointer-events: none; position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.logo { flex-shrink: 0; color: var(--accent); }
+.title { font: 17px/1.2 var(--font-display); letter-spacing: -.3px; }
+.versionBadge { font: 9px/1.4 var(--font-mono); color: var(--text-muted); padding-left: 3px; }
+.controls { position: relative; z-index: 1; display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.ctrlBtn { display: grid; place-items: center; width: 29px; height: 28px; color: var(--text-secondary); border-radius: 3px; }
+.ctrlBtn:hover { background: var(--accent-dim); color: var(--text-primary); }
+.closeBtn:hover { background: var(--red-dim); color: var(--red); }
+@media (max-width: 360px) { .versionBadge { display: none; } .bar { padding-left: 12px; } }
 

@@ -5,6 +5,8 @@ export type Network = {
   renamed: boolean
   live: boolean
   type: 'wifi' | 'ethernet'
+  profile?: string
+  canRename?: boolean
 }
 
 export type Connection = {
@@ -22,6 +24,10 @@ export type Connection = {
   name: string
   rxRateMbps?: number
   txRateMbps?: number
+  networkGuid?: string
+  interfaceName?: string
+  interfaceGuid?: string
+  auth?: string
 }
 
 export type NetworkDetails = {
@@ -45,6 +51,7 @@ export type StreamerStatus = {
   detectedApp: string | null
   isCloaked: boolean
   cooldownSeconds: number
+  error?: string
 }
 
 export type SpeedSample = {
@@ -80,7 +87,7 @@ export type ElevationStatus = {
   isElevated: boolean
   silentElevationEnabled: boolean
   taskConfigured: boolean
-  tier: 'task' | 'broker' | 'jit'
+  tier: 'admin' | 'task' | 'broker' | 'jit'
 }
 
 export type DeviceIdentity = {
@@ -88,7 +95,7 @@ export type DeviceIdentity = {
   macAddress: string
   interfaceName: string
   interfaceGuid: string
-  netbiosSilenced: boolean
+  netbiosSilenced: boolean | null
   macRandomization: 'disabled' | 'enabled' | 'daily' | 'unknown'
   activeProfile: string | null
 }
@@ -148,6 +155,7 @@ export type UpdateInfo = {
   downloadUrl?: string
   assetName?: string
   assetSize?: number
+  assetSha256?: string
 }
 
 export type DownloadProgress = {
@@ -165,11 +173,29 @@ export type UpdateStatus = {
   availableUpdate: UpdateInfo | null
 }
 
+export type NetworkSnapshot = {
+  networks: Network[]
+  connection: Connection | null
+  connectionError?: string | null
+}
+
+export type PlatformCapabilities = {
+  platform: string
+  networkRename: boolean
+  wifiSharing: boolean
+  dnsConfiguration: boolean
+  macRandomization: boolean
+  netbiosControl: boolean
+  roamingTuning: boolean
+  elevationTask: boolean
+  gpuControl: boolean
+}
+
 export interface ShortcutDefinition {
   id: string
   name: string
   description: string
-  category: 'Network Actions' | 'Navigation' | 'Privacy & Streamer' | 'Window & General'
+  category: 'Networks' | 'Navigation' | 'Privacy' | 'App'
   defaultKey: string
 }
 

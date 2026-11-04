@@ -3,6 +3,7 @@
 //           node scripts/github-release.cjs release v2.2.0
 const fs = require('node:fs')
 const { execFileSync } = require('node:child_process')
+const { releaseAssetPlan } = require('./release-assets.cjs')
 
 const repository = '/repos/billighost/netmask'
 let credential
@@ -39,7 +40,11 @@ async function api(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(30000)
   })
-  const result = response.status === 204 ? {} : await response.json()
+  const payload = response.status === 204 ? '' : await response.text()
+  let result
+  try { result = payload.trim() ? JSON.parse(payload) : {} }
+  catch { throw new Error(`GitHub returned an incomplete response (${response.status})`) }
+  if (!payload.trim() && method === 'GET' && response.ok) throw new Error(`GitHub returned an empty read response (${response.status})`)
   if (!response.ok) throw new Error(`GitHub ${response.status}: ${result.message || 'Request failed'}`)
   return result
 }
@@ -98,7 +103,31 @@ async function main() {
     case 'release': {
       const release = await api('GET', `/releases/tags/${encodeURIComponent(arg)}`)
       result = { id: release.id, tag: release.tag_name, url: release.html_url, draft: release.draft, prerelease: release.prerelease,
-        body: release.body, assets: release.assets.map(a => ({ name: a.name, size: a.size, state: a.state, url: a.browser_download_url })) }
+        body: release.body, assets: release.assets.map(a => ({ id: a.id, name: a.name, size: a.size, state: a.state, url: a.browser_download_url })) }
+      break
+    }
+    case 'release-asset-plan': {
+      const release = await api('GET', `/releases/tags/${encodeURIComponent(arg)}`)
+      const plan = releaseAssetPlan(release.tag_name, release.assets)
+      result = { tag: plan.tag, keep: plan.keep.map(a => ({ id: a.id, name: a.name, size: a.size })), remove: plan.remove.map(a => ({ id: a.id, name: a.name, size: a.size })) }
+      break
+    }
+    case 'release-asset-cleanup': {
+      if (!extra) throw new Error('An exact reviewed asset plan JSON file is required')
+      const reviewed = JSON.parse(fs.readFileSync(extra, 'utf8'))
+      const release = await api('GET', `/releases/tags/${encodeURIComponent(arg)}`)
+      const plan = releaseAssetPlan(release.tag_name, release.assets)
+      if (reviewed.tag !== plan.tag || reviewed.remove.length !== plan.remove.length || !plan.remove.every(a => reviewed.remove.some(r => r.id === a.id && r.name === a.name && r.size === a.size))) {
+        throw new Error('The release assets changed since the plan was reviewed')
+      }
+      const removed = []
+      for (const asset of plan.remove) {
+        await api('DELETE', `/releases/assets/${asset.id}`)
+        removed.push({ id: asset.id, name: asset.name })
+      }
+      const verified = await api('GET', `/releases/tags/${encodeURIComponent(arg)}`)
+      if (plan.keep.some(a => !verified.assets.some(v => v.id === a.id))) throw new Error('A retained asset is missing')
+      result = { tag: arg, removed, remaining: verified.assets.map(a => ({ name: a.name, size: a.size })) }
       break
     }
     case 'logs': {

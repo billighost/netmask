@@ -11,6 +11,10 @@ pub struct Network {
     pub live: bool,
     #[serde(rename = "type")]
     pub network_type: String, // "wifi" | "ethernet"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+    #[serde(default = "default_true")]
+    pub can_rename: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +34,14 @@ pub struct Connection {
     pub name: String,
     pub rx_rate_mbps: Option<f64>,
     pub tx_rate_mbps: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network_guid: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interface_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interface_guid: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +69,8 @@ pub struct StreamerStatus {
     pub detected_app: Option<String>,
     pub is_cloaked: bool,
     pub cooldown_seconds: i32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,6 +103,7 @@ pub struct WindowBounds {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct AppSettings {
     pub minimize_to_tray: bool,
     pub launch_on_startup: bool,
@@ -103,6 +118,38 @@ pub struct AppSettings {
     pub silent_elevation: bool,
     pub window_bounds: Option<WindowBounds>,
     pub shortcuts: HashMap<String, String>,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        crate::settings::default_settings()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkSnapshot {
+    pub networks: Vec<Network>,
+    pub connection: Option<Connection>,
+    pub connection_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlatformCapabilities {
+    pub platform: String,
+    pub network_rename: bool,
+    pub wifi_sharing: bool,
+    pub dns_configuration: bool,
+    pub mac_randomization: bool,
+    pub netbios_control: bool,
+    pub roaming_tuning: bool,
+    pub elevation_task: bool,
+    pub gpu_control: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,7 +168,7 @@ pub struct DeviceIdentity {
     pub mac_address: String,
     pub interface_name: String,
     pub interface_guid: String,
-    pub netbios_silenced: bool,
+    pub netbios_silenced: Option<bool>,
     pub mac_randomization: String, // "disabled" | "enabled" | "daily" | "unknown"
     pub active_profile: Option<String>,
 }
@@ -193,6 +240,8 @@ pub struct UpdateInfo {
     pub download_url: Option<String>,
     pub asset_name: Option<String>,
     pub asset_size: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asset_sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -213,4 +262,3 @@ pub struct UpdateStatus {
     pub downloaded_file_path: Option<String>,
     pub available_update: Option<UpdateInfo>,
 }
-
