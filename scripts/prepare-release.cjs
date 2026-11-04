@@ -30,8 +30,9 @@ async function main() {
     const existing = previous.assets.filter(asset => !['checksums.txt', 'availability.json'].includes(asset.name))
     verifyNativePackages(version, existing, availablePlatforms(version, existing))
     for (const asset of existing) {
-      if (fs.existsSync(path.join(directory, asset.name))) continue
       if (asset.state !== 'uploaded' || !/^sha256:[a-f0-9]{64}$/.test(asset.digest || '')) throw new Error(`Existing asset has no verified digest: ${asset.name}`)
+      const localPath = path.join(directory, asset.name)
+      if (fs.existsSync(localPath) && `sha256:${sha256(fs.readFileSync(localPath))}` === asset.digest) continue
       const url = new URL(asset.browser_download_url)
       if (url.origin !== 'https://github.com' || !url.pathname.startsWith(`/billighost/netmask/releases/download/v${version}/`)) throw new Error('Unexpected existing asset URL')
       const response = await fetch(url, { signal: AbortSignal.timeout(120000) })
@@ -49,6 +50,12 @@ async function main() {
   fs.writeFileSync(path.join(directory, 'checksums.txt'), checksums)
   fs.writeFileSync(path.join(directory, 'availability.json'), JSON.stringify({ tag: `v${version}`, runId: process.env.GITHUB_RUN_ID, available, unavailable, assets: assets.map(asset => asset.name) }, null, 2) + '\n')
   fs.writeFileSync('release-notes.md', releaseNotes(fs.readFileSync(notesFile, 'utf8'), version, available))
+  // Preserve published installer IDs and bytes. Only new installers and the
+  // regenerated metadata are uploaded when a retry adds another platform.
+  const uploadDirectory = 'publish-assets'
+  fs.mkdirSync(uploadDirectory, { recursive: true })
+  const uploadNames = assets.filter(asset => !previous?.assets.some(old => old.name === asset.name)).map(asset => asset.name)
+  for (const name of [...uploadNames, 'checksums.txt', 'availability.json']) fs.copyFileSync(path.join(directory, name), path.join(uploadDirectory, name))
   console.log(JSON.stringify({ available, unavailable, packages: assets.length }))
 }
 main().catch(reportError)

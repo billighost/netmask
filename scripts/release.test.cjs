@@ -120,6 +120,7 @@ test('a platform retry preserves prior verified installers and regenerates compl
     assert.deepEqual(availability.available, ['windows-x64', 'linux-x64'])
     assert.deepEqual(availability.unavailable, ['macos-arm64', 'macos-x64'])
     for (const name of packages['windows-x64']) assert.deepEqual(fs.readFileSync(path.join(assetsDir, name)), bytes)
+    assert.deepEqual(fs.readdirSync(path.join(root, 'publish-assets')).sort(), [...packages['linux-x64'], 'availability.json', 'checksums.txt'].sort())
     const checksums = fs.readFileSync(path.join(assetsDir, 'checksums.txt'), 'utf8').trim().split('\n')
     assert.equal(checksums.length, 4)
     for (const line of checksums) {
