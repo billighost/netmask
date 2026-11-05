@@ -134,6 +134,21 @@ Mesh tools were unavailable during this follow-up. This document and the product
 - Verification passed hooks lint for 31 components, TypeScript, 44 JavaScript/release/installer checks, the production renderer build, 33 browser scenarios with zero JavaScript errors, Rust formatting, the native workspace check, one desktop IPC test, and 39 executed core tests. Browser coverage exercises exact report HTML/Markdown previews and downloads, sharing lockout, persisted startup privacy, QR unloading, tray onboarding, no-active-connection reports, and the fresh-profile guide; it found and fixed a nested animation-frame callback that moved focus away from the name editor. Three subprocess fixtures remain intentionally ignored in direct enumeration and are invoked by the deadline regression test.
 - Fresh local v2.4.0 Windows packaging produced `NetMask_2.4.0_x64-setup.exe` at 7,324,642 bytes (SHA-256 `6979B9DD894DD45AD968F0380D058AB5E0A3799B935172C998A5F7C85865A17B`) and `NetMask_2.4.0_x64_en-US.msi` at 11,223,040 bytes (SHA-256 `6B52A8C45EB6B139084F71C1C041056597E850195926176B26592860994DFDD9`). Both carry file and product version 2.4.0. These are local verification artifacts, not published release assets.
 
+### v2.4.0 publication record
+
+- [PR #18](https://github.com/billighost/netmask/pull/18) passed TypeScript/UI and all four native installer checks at reviewed head `cca37c2320d41c9a22da0cc059044b01cc1a41c5`, then merged through the SHA-guarded helper as `1acfed8fc6299e91be671b7d3e55655b9e109290`.
+- Annotated tag `v2.4.0` resolves to that merged commit. [Release workflow 42073779731](https://github.com/billighost/netmask/actions/runs/42073779731) verified tag/version/main ancestry and completed Windows x64, Apple silicon macOS, Intel macOS, Linux x64, and publication successfully.
+- The [published release](https://github.com/billighost/netmask/releases/tag/v2.4.0) is not a draft or prerelease. `availability.json` declares all four platforms available and none unavailable; `checksums.txt` contains exactly the six native packages. Each checksum matches GitHub's SHA-256 asset digest, and every public package URL returned successfully.
+
+| Published package | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `NetMask_2.4.0_x64-setup.exe` | 4,308,207 | `4bb7f70889a21d9a2396b519e9a2c6670e7fdeba6edb1ce53fc62bb11ad1baa3` |
+| `NetMask_2.4.0_x64_en-US.msi` | 6,504,448 | `b53f6bf653e9128912140ecd343811dd50f398c31939eae1cf6c72e39e39fa7a` |
+| `NetMask_2.4.0_aarch64.dmg` | 6,875,090 | `61e288dc9bd43a2ddecd572e01f82efde53d9392543e3c66505770a0a964ff48` |
+| `NetMask_2.4.0_x64.dmg` | 7,138,791 | `d2d5f4ba79b76e05cbe8649a77108845f7ad14d5fc09278409226fd3846413c6` |
+| `NetMask_2.4.0_amd64.deb` | 7,388,014 | `d7d2eeac4fe79173f83f5c25d6692759e287884794181d5ef5a4fe212cdf27c7` |
+| `NetMask_2.4.0_amd64.AppImage` | 90,479,096 | `65734b90721cb070b25f7213c13fa2646b8e36ea4d124f84e12dd645a8ad361f` |
+
 ## Boundaries
 
 The audit does not change the developer's live Wi-Fi, DNS, registry, credentials, or driver settings as a test. Parser, socket, storage, subprocess, and browser fixtures do not prove permission prompts, real reconnects, Wi-Fi hardware behavior, signing, or every desktop environment's displayed name.
