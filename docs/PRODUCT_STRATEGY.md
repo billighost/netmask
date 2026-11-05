@@ -1,6 +1,6 @@
 # NetMask product and launch plan
 
-Prepared 2026-11-04 from the application and repository. This is a proposed strategy; the features and prices below are experiments, not shipped capabilities or market forecasts.
+Prepared 2026-11-04 from the application and repository, and updated 2026-11-05 after the first product pass. Items marked implemented are present in the working tree for the next release. Pricing and launch ideas remain experiments, not market forecasts.
 
 ## Recommendation
 
@@ -33,25 +33,25 @@ Suggested landing-page copy for what exists today:
 >
 > A small desktop app for Windows, macOS, and Linux. Your router keeps its Wi-Fi name. Available controls depend on your operating system.
 
-Display privacy currently changes supported local labels and hides selected fields inside NetMask. It does not hide every saved name, hostname, credential, or field in every screen, and it cannot protect another application's screen. Avoid promises of anonymity, universal screen-sharing protection, guaranteed faster internet, or automatic recording detection. Process detection recognizes a running broadcast app, not an actual broadcast.
+Sharing mode changes the supported operating-system local label and immediately hides saved names, original labels, search/editor values, network IDs, device identity, adapter identity, access-point addresses, notifications, reports, and Wi-Fi sharing controls inside NetMask. It cannot protect another application's screen or make the connection anonymous. Process detection recognizes a running broadcast app, not an actual broadcast.
 
 “NetMask” also sounds like a technical networking term. Always include the descriptor in search titles and store descriptions; check naming and domain availability before buying or registering anything.
 
 ## What to build next
 
-| Priority | Proposed feature | Reason to use it again | Acceptance criteria |
-| --- | --- | --- | --- |
-| 1 | App-wide screen-sharing mode | Prepare NetMask for a call or recording immediately | Renderer masking covers all saved names, original labels, search/editor values, device names, addresses, notifications and dialogs; QR codes and password reveal require an explicit exit or override; enable masking before asynchronous work; explain the scope |
-| 1 | Connection check with an exportable report | Quickly explain whether Wi-Fi, the router, or internet response is struggling | Show measured evidence and unavailable states, time and connection identity; include plain next steps; redact names and identifiers by default; let the user preview exactly what will be exported |
-| 1 | First-run guide and capability checklist | Reach the first successful action without confusion | Offer “Name a network,” “Check my connection,” and “Prepare NetMask for sharing”; explain macOS service naming and permissions; keep permission requests tied to an action |
-| 1 | Signing and dependable installers | Make installation and updating easier to trust | Verify Windows publisher signing and macOS notarization; test install, upgrade, tray, startup, restore, and uninstall on the supported systems; keep manual downloads available |
-| 2 | Connection history and call-quality trends | Understand repeated drops or jitter over time | Store bounded local history; distinguish loss, latency, and missing samples; reset on connection changes; expose pause, retention, and delete controls |
-| 2 | Tray quick actions | Check a connection without opening a large window | Show connection state, an explicit sharing-mode indicator, quick checks, and restore; avoid continuous expensive probes in the tray |
-| 2 | User-controlled per-network presets | Reuse familiar labels and display preferences | Key settings by stable identity; preview changes; keep recovery records; support partial failure without silent network changes |
-| 3 | IPv6-aware DNS and custom resolvers | Make advanced configuration useful and complete | Show which protocol and adapter are affected, retain both previous configurations, verify changes and rollback; avoid presenting one lookup sample as a universal recommendation |
-| 3 | Team support templates | Turn support work into a paid recurring use case | Validate with actual support teams before building policy deployment or account infrastructure |
+| Priority | Feature | Status | Reason to use it again | Acceptance criteria |
+| --- | --- | --- | --- | --- |
+| 1 | App-wide screen-sharing mode | Implemented | Prepare NetMask for a call or recording immediately | Renderer masking covers saved names, original labels, search/editor values, device names, addresses, notifications and dialogs; QR codes and passwords require an explicit exit; masking begins before asynchronous OS work; scope is explained |
+| 1 | Connection check with an exportable report | Implemented | Quickly explain whether Wi-Fi, the router, or internet response is struggling | HTML and Markdown use measured evidence and unavailable states, plain findings and next steps, exact preview, and default identifier redaction; Wi-Fi passwords are never exported |
+| 1 | First-run guide and capability checklist | Implemented | Reach the first successful action without confusion | Offers “Name a network,” “Check my connection,” and “Prepare for sharing”; platform notes explain local naming and permissions; permission requests remain tied to explicit actions |
+| 1 | Signing and dependable installers | In progress | Make installation and updating easier to trust | Install, upgrade, tray, startup, restore, and uninstall logic is covered; direct manual downloads remain available; publisher signing, notarization, and target-device checks still require release infrastructure |
+| 2 | Connection history and call-quality trends | Proposed | Understand repeated drops or jitter over time | Store bounded local history; distinguish loss, latency, and missing samples; reset on connection changes; expose pause, retention, and delete controls |
+| 2 | Tray quick actions | Implemented | Check a connection without opening a large window | Minimal menu provides Show NetMask, checked sharing-mode control, Run connection check, and Quit; the tooltip reflects sharing state; no expensive tray-only probe was added |
+| 2 | User-controlled per-network presets | Proposed | Reuse familiar labels and display preferences | Key settings by stable identity; preview changes; keep recovery records; support partial failure without silent network changes |
+| 3 | IPv6-aware DNS and custom resolvers | Proposed | Make advanced configuration useful and complete | Show which protocol and adapter are affected, retain both previous configurations, verify changes and rollback; avoid presenting one lookup sample as a universal recommendation |
+| 3 | Team support templates | Validate first | Turn support work into a paid recurring use case | Validate with actual support teams before building policy deployment or account infrastructure |
 
-Finish the first four items before adding more adapter tweaks, a VPN, an account system, or AI features. The next release should make the current core dependable and its privacy scope clear. App-wide screen-sharing mode and reports are new work; the audit fixes do not implement them.
+The four approved product additions—sharing mode, reports, first-run guidance, and focused tray actions—are implemented without adding permanent dashboard clutter. Finish target-platform installer, signing, permission, rename/restore, and uninstall validation before adding more adapter tweaks, a VPN, an account system, or AI features.
 
 ## Pricing experiments
 
@@ -75,7 +75,7 @@ Create one download page, one 30-second screen recording, and three screenshots:
 
 Once the package and update flow are stable, prepare Windows package-manager distribution, macOS distribution suitable for the actual signing status, and Linux package instructions. Treat submissions and store accounts as separate launch work. Evaluate a broader launch site only after the installation and first-use funnel works.
 
-**Days 31–60: build the retention feature.** Choose app-wide sharing mode or diagnostic reports from tester demand. Publish a specific before/after demonstration and a tutorial. Add a share action for a redacted result or report, with the destination and data visible to the user. A useful report can bring another person to the app naturally.
+**Days 31–60: validate the retention features.** Test sharing mode and connection reports with the first cohort. Publish a specific before/after demonstration and a short tutorial. Measure whether people return to prepare for calls or create reports, and improve the wording or defaults before adding history.
 
 **Days 61–90: test revenue and expand.** Offer the supporter experiment, interview repeat users about paid conveniences, and measure conversion. Expand to travelers and support teams if their workflows show stronger retention. Avoid paid acquisition until a release reliably installs and users return.
 

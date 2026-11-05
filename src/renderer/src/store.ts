@@ -52,6 +52,8 @@ interface Store {
   adminOk: boolean
   refreshing: boolean
   settingsOpen: boolean
+  onboardingOpen: boolean
+  reportModalOpen: boolean
   shortcutsModalOpen: boolean
   detailsModalGuid: string | null
   contextMenu: { x: number; y: number; guid: string } | null
@@ -91,6 +93,8 @@ interface Store {
   setAdminOk: (ok: boolean) => void
   setRefreshing: (r: boolean) => void
   setSettingsOpen: (open: boolean) => void
+  setOnboardingOpen: (open: boolean) => void
+  setReportModalOpen: (open: boolean) => void
   setShortcutsModalOpen: (open: boolean) => void
   setDetailsModalGuid: (guid: string | null) => void
   setContextMenu: (cm: { x: number; y: number; guid: string } | null) => void
@@ -114,6 +118,7 @@ interface Store {
 let toastSeq = 0
 
 const DEFAULT_SETTINGS: AppSettings = {
+  onboardingCompleted: false,
   minimizeToTray: true,
   launchOnStartup: false,
   autoRefreshInterval: 30,
@@ -149,6 +154,8 @@ export const useStore = create<Store>((set, get) => ({
   adminOk: false,
   refreshing: false,
   settingsOpen: false,
+  onboardingOpen: false,
+  reportModalOpen: false,
   shortcutsModalOpen: false,
   detailsModalGuid: null,
   contextMenu: null,
@@ -246,11 +253,16 @@ export const useStore = create<Store>((set, get) => ({
   setAdminOk: (ok) => set({ adminOk: ok }),
   setRefreshing: (r) => set({ refreshing: r }),
   setSettingsOpen: (open) => set(state => ({ settingsOpen: open, contextMenu: open ? null : state.contextMenu })),
+  setOnboardingOpen: (open) => set(state => ({ onboardingOpen: open, contextMenu: open ? null : state.contextMenu })),
+  setReportModalOpen: (open) => set(state => ({ reportModalOpen: open, contextMenu: open ? null : state.contextMenu })),
   setShortcutsModalOpen: (open) => set(state => ({ shortcutsModalOpen: open, contextMenu: open ? null : state.contextMenu })),
   setDetailsModalGuid: (guid) => set(state => ({ detailsModalGuid: guid, contextMenu: guid ? null : state.contextMenu })),
   setContextMenu: (cm) => set({ contextMenu: cm }),
   setStreamerStatus: (status) => set(state => ({ streamerStatus: status,
-    selectedGuid: nextSelection(visibleNetworks(state.networks, state.settings, state.networkSearch, status.isCloaked), state.selectedGuid) })),
+    networkSearch: status.isCloaked ? '' : state.networkSearch,
+    bssidPeek: status.isCloaked ? false : state.bssidPeek,
+    contextMenu: status.isCloaked ? null : state.contextMenu,
+    selectedGuid: nextSelection(visibleNetworks(state.networks, state.settings, status.isCloaked ? '' : state.networkSearch, status.isCloaked), state.selectedGuid) })),
   setElevationStatus: (status) => set({ elevationStatus: status }),
   setDownloadProgress: (p) => set({ downloadProgress: p }),
   setDownloadedVersion: (v) => set({ downloadedVersion: v }),

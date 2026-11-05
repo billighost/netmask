@@ -63,6 +63,12 @@ Fieldnotes tokens define paper, green, and terracotta colors, serif display name
 
 The shared `Dialog` portals into the document body, makes the underlying app inert and hidden from assistive technology, traps focus, handles Escape, and restores focus when closed. Nested dialogs apply the same protection to the underlying dialog. The app and every dialog use a bounded scroll area so controls remain reachable at the 320 × 200 minimum window size.
 
+New profiles open a one-time first-run guide with three explicit routes: name a network, check the current connection, or prepare for sharing. Existing settings files are migrated as already onboarded. The guide does not request permissions by itself; it closes only after the completion setting is saved, then hands focus to the selected action.
+
+Sharing mode is app-wide. The renderer treats either confirmed masking or an in-progress toggle as private, clears search and reveal state immediately, and redacts names, original labels, stable IDs, adapter/device identity, hardware addresses, notifications, report identifiers, and context-menu copy actions. Wi-Fi QR data is not requested while sharing; the user must explicitly exit first. The native streamer engine persists the previous local label before changing the supported OS label and retains recovery data whenever the result is uncertain.
+
+`connection-report.ts` produces both a standalone Fieldnotes HTML document and Markdown from the same snapshot. Reports show measurements, findings, and plain next steps; identifiers are excluded by default and cannot be enabled during sharing mode. The modal previews the exact generated document before a local browser download and never receives Wi-Fi passwords.
+
 ## Background work and measurement
 
 Transfer samples run once per second while the window is visible. Counter resets, missing samples, and interface changes reset the baseline. Windows reads adapter counters through native APIs; Linux reads `/proc/net/dev`; macOS reads interface counters from `netstat`. Measured transfer rate is distinct from negotiated link rate and the explicit download speed test.
@@ -74,6 +80,8 @@ Process scans are skipped when automatic masking is disabled. A rejected masking
 Transfer rates aggregate physical adapters. Missing counters emit an unavailable sample so the renderer clears the last reading. DNS benchmarking measures the effective automatic resolver only when automatic configuration is active; manual/custom DNS is shown separately. Results carry the configuration target, and apply checks that it still matches before changing DNS.
 
 The window hides to the tray rather than being destroyed. There is no claimed fixed Tauri RAM footprint or GPU-disable mode. See [BENCHMARKS.md](../BENCHMARKS.md) for measurement limits.
+
+The tray intentionally remains small: Show NetMask, a checked sharing-mode action, Run connection check, and Quit. A tray check opens the existing report modal and starts the optional download sample rather than introducing a second diagnostic path. Sharing status updates both the checked item and tooltip.
 
 ## External processes and updates
 

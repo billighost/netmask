@@ -43,7 +43,7 @@ Fix failures before committing or pushing. The hook scanner detects unsafe hook 
 
 A missing system linker, webview development package, or platform runtime is an environment limitation, not a passing check. Document it and obtain successful workspace checks and tests on the corresponding CI runner before merging. Native tests cover both the core and desktop host; three subprocess fixtures are intentionally ignored in direct enumeration and invoked by a deadline test. OS permission prompts, Wi-Fi reconnects, DNS mutations, and driver settings need a separate manual check on real hardware.
 
-For native changes, also build the host installers with `npm run dist:win`, `npm run dist:mac`, or `npm run dist:linux` where the relevant build toolchain is installed. Each published platform must pass its tests and installer compilation. A confirmed GitHub runner-allocation failure may leave that platform unavailable while verified platforms release.
+For native changes, also build the host installers with `npm run dist:win`, `npm run dist:mac`, or `npm run dist:linux` where the relevant build toolchain is installed. The macOS command retries only the known transient case where Tauri identifies its temporary DMG device but `hdiutil` reports that exact device as busy during ejection; unrelated failures still stop immediately. Each published platform must pass its tests and installer compilation. A confirmed GitHub runner-allocation failure may leave that platform unavailable while verified platforms release.
 
 ## 3. Create and push the release branch
 

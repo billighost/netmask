@@ -1,6 +1,6 @@
 {
   "name": "netmask",
-  "version": "2.3.4",
+  "version": "2.4.0",
   "description": "Cross-platform local network display name manager for Windows, macOS, and Linux",
   "author": {
     "name": "Bello Bilal",
@@ -30,7 +30,7 @@
     "vite:build": "vite build",
     "dist": "tauri build",
     "dist:win": "tauri build --bundles nsis,msi",
-    "dist:mac": "tauri build --bundles dmg",
+    "dist:mac": "node scripts/build-macos-dmg.cjs",
     "dist:linux": "tauri build --bundles deb,appimage",
     "typecheck": "tsc --noEmit",
     "lint": "node scripts/lint-hooks.js",

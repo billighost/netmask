@@ -143,11 +143,25 @@ fn status(state: &State, now: Instant) -> StreamerStatus {
     }
 }
 
+fn protect_persisted_record(state: &mut State) {
+    state.protected = state.record.is_some();
+}
+
 pub fn get_streamer_status() -> StreamerStatus {
-    status(
-        &STREAMER.lock().unwrap_or_else(|e| e.into_inner()),
-        Instant::now(),
-    )
+    let now = Instant::now();
+    let mut state = STREAMER.lock().unwrap_or_else(|e| e.into_inner());
+    if !state.loaded {
+        match load_record(&mut state) {
+            Ok(()) => {
+                // A persisted record means the previous process intended the
+                // UI and supported OS label to remain private. Redact from the
+                // first renderer snapshot; the worker verifies the OS state.
+                protect_persisted_record(&mut state);
+            }
+            Err(error) => state.error = Some(error),
+        }
+    }
+    status(&state, now)
 }
 
 fn activate(state: &mut State, manual: bool) -> Result<(), String> {
@@ -372,5 +386,20 @@ mod tests {
             Some("OBS Studio")
         );
         assert_eq!(broadcast_app_name("obs64.exe.backup"), None);
+    }
+
+    #[test]
+    fn persisted_records_are_private_before_the_first_worker_verification() {
+        let mut state = State {
+            record: Some(Recovery {
+                guid: "network-id".into(),
+                previous_name: "Original".into(),
+                mask: "Private".into(),
+                manual: true,
+            }),
+            ..State::default()
+        };
+        protect_persisted_record(&mut state);
+        assert!(status(&state, Instant::now()).is_cloaked);
     }
 }

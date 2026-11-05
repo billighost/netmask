@@ -1,0 +1,20 @@
+.scrim { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #14221b78; }
+.modal { width: min(620px, calc(100vw - 20px)); background: var(--bg-app); border: 1px solid var(--border-bright); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); padding: 25px; }
+.hero { display: flex; align-items: flex-start; gap: 17px; padding-bottom: 22px; border-bottom: 1px solid var(--border); }
+.mark { display: grid; place-items: center; width: 58px; height: 58px; flex-shrink: 0; color: var(--accent); background: var(--accent-dim); border-radius: 50%; }
+.eyebrow { color: var(--terracotta); font: 700 9px/1.4 var(--font-mono); letter-spacing: .13em; }
+.hero h1 { font: 34px/1.08 var(--font-display); font-weight: 400; margin-top: 7px; letter-spacing: -.7px; }
+.hero p { color: var(--text-secondary); font-size: 11px; line-height: 1.7; margin-top: 9px; }
+.actions { display: grid; gap: 9px; margin-top: 20px; }
+.actions > button { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-surface-1); }
+.actions > button:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.icon { display: grid; place-items: center; width: 36px; height: 36px; color: var(--accent); background: var(--accent-dim); border-radius: 50%; }
+.actionCopy { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.actionCopy strong { font-size: 12px; font-weight: 600; }
+.actionCopy small { color: var(--text-secondary); font-size: 10px; line-height: 1.6; }
+.arrow { color: var(--terracotta); font-size: 18px; }
+.note { margin-top: 16px; color: var(--text-secondary); background: var(--bg-surface-2); padding: 11px 13px; border-radius: var(--radius-sm); font-size: 10px; line-height: 1.6; }
+.footer { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin-top: 20px; }
+.footer button { color: var(--accent-btn-text); background: var(--accent); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 10px; }
+.footer span { color: var(--text-muted); font-size: 9px; text-align: right; }
+@media (max-width: 480px) { .modal { padding: 18px; } .hero { flex-direction: column; } .hero h1 { font-size: 29px; } .footer { align-items: flex-start; flex-direction: column; } .footer span { text-align: left; } }

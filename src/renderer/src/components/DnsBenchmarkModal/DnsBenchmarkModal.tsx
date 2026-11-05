@@ -5,12 +5,13 @@ import type { DnsResolverResult } from '../../types'
 import { CloseIcon, DnsIcon, BoltIcon, CheckIcon, RefreshIcon } from '../../icons'
 import { Dialog } from '../Dialog/Dialog'
 import { HelpTip } from '../Controls/HelpTip'
-import { errorMessage } from '../../network-state'
+import { errorMessage, sharingModeActive } from '../../network-state'
 import styles from '../Dialog/Panel.module.css'
 
 export const DnsBenchmarkModal: React.FC = () => {
-  const { open, results, capabilities, epoch } = useStore(state => ({
-    open: state.dnsModalOpen, results: state.dnsResults, capabilities: state.capabilities, epoch: state.connectionEpoch
+  const { open, results, capabilities, epoch, sharing } = useStore(state => ({
+    open: state.dnsModalOpen, results: state.dnsResults, capabilities: state.capabilities, epoch: state.connectionEpoch,
+    sharing: sharingModeActive(state.streamerStatus, state.streamerBusy)
   }), shallow)
   const [benchmarking, setBenchmarking] = useState(false)
   const [applyingId, setApplyingId] = useState<string | null>(null)
@@ -58,13 +59,13 @@ export const DnsBenchmarkModal: React.FC = () => {
       {!canApply && <p className={styles.topSub}>DNS configuration is unavailable on this platform.</p>}
       <div className={styles.list}>
         {benchmarking ? <div className={styles.loadingWrap} role="status"><div className={styles.spinner} />Querying DNS resolvers…</div>
-          : error ? <div className="nm-error" role="alert">{error}</div>
+          : error ? <div className="nm-error" role="alert">{sharing ? 'DNS details are hidden while sharing.' : error}</div>
           : results?.map(result => <div key={result.id} className={styles.item + (result.isCurrent ? ' ' + styles.itemCurrent : '')}>
             <div className={styles.itemLeft}><div className={styles.itemNameRow}><span className={styles.itemName}>{result.name}</span>
               {result.isCurrent && <span className={styles.currentBadge}><CheckIcon size={11} />Current</span>}
               {result.isFastest && <span className={styles.fastestBadge}>Fastest</span>}</div>
               <p className={styles.itemSub}>{result.description}</p>
-              <div className={styles.itemIps}>{result.isDhcp ? 'Assigned by the network' : result.primary + (result.secondary ? ' · ' + result.secondary : '')}</div></div>
+              <div className={styles.itemIps}>{result.isDhcp ? 'Assigned by the network' : sharing ? 'Hidden while sharing' : result.primary + (result.secondary ? ' · ' + result.secondary : '')}</div></div>
             <div className={styles.itemRight}><div className={styles.latencyWrap}><span className={styles.latencyNum}>{result.latencyMs !== null ? result.latencyMs + ' ms' : result.isDhcp ? '—' : 'No response'}</span></div>
               <button className={styles.applyBtn} disabled={!canApply || result.isCurrent || Boolean(applyingId)} onClick={() => void handleApply(result)}>
                 {applyingId === result.id ? 'Applying…' : result.isCurrent ? 'In use' : 'Use DNS'}</button></div>

@@ -8,7 +8,7 @@ import { Select } from '../Controls/Select'
 import { HelpTip } from '../Controls/HelpTip'
 import { copyText, refreshNetworks, toggleStreamer } from '../../network-actions'
 import { checkAppUpdate, downloadAppUpdate, installAppUpdate, openWebPage } from '../../update-actions'
-import { errorMessage } from '../../network-state'
+import { errorMessage, sharingModeActive } from '../../network-state'
 import styles from './SettingsModal.module.css'
 
 export const SettingsModal: React.FC = () => {
@@ -16,6 +16,7 @@ export const SettingsModal: React.FC = () => {
     open: state.settingsOpen, settings: state.settings, capabilities: state.capabilities, elevation: state.elevationStatus,
     streamer: state.streamerStatus, streamerBusy: state.streamerBusy, update: state.updateInfo, downloading: state.updateDownloading, progress: state.downloadProgress, downloaded: state.downloadedVersion
   }), shallow)
+  const sharing = sharingModeActive(streamer, streamerBusy)
   const [version, setVersion] = useState('…')
   const [checking, setChecking] = useState(false)
   const [updateStatus, setUpdateStatus] = useState('')
@@ -55,6 +56,8 @@ export const SettingsModal: React.FC = () => {
     finally { setTrimming(false) }
   }
   const exportBackup = async () => {
+    const privacy = useStore.getState()
+    if (sharingModeActive(privacy.streamerStatus, privacy.streamerBusy)) { state.addToast('Exit sharing mode before exporting original names', 'info'); return }
     setDataBusy(true)
     try {
       const json = await window.nm.exportBackup()
@@ -84,6 +87,8 @@ export const SettingsModal: React.FC = () => {
     input.click()
   }
   const restoreAll = async () => {
+    const privacy = useStore.getState()
+    if (sharingModeActive(privacy.streamerStatus, privacy.streamerBusy)) { state.addToast('Exit sharing mode before restoring original names', 'info'); return }
     if (!state.networks.some(network => network.renamed)) { state.addToast('No renamed networks to restore', 'info'); return }
     setDataBusy(true)
     try { await window.nm.restoreAll(); state.addToast('Original display names restored', 'success') }
@@ -97,6 +102,8 @@ export const SettingsModal: React.FC = () => {
     finally { setChecking(false) }
   }
   const saveMask = async () => {
+    const privacy = useStore.getState()
+    if (sharingModeActive(privacy.streamerStatus, privacy.streamerBusy)) { setMaskName(settings.streamerMaskName); return }
     const name = maskName.trim()
     if (!name || Array.from(name).length > 128 || /[\x00-\x1f\x7f]/.test(name)) { state.addToast('Use a name of up to 128 characters without control characters.', 'error'); setMaskName(settings.streamerMaskName); return }
     if (name !== settings.streamerMaskName) await state.updateSetting('streamerMaskName', name)
@@ -142,9 +149,10 @@ export const SettingsModal: React.FC = () => {
         <section className={styles.section}><h3 className={styles.sectionTitle}>Names on your screen</h3>
           <p className={styles.note}>{streamer.isCloaked ? 'Your private display name is active.' : streamer.detectedApp ? streamer.detectedApp + ' is running.' : 'Your usual display name is showing.'}</p>
           <button type="button" className={styles.button} disabled={capabilities?.networkRename === false || streamerBusy} onClick={() => void toggleStreamer()}><ShieldIcon size={13} />{streamerBusy ? 'Updating…' : streamer.isCloaked ? 'Restore my display name' : 'Use my private name'}</button>
-          {streamer.error && <p className="nm-error" role="status">{streamer.error}</p>}
+          {streamer.error && <p className="nm-error" role="status">{sharing ? 'Sharing mode needs attention. Exit it to view the detailed error.' : streamer.error}</p>}
           <Toggle label="Use a private name with broadcast apps" sub="Recognizes OBS, Discord, Zoom, Teams, and Twitch Studio." help="Looks for supported apps that are running. It cannot tell whether you are actually recording or broadcasting. After the app closes, NetMask waits briefly before restoring your previous name." on={settings.autoCloakStreamer} disabled={capabilities?.networkRename === false} onChange={value => void state.updateSetting('autoCloakStreamer', value)} />
-          <div className={styles.field}><label className="nm-field-label" htmlFor="streamer-mask-name">My private display name</label><input id="streamer-mask-name" className={styles.textInput} maxLength={256} value={maskName} onChange={event => setMaskName(event.target.value)} onBlur={() => void saveMask()} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() } }} /></div>
+          <div className={styles.field}><label className="nm-field-label" htmlFor="streamer-mask-name">My private display name</label><input id="streamer-mask-name" className={styles.textInput} maxLength={256} value={maskName} disabled={sharing} onChange={event => setMaskName(event.target.value)} onBlur={() => void saveMask()} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() } }} />
+            {sharing && <p className={styles.note}>Exit sharing mode before changing the private name.</p>}</div>
         </section>
         <section className={styles.section}><h3 className={styles.sectionTitle}>Router address</h3>
           <Toggle label="Hide the access point address" sub="Mask the router's BSSID inside NetMask." help="The BSSID identifies a Wi-Fi radio. Hiding it only changes what NetMask displays; it does not alter the router or the network." on={settings.bssidCloaking} onChange={value => void state.updateSetting('bssidCloaking', value)} />
@@ -158,8 +166,9 @@ export const SettingsModal: React.FC = () => {
         </div></section>
         <section className={styles.section}><h3 className={styles.sectionTitle}>Keep your originals <HelpTip label="Recovery records">Before a name changes, NetMask saves the original on this device. Export makes a copy you can keep. Import adds recovery records and keeps originals that are already saved.</HelpTip></h3>
           <p className={styles.note}>Original names stay on this device. Keep a backup somewhere you trust.</p>
-          <div className={styles.buttonGroup}><button type="button" className={styles.button} disabled={dataBusy} onClick={() => void exportBackup()}>Export backup</button><button type="button" className={styles.button} disabled={dataBusy} onClick={importBackup}>Import backup</button></div>
-          <button type="button" className={styles.button + ' ' + styles.danger} disabled={dataBusy || capabilities?.networkRename === false} onClick={() => void restoreAll()}><RestoreIcon size={13} />{dataBusy ? 'Working…' : 'Restore all original names'}</button>
+          <div className={styles.buttonGroup}><button type="button" className={styles.button} disabled={dataBusy || sharing} onClick={() => void exportBackup()}>Export backup</button><button type="button" className={styles.button} disabled={dataBusy} onClick={importBackup}>Import backup</button></div>
+          <button type="button" className={styles.button + ' ' + styles.danger} disabled={dataBusy || sharing || capabilities?.networkRename === false} onClick={() => void restoreAll()}><RestoreIcon size={13} />{dataBusy ? 'Working…' : 'Restore all original names'}</button>
+          {sharing && <p className={styles.note}>Exit sharing mode before exporting or restoring original names.</p>}
         </section>
         {capabilities?.elevationTask && <section className={styles.section}><h3 className={styles.sectionTitle}>Windows permissions <HelpTip label="Administrator permission">Windows protects saved network labels and some adapter settings. NetMask asks for permission when one of those changes needs it. A registered task is an optional way to open an administrator copy.</HelpTip></h3>
           <p className={styles.note}>{elevation?.isElevated ? 'NetMask has administrator permission.' : elevation?.taskConfigured ? 'Your permission task is registered.' : 'Windows asks when administrator permission is needed.'}</p>

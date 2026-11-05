@@ -47,3 +47,21 @@ test('bundled branding and small-window defaults have usable assets', () => {
   assert.match(config.app.security.csp, /object-src 'none'/)
   assert.equal(config.bundle.windows.nsis.installMode, 'currentUser')
 })
+
+test('the Windows setup moves from progress to an explicit completion page', () => {
+  assert.equal(config.bundle.windows.nsis.template, 'installer/installer.nsi')
+  const template = read('src-tauri/installer/installer.nsi')
+  const hooks = read('src-tauri/installer/hooks.nsh')
+  assert.doesNotMatch(template, /MUI_FINISHPAGE_NOAUTOCLOSE/)
+  assert.match(template, /Move directly to the completion page/)
+  assert.match(hooks, /MUI_FINISHPAGE_TITLE "Installation complete"/)
+  assert.match(hooks, /Click Finish to close Setup/)
+  assert.match(hooks, /MUI_FINISHPAGE_RUN_TEXT "Launch NetMask now"/)
+})
+
+test('sharing mode blocks keyboard restoration from revealing a saved name', () => {
+  const app = read('src/renderer/src/App.tsx')
+  const restoreCase = app.slice(app.indexOf("case 'restoreOriginal':"), app.indexOf("case 'reconnectWifi':"))
+  assert.match(restoreCase, /sharingModeActive\(state\.streamerStatus, state\.streamerBusy\)/)
+  assert.doesNotMatch(restoreCase, /Restored original name.*originalName/)
+})

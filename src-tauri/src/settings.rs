@@ -269,6 +269,7 @@ pub fn default_shortcuts() -> HashMap<String, String> {
 
 pub fn default_settings() -> AppSettings {
     AppSettings {
+        onboarding_completed: false,
         minimize_to_tray: true,
         launch_on_startup: false,
         auto_refresh_interval: 30,
@@ -324,7 +325,19 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
 }
 
 pub fn load_settings(store: &JsonStorage) -> Result<AppSettings, String> {
-    let mut settings: AppSettings = store.read("settings.json")?.unwrap_or_default();
+    let raw: Option<serde_json::Value> = store.read("settings.json")?;
+    let mut settings = match raw {
+        None => default_settings(),
+        Some(value) => {
+            let had_onboarding_state = value.get("onboardingCompleted").is_some();
+            let mut settings: AppSettings = serde_json::from_value(value)
+                .map_err(|error| format!("Settings could not be read: {error}"))?;
+            if !had_onboarding_state {
+                settings.onboarding_completed = true;
+            }
+            settings
+        }
+    };
     for (key, value) in default_shortcuts() {
         settings.shortcuts.entry(key).or_insert(value);
     }
@@ -365,7 +378,8 @@ pub fn update_settings_value(
 ) -> Result<AppSettings, String> {
     if !matches!(
         key,
-        "minimizeToTray"
+        "onboardingCompleted"
+            | "minimizeToTray"
             | "launchOnStartup"
             | "autoRefreshInterval"
             | "theme"
@@ -503,6 +517,21 @@ mod tests {
         assert_eq!(settings.shortcuts["refresh"], "");
         assert_eq!(settings.shortcuts["focusRename"], "Ctrl+N");
         assert!(settings.bssid_cloaking);
+        assert!(settings.onboarding_completed);
+        clean_test_storage(&store);
+    }
+
+    #[test]
+    fn only_new_profiles_receive_the_first_run_guide() {
+        let store = test_storage("onboarding");
+        assert!(!load_settings(&store).unwrap().onboarding_completed);
+        store
+            .write(
+                "settings.json",
+                &serde_json::json!({"theme": "light", "onboardingCompleted": false}),
+            )
+            .unwrap();
+        assert!(!load_settings(&store).unwrap().onboarding_completed);
         clean_test_storage(&store);
     }
 

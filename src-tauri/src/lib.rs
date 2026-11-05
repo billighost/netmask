@@ -6,7 +6,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 use std::time::{Duration, Instant};
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -48,7 +48,31 @@ fn persist_window(app: &AppHandle) {
     }
 }
 
-fn start_workers(app: &AppHandle, running: Arc<AtomicBool>) {
+fn update_tray_sharing(
+    app: &AppHandle,
+    item: &CheckMenuItem<tauri::Wry>,
+    status: &types::StreamerStatus,
+) {
+    let _ = item.set_checked(status.is_cloaked);
+    let _ = item.set_text(if status.is_cloaked {
+        "Sharing mode is on"
+    } else {
+        "Sharing mode is off"
+    });
+    if let Some(tray) = app.tray_by_id("netmask") {
+        let _ = tray.set_tooltip(Some(if status.is_cloaked {
+            "NetMask — sharing mode on"
+        } else {
+            "NetMask"
+        }));
+    }
+}
+
+fn start_workers(
+    app: &AppHandle,
+    running: Arc<AtomicBool>,
+    sharing_item: CheckMenuItem<tauri::Wry>,
+) {
     let speed_app = app.clone();
     let speed_running = running.clone();
     std::thread::spawn(move || {
@@ -146,6 +170,7 @@ fn start_workers(app: &AppHandle, running: Arc<AtomicBool>) {
                 status.error.clone(),
             );
             if previous.as_ref() != Some(&signature) {
+                update_tray_sharing(&streamer_app, &sharing_item, &status);
                 let _ = streamer_app.emit("nm:streamer-status", status);
                 previous = Some(signature);
             }
@@ -197,6 +222,26 @@ pub fn run() {
                 }
             }
             let show = MenuItem::with_id(app, "show", "Show NetMask", true, None::<&str>)?;
+            let initial_sharing = streamer::get_streamer_status();
+            let sharing = CheckMenuItem::with_id(
+                app,
+                "sharing",
+                if initial_sharing.is_cloaked {
+                    "Sharing mode is on"
+                } else {
+                    "Sharing mode is off"
+                },
+                true,
+                initial_sharing.is_cloaked,
+                None::<&str>,
+            )?;
+            let check = MenuItem::with_id(
+                app,
+                "connection-check",
+                "Run connection check",
+                true,
+                None::<&str>,
+            )?;
             let quit = MenuItem::with_id(app, "quit", "Quit NetMask", true, None::<&str>)?;
             let version = MenuItem::with_id(
                 app,
@@ -205,7 +250,7 @@ pub fn run() {
                 false,
                 None::<&str>,
             )?;
-            let menu = Menu::with_items(app, &[&version, &show, &quit])?;
+            let menu = Menu::with_items(app, &[&version, &show, &sharing, &check, &quit])?;
             let mut tray = TrayIconBuilder::with_id("netmask")
                 .tooltip("NetMask")
                 .icon_as_template(cfg!(target_os = "macos"))
@@ -214,8 +259,22 @@ pub fn run() {
             if let Some(icon) = app.default_window_icon() {
                 tray = tray.icon(icon.clone());
             }
-            tray.on_menu_event(|app, event| match event.id.as_ref() {
+            let sharing_event = sharing.clone();
+            tray.on_menu_event(move |app, event| match event.id.as_ref() {
                 "show" => show_window(app),
+                "sharing" => {
+                    let app = app.clone();
+                    let sharing = sharing_event.clone();
+                    tauri::async_runtime::spawn_blocking(move || {
+                        let status = streamer::toggle_streamer_cloak();
+                        update_tray_sharing(&app, &sharing, &status);
+                        let _ = app.emit("nm:streamer-status", status);
+                    });
+                }
+                "connection-check" => {
+                    show_window(app);
+                    let _ = app.emit("nm:tray-connection-check", ());
+                }
                 "quit" => app.exit(0),
                 _ => {}
             })
@@ -238,7 +297,12 @@ pub fn run() {
                 }
             })
             .build(app)?;
-            start_workers(app.handle(), app.state::<Workers>().running.clone());
+            update_tray_sharing(app.handle(), &sharing, &initial_sharing);
+            start_workers(
+                app.handle(),
+                app.state::<Workers>().running.clone(),
+                sharing,
+            );
             Ok(())
         })
         .on_window_event(|window, event| match event {
