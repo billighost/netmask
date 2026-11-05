@@ -185,6 +185,7 @@ pub fn instance_lock(wait_for_handoff: bool) -> Result<Option<File>, String> {
     }
 }
 
+#[cfg(any(windows, test))]
 fn migrate_storages(destination: &JsonStorage, sources: &[JsonStorage]) -> Result<(), String> {
     destination.ensure()?;
 

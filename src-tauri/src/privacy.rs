@@ -80,6 +80,8 @@ pub fn get_device_identity() -> Result<DeviceIdentity, String> {
 }
 
 pub fn set_mac_randomization(profile: &str, mode: &str) -> Result<bool, String> {
+    #[cfg(not(windows))]
+    let _ = profile;
     if !cfg!(windows) {
         return Err(
             "MAC randomization must be configured in this operating system's network settings"
