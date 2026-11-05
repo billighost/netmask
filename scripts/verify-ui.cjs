@@ -28,8 +28,8 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
     { guid: 'ethernet-id', name: 'Workshop', originalName: 'Workshop', renamed: false, live: false, type: 'ethernet', canRename: true }
   ]
   const connection = { ssid: 'HomeFiber_5G', profile: 'Saved Studio profile', name: 'Studio', signal: 94, signalDbm: -47, snr: 40, channel: 44, frequency: '5.220 GHz', band: '5 GHz', generation: 'Wi-Fi 5', radioType: '802.11ac', bssid: 'AA:BB:CC:DD:EE:FF', rxRateMbps: 866, txRateMbps: 866, networkGuid: 'wifi-id', interfaceName: 'Wi-Fi', interfaceGuid: 'adapter-id', auth: 'WPA2-Personal' }
-  const settings = { onboardingCompleted, minimizeToTray: true, launchOnStartup: false, autoRefreshInterval: 0, theme, showEthernet: true, ultraLowMemory: false, autoCloakStreamer: false, streamerMaskName: 'Private network', bssidCloaking: true, bssidMaskMode: 'partial', silentElevation: false, shortcuts: {} }
-  const streamer = { detectedApp: null, isCloaked: false, cooldownSeconds: 0 }
+  const settings = { onboardingCompleted, minimizeToTray: true, launchOnStartup: false, autoRefreshInterval: 0, theme, showEthernet: true, ultraLowMemory: false, autoCloakStreamer: false, streamerMaskName: 'Private network', customBroadcastApps: [], sharingTimerMinutes: 30, bssidCloaking: true, bssidMaskMode: 'partial', silentElevation: false, shortcuts: {} }
+  const streamer = { detectedApp: null, isCloaked: false, cooldownSeconds: 0, manualSecondsRemaining: 0, manualTimed: false }
   const identity = { hostname: 'Studio laptop', macAddress: '11:22:33:44:55:66', interfaceName: 'Wi-Fi', interfaceGuid: 'adapter-id', netbiosSilenced: false, macRandomization: 'disabled', activeProfile: 'Saved Studio profile' }
   const roaming = { supported: true, adapterName: 'Sample Wi-Fi adapter', preferredBand: '5 GHz', validPreferredBands: ['5 GHz', '2.4 GHz'], roamingAggressiveness: 'Medium', validRoamingAggressiveness: ['Low', 'Medium', 'High'] }
   const capabilities = { platform, networkRename: platform !== 'macos', wifiSharing: true, dnsConfiguration: true, macRandomization: platform !== 'macos', netbiosControl: platform === 'windows', roamingTuning: platform === 'windows', elevationTask: platform === 'windows', gpuControl: false }
@@ -65,6 +65,7 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
         nm_get_elevation_status: { isElevated: true, silentElevationEnabled: false, taskConfigured: false, tier: 'admin' },
         nm_get_capabilities: capabilities, nm_check_captive_portal: { isCaptive: false, portalUrl: null, checkedAt: Date.now() },
         nm_get_update_status: { isDownloading: false, progress: null, downloadedVersion: null, downloadedFilePath: null, availableUpdate: null },
+        nm_get_recovery_audit: null, nm_get_name_conflict: null,
         nm_check_update: null, nm_get_current_dns: { primary: '1.1.1.1', secondary: '1.0.0.1', isDhcp: false },
         nm_benchmark_dns: resolvers, nm_get_device_identity: identity, nm_get_roaming_settings: roaming,
         nm_run_speed_test: { mbps: 100, mbPerSec: 12.5 },
@@ -91,7 +92,7 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
       if (command === 'nm_apply_dns') { resolvers.forEach(item => item.isCurrent = item.id === args.resolverId); return true }
       if (command === 'nm_reconnect') return true
       if (command === 'nm_export_backup') return JSON.stringify({ 'wifi-id': 'HomeFiber_5G' })
-      if (['nm_open_external', 'nm_trim_memory', 'nm_close', 'nm_minimize'].includes(command)) return null
+      if (['nm_open_external', 'nm_trim_memory', 'nm_close', 'nm_minimize', 'nm_dismiss_recovery_audit'].includes(command)) return null
       if (command in values) return structuredClone(values[command])
       throw Error('Unmocked native command: ' + command)
     }
@@ -421,6 +422,16 @@ async function productFeatureChecks(browser, base, errors, results) {
   const htmlSource = await page.locator('iframe[title="HTML report preview"]').getAttribute('srcdoc')
   assert.match(htmlSource, /Redacted/)
   assert.doesNotMatch(htmlSource, /HomeFiber_5G|Studio|AA:BB:CC|Saved Studio profile/)
+  const htmlFrame = page.frames().find(frame => frame !== page.mainFrame())
+  assert.ok(htmlFrame, 'HTML report preview frame is available')
+  const previewSize = await htmlFrame.evaluate(() => ({ height: innerHeight, scrollHeight: document.documentElement.scrollHeight }))
+  assert.ok(previewSize.scrollHeight > previewSize.height, 'HTML report preview has a scrollable final section')
+  await htmlFrame.evaluate(() => scrollTo(0, document.documentElement.scrollHeight))
+  const scrolled = await htmlFrame.evaluate(() => scrollY)
+  await page.evaluate(() => window.__NM_FIXTURE__.emit('nm:speed', { downMBps: 20, upMBps: 2, downKbps: 20000, upKbps: 2000 }))
+  await page.waitForTimeout(150)
+  assert.ok(await htmlFrame.evaluate(() => scrollY >= Math.max(1, document.documentElement.scrollHeight - innerHeight - 2)), 'Live readings do not snap the HTML report preview back to the top')
+  assert.ok(scrolled > 0)
   await report.getByRole('button', { name: 'Markdown', exact: true }).click()
   const markdown = await report.locator('pre').innerText()
   assert.match(markdown, /\| Connection \| Redacted \|/)

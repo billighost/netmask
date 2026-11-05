@@ -6,15 +6,16 @@ import { Dialog } from '../Dialog/Dialog'
 import { Toggle } from '../Controls/Toggle'
 import { Select } from '../Controls/Select'
 import { HelpTip } from '../Controls/HelpTip'
-import { copyText, refreshNetworks, toggleStreamer } from '../../network-actions'
+import { copyText, refreshNetworks, startStreamerTimer, toggleStreamer } from '../../network-actions'
 import { checkAppUpdate, downloadAppUpdate, installAppUpdate, openWebPage } from '../../update-actions'
 import { errorMessage, sharingModeActive } from '../../network-state'
 import styles from './SettingsModal.module.css'
 
 export const SettingsModal: React.FC = () => {
-  const { open, settings, capabilities, elevation, streamer, streamerBusy, update, downloading, progress, downloaded } = useStore(state => ({
+  const { open, settings, capabilities, elevation, streamer, streamerBusy, connection, update, downloading, progress, downloaded, updateError, updateLastCheckedAt } = useStore(state => ({
     open: state.settingsOpen, settings: state.settings, capabilities: state.capabilities, elevation: state.elevationStatus,
-    streamer: state.streamerStatus, streamerBusy: state.streamerBusy, update: state.updateInfo, downloading: state.updateDownloading, progress: state.downloadProgress, downloaded: state.downloadedVersion
+    streamer: state.streamerStatus, streamerBusy: state.streamerBusy, connection: state.connection, update: state.updateInfo, downloading: state.updateDownloading, progress: state.downloadProgress, downloaded: state.downloadedVersion,
+    updateError: state.updateError, updateLastCheckedAt: state.updateLastCheckedAt
   }), shallow)
   const sharing = sharingModeActive(streamer, streamerBusy)
   const [version, setVersion] = useState('…')
@@ -24,10 +25,12 @@ export const SettingsModal: React.FC = () => {
   const [trimming, setTrimming] = useState(false)
   const [dataBusy, setDataBusy] = useState(false)
   const [maskName, setMaskName] = useState(settings.streamerMaskName)
+  const [customApps, setCustomApps] = useState(settings.customBroadcastApps.join(', '))
   const [tab, setTab] = useState<'general' | 'privacy' | 'tools' | 'about'>('general')
   const state = useStore.getState()
   useEffect(() => { window.nm.getVersion().then(setVersion).catch(() => setVersion('Unavailable')) }, [])
   useEffect(() => { setMaskName(settings.streamerMaskName) }, [settings.streamerMaskName])
+  useEffect(() => { setCustomApps(settings.customBroadcastApps.join(', ')) }, [settings.customBroadcastApps])
   useEffect(() => {
     if (open) window.nm.getElevationStatus().then(state.setElevationStatus).catch(error => state.addToast(errorMessage(error), 'error'))
   }, [open])
@@ -108,6 +111,33 @@ export const SettingsModal: React.FC = () => {
     if (!name || Array.from(name).length > 128 || /[\x00-\x1f\x7f]/.test(name)) { state.addToast('Use a name of up to 128 characters without control characters.', 'error'); setMaskName(settings.streamerMaskName); return }
     if (name !== settings.streamerMaskName) await state.updateSetting('streamerMaskName', name)
   }
+  const saveCustomApps = async () => {
+    const apps = Array.from(new Set(customApps.split(/[\n,]+/).map(name => name.trim()).filter(Boolean)))
+    const invalid = apps.length > 20 || apps.some(name => name.length > 80 || /[\\/"\x00-\x1f\x7f]/.test(name))
+    if (invalid) {
+      state.addToast('Use up to 20 executable names without paths, quotes, or control characters.', 'error')
+      setCustomApps(settings.customBroadcastApps.join(', '))
+      return
+    }
+    if (await state.updateSetting('customBroadcastApps', apps)) setCustomApps(apps.join(', '))
+  }
+  const exportDiagnostics = async () => {
+    setDataBusy(true)
+    try {
+      const report = await window.nm.getDiagnosticReport()
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `netmask-diagnostics-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.append(anchor)
+      anchor.click()
+      anchor.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      state.addToast('Private diagnostic report saved', 'success')
+    } catch (error) { state.addToast(errorMessage(error, 'The diagnostic report could not be created'), 'error') }
+    finally { setDataBusy(false) }
+  }
   const toolButtons = [
     { label: 'Keyboard controls', icon: <KeyboardIcon size={14} />, action: () => state.setShortcutsModalOpen(true), disabled: false },
     { label: 'This device and adapter', icon: <ShieldIcon size={14} />, action: () => state.setPrivacyCloakModalOpen(true), disabled: false },
@@ -150,9 +180,14 @@ export const SettingsModal: React.FC = () => {
           <p className={styles.note}>{streamer.isCloaked ? 'Your private display name is active.' : streamer.detectedApp ? streamer.detectedApp + ' is running.' : 'Your usual display name is showing.'}</p>
           <button type="button" className={styles.button} disabled={capabilities?.networkRename === false || streamerBusy} onClick={() => void toggleStreamer()}><ShieldIcon size={13} />{streamerBusy ? 'Updating…' : streamer.isCloaked ? 'Restore my display name' : 'Use my private name'}</button>
           {streamer.error && <p className="nm-error" role="status">{sharing ? 'Sharing mode needs attention. Exit it to view the detailed error.' : streamer.error}</p>}
-          <Toggle label="Use a private name with broadcast apps" sub="Recognizes OBS, Discord, Zoom, Teams, and Twitch Studio." help="Looks for supported apps that are running. It cannot tell whether you are actually recording or broadcasting. After the app closes, NetMask waits briefly before restoring your previous name." on={settings.autoCloakStreamer} disabled={capabilities?.networkRename === false} onChange={value => void state.updateSetting('autoCloakStreamer', value)} />
+          <Toggle label="Use a private name with broadcast apps" sub="Recognizes common call, recording, and streaming apps." help="Looks only at executable names for OBS, Streamlabs, Discord, Zoom, Teams, Webex, Slack, Skype, Loom, Riverside, XSplit, Twitch Studio, and NVIDIA Broadcast. It never reads browser tabs or history. After the app closes, NetMask waits briefly before restoring your previous name." on={settings.autoCloakStreamer} disabled={capabilities?.networkRename === false} onChange={value => void state.updateSetting('autoCloakStreamer', value)} />
+          <div className={styles.timerRow}><Select id="sharing-timer" label="Sharing timer" value={settings.sharingTimerMinutes} options={[15, 30, 60].map(value => ({ value, label: value + ' minutes' }))} onChange={value => void state.updateSetting('sharingTimerMinutes', value as 15 | 30 | 60)} />
+            <button type="button" className={styles.button} disabled={capabilities?.networkRename === false || streamerBusy || !connection} onClick={() => void startStreamerTimer(settings.sharingTimerMinutes)}>{streamer.manualSecondsRemaining > 0 ? Math.ceil(streamer.manualSecondsRemaining / 60) + ' min left' : 'Start timer'}</button></div>
           <div className={styles.field}><label className="nm-field-label" htmlFor="streamer-mask-name">My private display name</label><input id="streamer-mask-name" className={styles.textInput} maxLength={256} value={maskName} disabled={sharing} onChange={event => setMaskName(event.target.value)} onBlur={() => void saveMask()} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() } }} />
             {sharing && <p className={styles.note}>Exit sharing mode before changing the private name.</p>}</div>
+          <details className={styles.advanced}><summary>Advanced app detection</summary><div className={styles.field}><label className="nm-field-label" htmlFor="custom-broadcast-apps">Extra executable names</label>
+            <input id="custom-broadcast-apps" className={styles.textInput} value={customApps} placeholder="example.exe, another-app" onChange={event => setCustomApps(event.target.value)} onBlur={() => void saveCustomApps()} />
+            <p className={styles.note}>Comma-separated file names only. NetMask matches running process names; it never launches these files.</p></div></details>
         </section>
         <section className={styles.section}><h3 className={styles.sectionTitle}>Router address</h3>
           <Toggle label="Hide the access point address" sub="Mask the router's BSSID inside NetMask." help="The BSSID identifies a Wi-Fi radio. Hiding it only changes what NetMask displays; it does not alter the router or the network." on={settings.bssidCloaking} onChange={value => void state.updateSetting('bssidCloaking', value)} />
@@ -164,6 +199,10 @@ export const SettingsModal: React.FC = () => {
         <section className={styles.section}><h3 className={styles.sectionTitle}>Take a closer look</h3><div className={styles.toolGrid}>
           {toolButtons.map(tool => <button key={tool.label} type="button" className={styles.toolButton} disabled={tool.disabled} onClick={tool.action}>{tool.icon}<span>{tool.label}</span><span aria-hidden="true">↗</span></button>)}
         </div></section>
+        <section className={styles.section}><h3 className={styles.sectionTitle}>Private diagnostics</h3>
+          <p className={styles.note}>Exports version, platform, capability flags, safe counts, and update/sharing state. It never includes network names, SSIDs, BSSIDs, MAC addresses, hostnames, process names, credentials, or file paths.</p>
+          <button type="button" className={styles.button} disabled={dataBusy} onClick={() => void exportDiagnostics()}>{dataBusy ? 'Preparing…' : 'Save diagnostic report'}</button>
+        </section>
         <section className={styles.section}><h3 className={styles.sectionTitle}>Keep your originals <HelpTip label="Recovery records">Before a name changes, NetMask saves the original on this device. Export makes a copy you can keep. Import adds recovery records and keeps originals that are already saved.</HelpTip></h3>
           <p className={styles.note}>Original names stay on this device. Keep a backup somewhere you trust.</p>
           <div className={styles.buttonGroup}><button type="button" className={styles.button} disabled={dataBusy || sharing} onClick={() => void exportBackup()}>Export backup</button><button type="button" className={styles.button} disabled={dataBusy} onClick={importBackup}>Import backup</button></div>
@@ -188,7 +227,8 @@ export const SettingsModal: React.FC = () => {
           <div className={styles.authorLinks}><button type="button" onClick={() => void openWebPage('https://github.com/billighost/netmask')}><GithubIcon size={14} /><span>billighost/netmask</span><span aria-hidden="true">↗</span></button><button type="button" onClick={() => void copyText('bb2010ng@gmail.com', 'Maintainer email copied')}><MailIcon size={14} /><span>bb2010ng@gmail.com</span><span className={styles.copyLabel}>Copy</span></button></div>
         </section>
         <section className={styles.section}><h3 className={styles.sectionTitle}>Updates</h3>
-          <p className={styles.note}>{ready ? 'Version ' + downloaded + ' is ready to install.' : update ? 'Version ' + update.version + ' is available.' : updateStatus || 'Check for a new release on GitHub.'}</p>
+          <p className={styles.note}>{ready ? 'Version ' + downloaded + ' is ready to install.' : update ? 'Version ' + update.version + ' is available.' : updateStatus || updateError || 'NetMask checks automatically when it opens.'}</p>
+          {updateLastCheckedAt && <p className={styles.note}>Last checked {new Date(updateLastCheckedAt).toLocaleString()}.</p>}
           {progress && <div className={styles.progressBox}><p>{Math.round(progress.percent)}% · {(progress.transferred / 1e6).toFixed(1)} of {(progress.total / 1e6).toFixed(1)} MB</p><progress aria-label="Update download" max={100} value={progress.percent} /></div>}
           <div className={styles.buttonGroup}><button type="button" className={styles.button} disabled={checking || downloading} onClick={() => void checkUpdate()}><RefreshIcon size={13} />{checking ? 'Checking…' : 'Check for updates'}</button>
             {ready ? <button type="button" className={styles.button + ' ' + styles.primary} onClick={() => void installAppUpdate()}><DownloadIcon size={13} />Open installer</button> : update && <button type="button" className={styles.button + ' ' + styles.primary} disabled={downloading} onClick={() => void downloadAppUpdate(update)}><DownloadIcon size={13} />{downloading ? 'Downloading…' : update.downloadUrl ? 'Download update' : 'View release'}</button>}

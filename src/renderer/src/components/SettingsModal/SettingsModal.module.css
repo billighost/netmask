@@ -15,6 +15,9 @@
 .sectionTitle { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 10px; font-weight: 500; color: var(--text-muted); letter-spacing: .6px; margin-bottom: 9px; }
 .note { font-size: 11px; color: var(--text-secondary); line-height: 1.7; margin-block: 8px 14px; }
 .field { margin-top: 14px; }
+.timerRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; margin-top: 14px; }
+.advanced { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+.advanced summary { cursor: pointer; color: var(--text-secondary); font-size: 10px; }
 .field > label { margin-bottom: 8px; }
 .textInput { width: 100%; padding: 9px 11px; border: 1px solid var(--border-bright); border-radius: var(--radius-sm); background: var(--bg-surface-1); font-size: 12px; }
 .textInput:focus { border-color: var(--accent); outline: 0; }

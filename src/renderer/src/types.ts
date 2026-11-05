@@ -52,6 +52,8 @@ export type StreamerStatus = {
   detectedApp: string | null
   isCloaked: boolean
   cooldownSeconds: number
+  manualSecondsRemaining: number
+  manualTimed: boolean
   error?: string
 }
 
@@ -80,6 +82,8 @@ export type AppSettings = {
   ultraLowMemory: boolean
   autoCloakStreamer: boolean
   streamerMaskName: string
+  customBroadcastApps: string[]
+  sharingTimerMinutes: 15 | 30 | 60
   bssidCloaking: boolean
   bssidMaskMode: 'full' | 'partial'
   silentElevation: boolean
@@ -193,6 +197,40 @@ export type PlatformCapabilities = {
   roamingTuning: boolean
   elevationTask: boolean
   gpuControl: boolean
+}
+
+export type DiagnosticReport = {
+  generatedAt: number
+  version: string
+  platform: string
+  capabilities: PlatformCapabilities
+  networkCount: number
+  wifiCount: number
+  renamedCount: number
+  syncPendingCount: number
+  recoveryRecordCount: number
+  connected: boolean
+  snapshotError: boolean
+  sharingMode: boolean
+  sharingTimerActive: boolean
+  broadcastAppDetected: boolean
+  updateAvailable: boolean
+  updateVersion: string | null
+  updateDownloading: boolean
+  downloadedVersion: string | null
+}
+
+export type RecoveryAudit = {
+  checkedVersion: string
+  recoveryRecordCount: number
+  attentionCount: number
+  syncPendingCount: number
+}
+
+export type NameConflict = {
+  conflictingGuid: string
+  currentName: string
+  suggestedName: string
 }
 
 export interface ShortcutDefinition {

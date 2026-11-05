@@ -438,9 +438,13 @@ pub fn install_update(requested_path: Option<&str>) -> Result<bool, String> {
     if !verified_is_intact(verified) {
         return Err("The installer changed after downloading; download it again".into());
     }
+    let version = get_update_status()
+        .downloaded_version
+        .ok_or("The downloaded update version is unavailable")?;
+    settings::storage().write("update-pending.json", &Some(version))?;
     #[cfg(windows)]
     {
-        if verified
+        let launch = if verified
             .path
             .extension()
             .is_some_and(|extension| extension == "msi")
@@ -449,29 +453,41 @@ pub fn install_update(requested_path: Option<&str>) -> Result<bool, String> {
                 .arg("/i")
                 .arg(&verified.path)
                 .spawn()
-                .map_err(|_| "Cannot launch the Windows installer")?;
+                .map(|_| ())
         } else {
             system::hidden_command(&verified.path.to_string_lossy())
                 .args(["/UPDATE", "/P", "/R"])
                 .spawn()
-                .map_err(|_| "Cannot launch the Windows installer")?;
+                .map(|_| ())
+        };
+        if launch.is_err() {
+            let _ = settings::storage().write("update-pending.json", &Option::<String>::None);
+            return Err("Cannot launch the Windows installer".into());
         }
         Ok(true)
     }
     #[cfg(target_os = "macos")]
     {
-        system::hidden_command("open")
+        if system::hidden_command("open")
             .arg(&verified.path)
             .spawn()
-            .map_err(|_| "Cannot open the macOS installer")?;
+            .is_err()
+        {
+            let _ = settings::storage().write("update-pending.json", &Option::<String>::None);
+            return Err("Cannot open the macOS installer".into());
+        }
         Ok(false)
     }
     #[cfg(target_os = "linux")]
     {
-        system::hidden_command("xdg-open")
+        if system::hidden_command("xdg-open")
             .arg(&verified.path)
             .spawn()
-            .map_err(|_| "Cannot open the Linux package installer")?;
+            .is_err()
+        {
+            let _ = settings::storage().write("update-pending.json", &Option::<String>::None);
+            return Err("Cannot open the Linux package installer".into());
+        }
         Ok(false)
     }
 }

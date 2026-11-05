@@ -294,10 +294,11 @@ mod tests {
             )
             .is_ok()
         );
-        // Starting a second copy of the test binary can exceed two seconds on
-        // a busy Windows linker/CI host. The leaked fixture sleeps for five,
-        // so a four-second ceiling still proves that inherited pipes closed.
-        assert!(started.elapsed() < Duration::from_secs(4));
+        // Starting a second copy of the test binary can be delayed on a busy
+        // Windows linker/CI host. The leaked fixture sleeps for eight seconds,
+        // so a six-second ceiling leaves scheduling headroom while still
+        // proving that inherited pipes were closed before the child exited.
+        assert!(started.elapsed() < Duration::from_secs(6));
         let error = fixture(
             "system::tests::fixture_private_error",
             Duration::from_secs(2),
@@ -308,7 +309,7 @@ mod tests {
     #[test]
     #[ignore = "subprocess fixture, invoked by the deadline test"]
     fn fixture_holds_pipes() {
-        std::thread::sleep(Duration::from_secs(5));
+        std::thread::sleep(Duration::from_secs(8));
     }
     #[test]
     #[ignore = "subprocess fixture, invoked by the deadline test"]

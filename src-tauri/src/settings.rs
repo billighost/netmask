@@ -205,6 +205,23 @@ fn migrate_storages(destination: &JsonStorage, sources: &[JsonStorage]) -> Resul
         destination.write("names.json", &normalize_backup(names)?)?;
     }
 
+    let mut links: HashMap<String, String> =
+        destination.read("name-links.json")?.unwrap_or_default();
+    let mut links_changed = false;
+    for source in sources {
+        if let Some(source_links) = source.read::<HashMap<String, String>>("name-links.json")? {
+            for (id, stable_id) in normalize_name_links(source_links)? {
+                if let std::collections::hash_map::Entry::Vacant(entry) = links.entry(id) {
+                    entry.insert(stable_id);
+                    links_changed = true;
+                }
+            }
+        }
+    }
+    if links_changed {
+        destination.write("name-links.json", &normalize_name_links(links)?)?;
+    }
+
     // Preferences and streamer recovery are copied from the newest legacy
     // location only when the new location has no value of its own.
     for name in ["settings.json", "streamer.json"] {
@@ -255,6 +272,7 @@ pub fn default_shortcuts() -> HashMap<String, String> {
         ("filterSearch", "Ctrl+F"),
         ("viewDetails", "Ctrl+D"),
         ("toggleStreamer", "Ctrl+Shift+S"),
+        ("startSharingTimer", "Ctrl+Alt+S"),
         ("peekBssid", "Ctrl+Shift+B"),
         ("trimMemory", "Ctrl+Shift+M"),
         ("runSpeedTest", "Ctrl+Shift+T"),
@@ -278,6 +296,8 @@ pub fn default_settings() -> AppSettings {
         ultra_low_memory: false,
         auto_cloak_streamer: true,
         streamer_mask_name: "Private network".into(),
+        custom_broadcast_apps: Vec::new(),
+        sharing_timer_minutes: 30,
         bssid_cloaking: true,
         bssid_mask_mode: "partial".into(),
         silent_elevation: true,
@@ -308,6 +328,20 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
         return Err("BSSID mask must be full or partial".into());
     }
     validate_display_name(&settings.streamer_mask_name)?;
+    if !matches!(settings.sharing_timer_minutes, 15 | 30 | 60) {
+        return Err("Sharing timer must be 15, 30, or 60 minutes".into());
+    }
+    if settings.custom_broadcast_apps.len() > 20
+        || settings.custom_broadcast_apps.iter().any(|name| {
+            let trimmed = name.trim();
+            trimmed.is_empty()
+                || trimmed.chars().count() > 80
+                || trimmed.chars().any(char::is_control)
+                || trimmed.contains(['/', '\\', '"'])
+        })
+    {
+        return Err("Custom sharing apps must be executable names without paths".into());
+    }
     if settings.shortcuts.len() > 64
         || settings
             .shortcuts
@@ -387,6 +421,8 @@ pub fn update_settings_value(
             | "ultraLowMemory"
             | "autoCloakStreamer"
             | "streamerMaskName"
+            | "customBroadcastApps"
+            | "sharingTimerMinutes"
             | "bssidCloaking"
             | "bssidMaskMode"
             | "silentElevation"
@@ -460,6 +496,39 @@ pub fn write_backup(backup: &HashMap<String, String>) -> Result<(), String> {
     storage().write("names.json", backup)
 }
 
+pub fn read_name_links() -> Result<HashMap<String, String>, String> {
+    normalize_name_links(storage().read("name-links.json")?.unwrap_or_default())
+}
+
+pub fn write_name_links(links: &HashMap<String, String>) -> Result<(), String> {
+    storage().write("name-links.json", &normalize_name_links(links.clone())?)
+}
+
+fn normalize_name_links(links: HashMap<String, String>) -> Result<HashMap<String, String>, String> {
+    let mut normalized = HashMap::new();
+    for (id, stable_id) in links {
+        let id = if crate::platform::is_guid(&id) {
+            format!("{{{}}}", id.trim_matches(['{', '}']).to_ascii_lowercase())
+        } else {
+            return Err("A Windows recovery link has an invalid network identifier".into());
+        };
+        if !stable_id.starts_with("wlan:")
+            || stable_id.len() > 512
+            || stable_id.chars().any(char::is_control)
+        {
+            return Err("A Windows recovery link has an invalid saved-profile identifier".into());
+        }
+        if normalized
+            .get(&id)
+            .is_some_and(|existing| existing != &stable_id)
+        {
+            return Err("Conflicting Windows recovery links were preserved for inspection".into());
+        }
+        normalized.insert(id, stable_id);
+    }
+    Ok(normalized)
+}
+
 pub fn validate_backup_json(json: &str) -> Result<HashMap<String, String>, String> {
     if json.len() as u64 > MAX_JSON_BYTES {
         return Err("Backup is too large".into());
@@ -517,6 +586,9 @@ mod tests {
         assert_eq!(settings.shortcuts["refresh"], "");
         assert_eq!(settings.shortcuts["focusRename"], "Ctrl+N");
         assert!(settings.bssid_cloaking);
+        assert!(settings.custom_broadcast_apps.is_empty());
+        assert_eq!(settings.sharing_timer_minutes, 30);
+        assert_eq!(settings.shortcuts["startSharingTimer"], "Ctrl+Alt+S");
         assert!(settings.onboarding_completed);
         clean_test_storage(&store);
     }

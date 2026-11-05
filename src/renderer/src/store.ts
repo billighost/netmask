@@ -23,6 +23,7 @@ export const DEFAULT_SHORTCUTS: Record<string, string> = {
   filterSearch: 'Ctrl+F',
   viewDetails: 'Ctrl+D',
   toggleStreamer: 'Ctrl+Shift+S',
+  startSharingTimer: 'Ctrl+Alt+S',
   peekBssid: 'Ctrl+Shift+B',
   trimMemory: 'Ctrl+Shift+M',
   runSpeedTest: 'Ctrl+Shift+T',
@@ -63,7 +64,10 @@ interface Store {
   downloadProgress: DownloadProgress | null
   downloadedVersion: string | null
   updateInfo: import('./types').UpdateInfo | null
+  updateLastCheckedAt: number | null
+  updateError: string | null
   updateDownloading: boolean
+  recoveryAudit: import('./types').RecoveryAudit | null
 
   // Device/adapter controls, DNS, roaming, ping, captive portal, and sharing.
   pingTelemetry: import('./types').PingTelemetry | null
@@ -127,6 +131,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   ultraLowMemory: false,
   autoCloakStreamer: true,
   streamerMaskName: 'Private network',
+  customBroadcastApps: [],
+  sharingTimerMinutes: 30,
   bssidCloaking: true,
   bssidMaskMode: 'partial',
   silentElevation: true,
@@ -159,13 +165,16 @@ export const useStore = create<Store>((set, get) => ({
   shortcutsModalOpen: false,
   detailsModalGuid: null,
   contextMenu: null,
-  streamerStatus: { detectedApp: null, isCloaked: false, cooldownSeconds: 0 },
+  streamerStatus: { detectedApp: null, isCloaked: false, cooldownSeconds: 0, manualSecondsRemaining: 0, manualTimed: false },
   bssidPeek: false,
   elevationStatus: null,
   downloadProgress: null,
   downloadedVersion: null,
   updateInfo: null,
+  updateLastCheckedAt: null,
+  updateError: null,
   updateDownloading: false,
+  recoveryAudit: null,
   pingTelemetry: null,
   deviceIdentity: null,
   dnsResults: null,

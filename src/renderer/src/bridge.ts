@@ -4,7 +4,7 @@ import type {
   Network, Connection, NetworkDetails, StreamerStatus, SpeedSample, SpeedTestResult,
   UpdateInfo, DownloadProgress, UpdateStatus, AppSettings, ElevationStatus,
   DeviceIdentity, DnsResolverResult, RoamingSettings, PingTelemetry, WifiQrData,
-  CaptivePortalStatus, PlatformCapabilities, NetworkSnapshot
+  CaptivePortalStatus, PlatformCapabilities, NetworkSnapshot, DiagnosticReport, RecoveryAudit, NameConflict
 } from './types'
 
 function createListener<T>(eventName: string) {
@@ -62,6 +62,7 @@ export const tauriApi = {
   checkCaptivePortal: (): Promise<CaptivePortalStatus> => invoke('nm_check_captive_portal'),
   openExternal: (url: string): Promise<void> => invoke('nm_open_external', { url }),
   onCaptivePortalStatus: createListener<CaptivePortalStatus>('nm:captive-portal-status'),
+  onNetworkChanged: createListener<void>('nm:network-changed'),
 
   getNetworks: (): Promise<Network[]> => invoke('nm_get_networks'),
   getNetworkSnapshot: (): Promise<NetworkSnapshot> => invoke('nm_get_network_snapshot'),
@@ -70,6 +71,10 @@ export const tauriApi = {
 
   rename: (guid: string, newName: string, currentName?: string): Promise<void> =>
     invoke('nm_rename', { guid, newName, currentName }),
+  getNameConflict: (guid: string, newName: string, currentName?: string): Promise<NameConflict | null> =>
+    invoke('nm_get_name_conflict', { guid, newName, currentName }),
+  repairNameConflict: (guid: string, newName: string, currentName?: string): Promise<void> =>
+    invoke('nm_repair_name_conflict', { guid, newName, currentName }),
   restore: (guid: string, currentName?: string): Promise<void> =>
     invoke('nm_restore', { guid, currentName }),
   restoreAll: (): Promise<void> => invoke('nm_restore_all'),
@@ -91,7 +96,11 @@ export const tauriApi = {
   trimMemory: (): Promise<void> => invoke('nm_trim_memory'),
 
   getStreamerStatus: (): Promise<StreamerStatus> => invoke('nm_get_streamer_status'),
+  getDiagnosticReport: (): Promise<DiagnosticReport> => invoke('nm_get_diagnostic_report'),
+  getRecoveryAudit: (): Promise<RecoveryAudit | null> => invoke('nm_get_recovery_audit'),
+  dismissRecoveryAudit: (): Promise<void> => invoke('nm_dismiss_recovery_audit'),
   toggleStreamerCloak: (): Promise<StreamerStatus> => invoke('nm_toggle_streamer_cloak'),
+  startStreamerTimer: (minutes: number): Promise<StreamerStatus> => invoke('nm_start_streamer_timer', { minutes }),
   onStreamerStatus: createListener<StreamerStatus>('nm:streamer-status'),
 
   onMaximizeChange: createListener<boolean>('nm:maximize-change'),

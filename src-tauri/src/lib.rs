@@ -54,10 +54,15 @@ fn update_tray_sharing(
     status: &types::StreamerStatus,
 ) {
     let _ = item.set_checked(status.is_cloaked);
-    let _ = item.set_text(if status.is_cloaked {
-        "Sharing mode is on"
+    let _ = item.set_text(if status.manual_seconds_remaining > 0 {
+        format!(
+            "Sharing mode · {} min left",
+            (status.manual_seconds_remaining + 59) / 60
+        )
+    } else if status.is_cloaked {
+        "Sharing mode is on".into()
     } else {
-        "Sharing mode is off"
+        "Sharing mode is off".into()
     });
     if let Some(tray) = app.tray_by_id("netmask") {
         let _ = tray.set_tooltip(Some(if status.is_cloaked {
@@ -73,6 +78,26 @@ fn start_workers(
     running: Arc<AtomicBool>,
     sharing_item: CheckMenuItem<tauri::Wry>,
 ) {
+    let network_app = app.clone();
+    let network_running = running.clone();
+    std::thread::spawn(move || {
+        let mut previous = platform::current_connection_signature().ok();
+        while network_running.load(Ordering::Relaxed) {
+            std::thread::sleep(Duration::from_secs(2));
+            if !network_running.load(Ordering::Relaxed) {
+                break;
+            }
+            let Ok(signature) = platform::current_connection_signature() else {
+                continue;
+            };
+            if previous.as_ref() != Some(&signature) {
+                previous = Some(signature);
+                speed::reset_speed_baseline();
+                let _ = network_app.emit("nm:network-changed", ());
+            }
+        }
+    });
+
     let speed_app = app.clone();
     let speed_running = running.clone();
     std::thread::spawn(move || {
@@ -167,6 +192,8 @@ fn start_workers(
                 status.detected_app.clone(),
                 status.is_cloaked,
                 status.cooldown_seconds,
+                (status.manual_seconds_remaining + 59) / 60,
+                status.manual_timed,
                 status.error.clone(),
             );
             if previous.as_ref() != Some(&signature) {
@@ -205,6 +232,9 @@ pub fn run() {
             settings::ensure_data_dir()?;
             if let Err(error) = settings::migrate_legacy_data() {
                 log::warn!("Legacy settings migration was not completed: {error}");
+            }
+            if let Err(error) = operations::run_pending_recovery_audit() {
+                log::warn!("Post-update recovery audit was deferred: {error}");
             }
             let preferences = settings::get_settings();
             if let Some(window) = app.get_webview_window("main") {
@@ -348,6 +378,8 @@ pub fn run() {
             commands::nm_get_connection,
             commands::nm_get_details,
             commands::nm_rename,
+            commands::nm_get_name_conflict,
+            commands::nm_repair_name_conflict,
             commands::nm_restore,
             commands::nm_restore_all,
             commands::nm_reconnect,
@@ -362,7 +394,11 @@ pub fn run() {
             commands::nm_close,
             commands::nm_trim_memory,
             commands::nm_get_streamer_status,
+            commands::nm_get_diagnostic_report,
+            commands::nm_get_recovery_audit,
+            commands::nm_dismiss_recovery_audit,
             commands::nm_toggle_streamer_cloak,
+            commands::nm_start_streamer_timer,
             commands::nm_get_version,
             commands::nm_get_update_status,
             commands::nm_check_update,
