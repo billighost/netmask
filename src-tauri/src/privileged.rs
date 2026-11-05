@@ -133,10 +133,12 @@ impl Request {
 
     fn execute(&self) -> Result<(), String> {
         self.validate()?;
+        #[cfg(windows)]
         if let Self::Rename { id, name } = self {
-            #[cfg(windows)]
             return platform::windows::rename(id, name, false);
-            #[cfg(not(windows))]
+        }
+        #[cfg(not(windows))]
+        if matches!(self, Self::Rename { .. }) {
             return Err("Windows operation unavailable".into());
         }
         system::powershell(&self.script()?.ok_or("Missing operation")?).map(|_| ())

@@ -1,3 +1,5 @@
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use crate::platform;
 use crate::types::DnsResolverResult;
 use crate::{settings, system};
 use std::net::{IpAddr, SocketAddr, UdpSocket};
