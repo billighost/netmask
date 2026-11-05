@@ -107,14 +107,29 @@ pub fn profiles() -> Result<Vec<Profile>, String> {
     })
 }
 
-pub fn rename(id: &str, name: &str) -> Result<(), String> {
+fn parse_identifier(id: &str) -> Result<GUID, String> {
     if !super::is_guid(id) {
         return Err("Invalid Windows network identifier".into());
     }
     let hex = id.trim_matches(['{', '}']).replace('-', "");
-    let guid = GUID::from_u128(
+    Ok(GUID::from_u128(
         u128::from_str_radix(&hex, 16).map_err(|_| "Invalid Windows network identifier")?,
-    );
+    ))
+}
+
+pub fn name(id: &str) -> Result<String, String> {
+    let guid = parse_identifier(id)?;
+    with_manager(|manager| {
+        let network = unsafe { manager.GetNetwork(guid) }
+            .map_err(|_| "This Windows network is no longer available")?;
+        unsafe { network.GetName() }
+            .map(|value| value.to_string())
+            .map_err(|_| "Network display name unavailable".into())
+    })
+}
+
+pub fn rename(id: &str, name: &str) -> Result<(), String> {
+    let guid = parse_identifier(id)?;
     with_manager(|manager| {
         let network = unsafe { manager.GetNetwork(guid) }
             .map_err(|_| "This Windows network is no longer available")?;

@@ -322,17 +322,24 @@ pub fn rename_with_mode(
         }
     }
     #[cfg(windows)]
-    windows::rename(guid, new_name, allow_prompt)?;
+    windows::rename(guid, new_name, current_name, allow_prompt)?;
     #[cfg(target_os = "linux")]
     linux::rename(guid, new_name, current_name, allow_prompt)?;
     #[cfg(target_os = "macos")]
     macos::rename(guid, new_name, current_name, allow_prompt)?;
-    let networks = get_networks(&settings::read_backup()?)?;
-    if display_name_confirmed(&networks, guid, new_name) {
-        Ok(())
-    } else {
-        Err("The operating system did not confirm the new display name. The original name is still saved.".into())
+    // Windows and NetworkManager may publish the updated profile through a
+    // separate service notification. Give that bounded refresh time before
+    // treating a successful protected write as a failure.
+    for attempt in 0..10 {
+        let networks = get_networks(&settings::read_backup()?)?;
+        if display_name_confirmed(&networks, guid, new_name) {
+            return Ok(());
+        }
+        if attempt < 9 {
+            std::thread::sleep(Duration::from_millis(100));
+        }
     }
+    Err("The operating system did not confirm the new display name. The original name is still saved.".into())
 }
 fn display_name_confirmed(networks: &[Network], guid: &str, expected_name: &str) -> bool {
     networks

@@ -131,7 +131,10 @@ pub fn get_data_dir() -> PathBuf {
             .or_else(|| std::env::var_os("APPDATA"))
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir);
-        base.join("NetMask")
+        // The installer owns %LOCALAPPDATA%\NetMask and removes that directory
+        // during uninstall. Keep recovery records in an application-data path
+        // that survives removal so a failed uninstall restore is recoverable.
+        base.join("com.billighost.netmask")
     }
     #[cfg(target_os = "macos")]
     {
@@ -182,24 +185,59 @@ pub fn instance_lock(wait_for_handoff: bool) -> Result<Option<File>, String> {
     }
 }
 
-/// Previous Windows installations used ProgramData. Copy only missing files;
-/// never modify the legacy directory or overwrite an existing per-user file.
+fn migrate_storages(destination: &JsonStorage, sources: &[JsonStorage]) -> Result<(), String> {
+    destination.ensure()?;
+
+    let mut names: HashMap<String, String> = destination.read("names.json")?.unwrap_or_default();
+    let mut names_changed = false;
+    for source in sources {
+        if let Some(source_names) = source.read::<HashMap<String, String>>("names.json")? {
+            for (id, original) in normalize_backup(source_names)? {
+                if let std::collections::hash_map::Entry::Vacant(entry) = names.entry(id) {
+                    entry.insert(original);
+                    names_changed = true;
+                }
+            }
+        }
+    }
+    if names_changed {
+        destination.write("names.json", &normalize_backup(names)?)?;
+    }
+
+    // Preferences and streamer recovery are copied from the newest legacy
+    // location only when the new location has no value of its own.
+    for name in ["settings.json", "streamer.json"] {
+        if destination.path(name)?.exists() {
+            continue;
+        }
+        for source in sources {
+            if let Some(value) = source.read::<serde_json::Value>(name)? {
+                destination.write(name, &value)?;
+                break;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Earlier Windows builds stored data in the install directory and ProgramData.
+/// Merge their recovery records without deleting or overwriting either source.
 pub fn migrate_legacy_data() -> Result<(), String> {
     #[cfg(windows)]
     {
-        let legacy = PathBuf::from(
+        let local = std::env::var_os("LOCALAPPDATA")
+            .or_else(|| std::env::var_os("APPDATA"))
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+            .join("NetMask");
+        let program_data = PathBuf::from(
             std::env::var_os("ProgramData").unwrap_or_else(|| "C:\\ProgramData".into()),
         )
         .join("NetMask");
-        for name in ["settings.json", "names.json"] {
-            if storage().directory.join(name).exists() {
-                continue;
-            }
-            let old_storage = JsonStorage::new(legacy.clone());
-            if let Some(value) = old_storage.read::<serde_json::Value>(name)? {
-                storage().write(name, &value)?;
-            }
-        }
+        migrate_storages(
+            storage(),
+            &[JsonStorage::new(local), JsonStorage::new(program_data)],
+        )?;
     }
     Ok(())
 }
@@ -492,6 +530,58 @@ mod tests {
         );
         assert!(store.path("../settings.json").is_err());
         clean_test_storage(&store);
+    }
+
+    #[test]
+    fn migration_merges_recovery_records_and_preserves_newer_preferences() {
+        let destination = test_storage("migration-destination");
+        let recent = test_storage("migration-recent");
+        let old = test_storage("migration-old");
+        destination
+            .write(
+                "names.json",
+                &serde_json::json!({"existing": "Current original"}),
+            )
+            .unwrap();
+        destination
+            .write("settings.json", &serde_json::json!({"theme": "light"}))
+            .unwrap();
+        recent
+            .write(
+                "names.json",
+                &serde_json::json!({"existing": "Stale original", "recent": "Recent original"}),
+            )
+            .unwrap();
+        recent
+            .write("settings.json", &serde_json::json!({"theme": "dark"}))
+            .unwrap();
+        recent
+            .write("streamer.json", &serde_json::json!({"guid": "network"}))
+            .unwrap();
+        old.write(
+            "names.json",
+            &serde_json::json!({"legacy": "Legacy original"}),
+        )
+        .unwrap();
+
+        let sources = [recent, old];
+        migrate_storages(&destination, &sources).unwrap();
+        let names: HashMap<String, String> = destination.read("names.json").unwrap().unwrap();
+        assert_eq!(names["existing"], "Current original");
+        assert_eq!(names["recent"], "Recent original");
+        assert_eq!(names["legacy"], "Legacy original");
+        assert_eq!(
+            destination
+                .read::<serde_json::Value>("settings.json")
+                .unwrap()
+                .unwrap()["theme"],
+            "light"
+        );
+        assert!(destination.path("streamer.json").unwrap().exists());
+        clean_test_storage(&destination);
+        for source in &sources {
+            clean_test_storage(source);
+        }
     }
 
     #[test]

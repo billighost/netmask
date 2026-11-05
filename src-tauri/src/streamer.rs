@@ -1,5 +1,7 @@
+#[cfg(unix)]
+use crate::system;
 use crate::types::StreamerStatus;
-use crate::{operations, platform, settings, system};
+use crate::{operations, platform, settings};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -81,19 +83,52 @@ pub fn broadcast_app_name(process: &str) -> Option<&'static str> {
 
 fn running_broadcast_app() -> Result<Option<String>, String> {
     #[cfg(windows)]
-    let output = system::run("tasklist.exe", &["/FO", "CSV", "/NH"])?;
+    {
+        use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+        use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
+            TH32CS_SNAPPROCESS,
+        };
+        let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+        if snapshot == INVALID_HANDLE_VALUE {
+            return Err("Windows process detection is temporarily unavailable".into());
+        }
+        struct Snapshot(windows_sys::Win32::Foundation::HANDLE);
+        impl Drop for Snapshot {
+            fn drop(&mut self) {
+                unsafe {
+                    CloseHandle(self.0);
+                }
+            }
+        }
+        let snapshot = Snapshot(snapshot);
+        let mut entry = PROCESSENTRY32W::default();
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        if unsafe { Process32FirstW(snapshot.0, &mut entry) } == 0 {
+            return Err("Windows process detection is temporarily unavailable".into());
+        }
+        loop {
+            let length = entry
+                .szExeFile
+                .iter()
+                .position(|value| *value == 0)
+                .unwrap_or(entry.szExeFile.len());
+            let process = String::from_utf16_lossy(&entry.szExeFile[..length]);
+            if let Some(app) = broadcast_app_name(&process) {
+                return Ok(Some(app.into()));
+            }
+            if unsafe { Process32NextW(snapshot.0, &mut entry) } == 0 {
+                return Ok(None);
+            }
+        }
+    }
     #[cfg(unix)]
-    let output = system::run("ps", &["-A", "-o", "comm="])?;
-    Ok(output.lines().find_map(|line| {
-        #[cfg(windows)]
-        let process = line
-            .strip_prefix('"')
-            .and_then(|s| s.split('"').next())
-            .unwrap_or("");
-        #[cfg(unix)]
-        let process = line.trim();
-        broadcast_app_name(process).map(str::to_owned)
-    }))
+    {
+        let output = system::run("ps", &["-A", "-o", "comm="])?;
+        Ok(output
+            .lines()
+            .find_map(|line| broadcast_app_name(line.trim()).map(str::to_owned)))
+    }
 }
 
 fn status(state: &State, now: Instant) -> StreamerStatus {
@@ -214,6 +249,7 @@ pub fn check_streamer_now() -> StreamerStatus {
             Ok(None)
         } {
             Ok(app) => {
+                state.error = None;
                 state.detected_app = app;
                 if state.detected_app.is_none() {
                     state.suppressed = false;
@@ -299,6 +335,14 @@ pub fn shutdown() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    #[cfg(windows)]
+    fn broadcast_detection_uses_the_native_process_snapshot_without_a_shell_timeout() {
+        let started = Instant::now();
+        running_broadcast_app().unwrap();
+        assert!(started.elapsed() < Duration::from_secs(2));
+    }
+
     #[test]
     fn cooldown_uses_elapsed_time_and_manual_masks_do_not_depend_on_process_detection() {
         let start = Instant::now();

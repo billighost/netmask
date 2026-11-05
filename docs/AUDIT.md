@@ -112,6 +112,15 @@ Mesh tools were unavailable during this follow-up. This document and the product
 - The final read-only v2.3.3 diagnostic ran without elevation. It returned a connected 479-network snapshot, successful identity/DNS/adapter reads, and confirmed that the live row and connection use the same local label while that label differs from the router SSID.
 - The diagnostic and automated tests do not rename a live network, reconnect Wi-Fi, approve an elevation prompt, or change protected network settings. Supported-platform CI and target-hardware checks remain the evidence for OS integration and installer behavior.
 
+## v2.3.4 rename and recovery repair, 2026-11-05
+
+- The Windows Tauri path had stopped synchronizing the Network List Manager label with the associated saved WLAN profile, while the Electron implementation changed both. The native rename now identifies the matching profile by adapter and live connection, applies both changes in one elevated helper, and rolls back the NLM label if the WLAN write fails.
+- Rename confirmation now polls bounded service refreshes for up to one second. The keyboard restore shortcut uses the same refreshed identity and connection checks as the visible restore actions.
+- Windows recovery data previously lived in `%LOCALAPPDATA%\NetMask`, which is also the NSIS install directory. It now lives in `%LOCALAPPDATA%\com.billighost.netmask` and merges missing recovery records from the former install directory and the Electron-era ProgramData directory without overwriting newer entries or deleting either source.
+- NSIS and MSI uninstall paths invoke the native `--nm-uninstall` recovery mode before removing the executable. It restores all available originals with one elevation, removes the stale scheduled task, clears streamer recovery only after success, and leaves the durable recovery file intact after any failure. MSI upgrades explicitly skip uninstall restoration.
+- Sharing-mode detection no longer launches `tasklist.exe` every five seconds. Windows process names come from the native Tool Help snapshot API, and a transient scan error is cleared by the next successful scan instead of remaining stuck in the privacy panel.
+- Verification passed 39 JavaScript checks, TypeScript, hooks lint, the production renderer build, 28 browser scenarios, Rust formatting, the native workspace check, and 37 executed native tests; three subprocess fixtures remain intentionally ignored in enumeration and run through their deadline test. The native Windows process-snapshot regression test completes without launching a shell. Optimized Windows builds produced a 7,321,730-byte NSIS installer and an 11,235,328-byte MSI. WiX decompilation confirmed the `NetMaskRestoreNamesBeforeUninstall` action, `--nm-uninstall` command, and pre-`RemoveFiles` condition in the MSI.
+
 ## Boundaries
 
 The audit does not change the developer's live Wi-Fi, DNS, registry, credentials, or driver settings as a test. Parser, socket, storage, subprocess, and browser fixtures do not prove permission prompts, real reconnects, Wi-Fi hardware behavior, signing, or every desktop environment's displayed name.

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="NetMaskUninstallRecoveryComponent" Guid="*">
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\Bello Bilal\NetMask"
+          Name="Network Name Recovery"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+    <CustomAction
+      Id="NetMaskRestoreNamesBeforeUninstall"
+      FileKey="Path"
+      ExeCommand="--nm-uninstall"
+      Execute="immediate"
+      Impersonate="yes"
+      Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="NetMaskRestoreNamesBeforeUninstall" Before="RemoveFiles">
+        REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE
+      </Custom>
+    </InstallExecuteSequence>
+  </Fragment>
+</Wix>

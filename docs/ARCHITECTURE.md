@@ -39,7 +39,7 @@ Preferences and recovery records stay in the current account's data directory:
 
 | System | Directory |
 | --- | --- |
-| Windows | `%LOCALAPPDATA%\NetMask` |
+| Windows | `%LOCALAPPDATA%\com.billighost.netmask` |
 | macOS | `~/Library/Application Support/NetMask` |
 | Linux | `$XDG_CONFIG_HOME/netmask`, or `~/.config/netmask` |
 
@@ -47,7 +47,7 @@ An absolute `NETMASK_DATA_DIR` override is available for isolated diagnostics. T
 
 `settings.rs` bounds JSON size, validates preferences and imports, merges new defaults into old preferences, serializes mutations with OS file locks, and replaces complete files atomically. On Unix it sets private directory/file permissions. Parse failures preserve the original file and surface an error rather than treating corrupt recovery data as an empty backup.
 
-Windows migration copies missing settings and name files from the previous ProgramData location. It does not delete the old files or overwrite existing per-user data. `names.json` stores original labels and `streamer.json` stores a recoverable masking session. These files are JSON, not encrypted storage.
+Windows migration merges missing recovery records from the former `%LOCALAPPDATA%\NetMask` install directory and the Electron-era ProgramData location. Newer records and preferences win; migration does not delete or overwrite either legacy source. `names.json` stores original labels and `streamer.json` stores a recoverable masking session. These files are JSON, not encrypted storage.
 
 ## Fieldnotes interface and events
 
