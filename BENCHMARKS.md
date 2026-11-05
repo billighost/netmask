@@ -4,17 +4,17 @@ The current app uses Tauri and the operating system's webview. Previous numbers 
 
 ## Native memory, Windows, 2026-11-05
 
-Measured the optimized v2.3.2 pre-release executable on Windows 11 Pro build 22000, an Intel Core i5-7200U with 7.9 GiB visible RAM, and WebView2 156.0.4314.58. The executable SHA-256 was `9a255cb718e6d4df3a30c5edfb6bdad79fac24700c7fa8e2d302c8b518ee7d29`. NetMask settings and WebView2 data were isolated so an already-running installed copy could not share renderer processes with the measured build.
+Measured the optimized v2.3.2 release-candidate executable from clean commit `e0d874a39481062ac97a5bfe921690f1272e1fb6` on Windows 11 Pro build 22000, an Intel Core i5-7200U with 7.9 GiB visible RAM, and WebView2 156.0.4314.58. The executable SHA-256 was `591a0ac1d26d4d1edb6ea6af5c4aab1349216def71a56572568fe9304ede014e`. NetMask settings and WebView2 data were isolated so another installed copy could not share renderer processes with the measured build.
 
 | Metric, 15 one-second samples per state | Visible after 30 s | Hidden in tray after 60 s |
 | --- | ---: | ---: |
-| Private resident memory, median (range) | **135.1 MiB** (127.6–199.1) | **119.1 MiB** (118.5–120.3) |
-| Total working set, median (range) | 384.4 MiB (377.2–503.2) | 371.2 MiB (369.7–371.6) |
-| Private commit, median (range) | 181.7 MiB (173.5–278.6) | 163.9 MiB (163.4–165.3) |
+| Private resident memory, median (range) | **135.8 MiB** (128.2–216.3) | **119.6 MiB** (118.8–120.7) |
+| Total working set, median (range) | 388.2 MiB (380.8–518.1) | 374.7 MiB (373.0–375.2) |
+| Private commit, median (range) | 189.0 MiB (181.4–302.7) | 172.8 MiB (171.0–173.0) |
 
-Private resident memory is the sum of resident `QueryWorkingSet` pages whose Shared bit is unset across the NetMask host and its descendants. The visible median comprised 5.1 MiB in the Rust host, 126.8 MiB in WebView2, and the remainder in short-lived command descendants; the tray median comprised 5.1 MiB in the host and 114.0 MiB in WebView2. Total working set includes shared pages and can count them in more than one process. Private commit includes nonresident committed pages, so neither of those values should be relabelled as resident RAM.
+Private resident memory is the sum of resident `QueryWorkingSet` pages whose Shared bit is unset across the NetMask host and its descendants. The visible median comprised 5.1 MiB in the Rust host, 130.4 MiB in WebView2, and the remainder in short-lived command descendants; the tray median comprised 5.1 MiB in the host and 114.6 MiB in WebView2. Total working set includes shared pages and can count them in more than one process. Private commit includes nonresident committed pages, so neither of those values should be relabelled as resident RAM.
 
-The run used actual local saved networks and normal visible telemetry, Paper theme, automation disabled, no speed test or update download, and no explicit working-set trim. The source tree was still a dirty v2.3.2 release candidate based on `d00ce49abda2f783e192ad6cd7559176c33b9236`; the exact binary hash above identifies what was measured. See the [raw report](docs/benchmarks/native-memory-v2.3.2-2026-11-05.json) for every sample and process. This is one machine, not a cross-platform guarantee.
+The run used actual local saved networks and normal visible telemetry, Paper theme, automation disabled, no speed test or update download, and no explicit working-set trim. See the [raw report](docs/benchmarks/native-memory-v2.3.2-2026-11-05.json) for every sample and process. This is one machine, not a cross-platform guarantee.
 
 To repeat the same safe measurement with an optimized Windows build:
 
