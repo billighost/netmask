@@ -13,9 +13,9 @@ fn properties() -> Result<(String, Vec<Property>), String> {
     let guid = platform::windows::active_interface_guid()?
         .ok_or("Connect to Wi-Fi to inspect its driver settings")?;
     let data = system::powershell_json(&format!(
-        "$adapter = Get-NetAdapter | Where-Object {{ $_.InterfaceGuid.ToString('B') -eq {} }} | Select-Object -First 1; if (-not $adapter) {{ throw 'Wi-Fi adapter unavailable' }}; $props = @(Get-NetAdapterAdvancedProperty -Name '*' -ErrorAction Stop | Where-Object {{ $_.Name -eq $adapter.Name -and ($_.RegistryKeyword -match 'PreferredBand|Roam.*Aggress' -or $_.DisplayName -match 'Preferred Band|Roaming Aggressiveness') }} | ForEach-Object {{ [pscustomobject]@{{ keyword = $_.RegistryKeyword; value = $_.DisplayValue; valid = @($_.ValidDisplayValues) }} }}); [pscustomobject]@{{ name = $adapter.Name; properties = $props }}",
+        "$adapter = Get-NetAdapter | Where-Object {{ ([Guid]$_.InterfaceGuid).ToString('B') -eq {} }} | Select-Object -First 1; if (-not $adapter) {{ throw 'Wi-Fi adapter unavailable' }}; $props = @(Get-NetAdapterAdvancedProperty -Name '*' -ErrorAction Stop | Where-Object {{ $_.Name -eq $adapter.Name -and ($_.RegistryKeyword -match 'PreferredBand|Roam.*Aggress') }} | ForEach-Object {{ [pscustomobject]@{{ keyword = $_.RegistryKeyword; value = $_.DisplayValue; valid = @($_.ValidDisplayValues) }} }}); [pscustomobject]@{{ name = $adapter.Name; properties = $props }}",
         system::powershell_literal(&guid)
-    ))?;
+    )).map_err(|error| format!("Wi-Fi adapter settings could not be read. {error}"))?;
     let properties = data["properties"]
         .as_array()
         .map(|rows| {
@@ -78,17 +78,15 @@ pub fn set_roaming_settings(band: Option<&str>, roaming: Option<&str>) -> Result
     }
     settings::storage().with_lock("driver-mutations", || {
         let (adapter, properties) = properties()?;
-        let mut script = String::new();
+        let mut changes = Vec::new();
         for (is_band, value) in [(true, band), (false, roaming)] {
             let Some(value) = value else { continue; };
             let property = properties.iter().find(|p| preferred(p) == is_band).ok_or("This driver does not expose the requested control")?;
             if !property.valid.iter().any(|valid| valid == value) { return Err("The requested value is not supported by this Wi-Fi driver".into()); }
-            script.push_str(&format!("Get-NetAdapterAdvancedProperty -Name '*' -ErrorAction Stop | Where-Object {{ $_.Name -eq {} -and $_.RegistryKeyword -eq {} }} | Set-NetAdapterAdvancedProperty -DisplayValue {} -NoRestart -ErrorAction Stop; ",
-                system::powershell_literal(&adapter), system::powershell_literal(&property.keyword), system::powershell_literal(value)));
+            changes.push((property.keyword.clone(), value.to_owned()));
         }
-        if script.is_empty() { return Err("Choose a driver setting to change".into()); }
-        script.push_str(&format!("Get-NetAdapter | Where-Object {{ $_.Name -eq {} }} | Restart-NetAdapter -Confirm:$false -ErrorAction Stop", system::powershell_literal(&adapter)));
-        system::powershell(&script, !platform::is_admin())?;
+        if changes.is_empty() { return Err("Choose a driver setting to change".into()); }
+        crate::privileged::run(crate::privileged::Request::Driver { adapter: adapter.clone(), changes })?;
         // The adapter may reconnect before the WLAN API reports a connection.
         let verify_script = format!("@(Get-NetAdapterAdvancedProperty -Name '*' -ErrorAction Stop | Where-Object {{ $_.Name -eq {} }} | Select-Object RegistryKeyword, DisplayValue)", system::powershell_literal(&adapter));
         let verified = system::powershell_json(&verify_script)?;

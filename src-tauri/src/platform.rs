@@ -421,18 +421,12 @@ pub fn setup_silent_elevation() -> (bool, String) {
         );
     }
     let result: Result<(), String> = (|| {
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
         let user =
             powershell_json("[Security.Principal.WindowsIdentity]::GetCurrent().User.Value")?
                 .as_str()
                 .ok_or("Cannot determine the current Windows user")?
                 .to_owned();
-        let script = format!(
-            "$action = New-ScheduledTaskAction -Execute {} -Argument '--handoff'; $principal = New-ScheduledTaskPrincipal -UserId {} -LogonType Interactive -RunLevel Highest; $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; Register-ScheduledTask -TaskName 'NetMask_Elevated' -Action $action -Principal $principal -Settings $settings -Force -ErrorAction Stop | Out-Null",
-            powershell_literal(&exe.to_string_lossy()),
-            powershell_literal(&user)
-        );
-        powershell(&script, !is_admin())?;
+        crate::privileged::run(crate::privileged::Request::RegisterTask { user_sid: user })?;
         if is_task_configured() {
             Ok(())
         } else {
@@ -451,10 +445,7 @@ pub fn remove_silent_elevation() -> (bool, String) {
             "Scheduled elevation tasks are available only on Windows".into(),
         );
     }
-    match powershell(
-        "Unregister-ScheduledTask -TaskName 'NetMask_Elevated' -Confirm:$false -ErrorAction Stop",
-        !is_admin(),
-    ) {
+    match crate::privileged::run(crate::privileged::Request::RemoveTask) {
         Ok(_) => (true, "Elevation task removed".into()),
         Err(error) => (false, error),
     }
@@ -468,28 +459,15 @@ pub fn elevate() -> Result<(), String> {
     }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let exe = powershell_literal(&exe.to_string_lossy());
-    let script = if settings::get_settings().silent_elevation && is_task_configured() {
-        format!(
+    if settings::get_settings().silent_elevation && is_task_configured() {
+        let script = format!(
             "$task = Get-ScheduledTask -TaskName 'NetMask_Elevated' -ErrorAction Stop; if ($task.Actions.Execute -ne {exe} -or $task.Actions.Arguments -ne '--handoff') {{ throw 'Elevation task needs to be registered again for this installation.' }}; Start-ScheduledTask -TaskName 'NetMask_Elevated' -ErrorAction Stop"
-        )
+        );
+        powershell(&script)?;
     } else {
-        format!(
-            "Start-Process -FilePath {exe} -ArgumentList '--handoff' -Verb RunAs -PassThru -WindowStyle Hidden | Out-Null"
-        )
-    };
-    let script = system::encode_powershell(&format!("$ErrorActionPreference = 'Stop'; {script}"));
-    system::run_checked(
-        "powershell.exe",
-        &[
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-EncodedCommand",
-            &script,
-        ],
-        Duration::from_secs(120),
-    )?;
+        #[cfg(windows)]
+        crate::privileged::launch_elevated("--handoff", false)?;
+    }
     Ok(())
 }
 pub fn set_launch_on_startup(enabled: bool) -> Result<(), String> {

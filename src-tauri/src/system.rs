@@ -161,7 +161,21 @@ pub fn run_checked(program: &str, arguments: &[&str], timeout: Duration) -> Resu
     let status = status?;
     if !status.success() {
         // Both output streams can echo arguments, SSIDs or credentials.
-        return Err(format!("{program} failed (exit code {:?})", status.code()));
+        if program.eq_ignore_ascii_case("powershell.exe") {
+            return Err(match status.code() {
+                Some(5) => "Windows requires administrator permission for this operation.",
+                Some(127) => "This Windows installation does not provide the required network command.",
+                Some(87) => "Windows rejected the network command's parameters.",
+                _ => "Windows could not complete the network operation. Check the adapter and its supported settings.",
+            }.into());
+        }
+        return Err(format!(
+            "{program} failed (exit code {})",
+            status
+                .code()
+                .map(|code| code.to_string())
+                .unwrap_or_else(|| "unavailable".into())
+        ));
     }
     Ok(String::from_utf8_lossy(&stdout)
         .trim_end_matches(['\r', '\n'])
@@ -181,24 +195,13 @@ pub fn encode_powershell(script: &str) -> String {
     base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 
-pub fn elevated_script(script: &str) -> String {
-    let child = encode_powershell(&format!(
-        "$ErrorActionPreference = 'Stop'; try {{ {script} }} catch {{ exit 1 }}"
-    ));
-    format!(
-        "$ErrorActionPreference = 'Stop'; try {{ $p = Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {child}' -Verb RunAs -Wait -PassThru -WindowStyle Hidden; exit $p.ExitCode }} catch {{ exit 1 }}"
-    )
-}
-
-pub fn powershell(script: &str, elevated: bool) -> Result<String, String> {
+pub fn powershell(script: &str) -> Result<String, String> {
     if !cfg!(windows) {
         return Err("This operation is only available on Windows".into());
     }
-    let script = if elevated {
-        elevated_script(script)
-    } else {
-        format!("$ErrorActionPreference = 'Stop'; {script}")
-    };
+    let script = format!(
+        "$ErrorActionPreference = 'Stop'; try {{ {script} }} catch {{ if ($_.Exception -is [UnauthorizedAccessException] -or $_.Exception.HResult -eq -2147024891) {{ exit 5 }} elseif ($_.Exception -is [Management.Automation.CommandNotFoundException]) {{ exit 127 }} elseif ($_.Exception -is [ArgumentException]) {{ exit 87 }} else {{ exit 1 }} }}"
+    );
     let encoded = encode_powershell(&script);
     run_checked(
         "powershell.exe",
@@ -210,7 +213,7 @@ pub fn powershell(script: &str, elevated: bool) -> Result<String, String> {
             "-EncodedCommand",
             &encoded,
         ],
-        Duration::from_secs(if elevated { 120 } else { 15 }),
+        Duration::from_secs(30),
     )
 }
 
@@ -218,7 +221,7 @@ pub fn powershell_json(script: &str) -> Result<serde_json::Value, String> {
     let script = format!(
         "$nmResult = & {{ {script} }}; $nmBytes = [Text.Encoding]::UTF8.GetBytes(($nmResult | ConvertTo-Json -Depth 8 -Compress)); $nmOutput = [Console]::OpenStandardOutput(); $nmOutput.Write($nmBytes, 0, $nmBytes.Length)"
     );
-    let result = powershell(&script, false)?;
+    let result = powershell(&script)?;
     serde_json::from_str(&result).map_err(|_| "Windows returned an invalid response".into())
 }
 
@@ -235,7 +238,7 @@ pub fn xml_escape(value: &str) -> String {
 mod tests {
     use super::*;
     #[test]
-    fn elevation_preserves_literal_unicode_and_propagates_child_failure() {
+    fn powershell_arguments_preserve_literal_unicode() {
         let name = "Café's $(whoami); & Wi-Fi";
         assert_eq!(powershell_literal(name), "'Café''s $(whoami); & Wi-Fi'");
         let script = format!(
@@ -251,10 +254,18 @@ mod tests {
             .map(|b| u16::from_le_bytes([b[0], b[1]]))
             .collect();
         assert_eq!(String::from_utf16(&unicode).unwrap(), script);
-        let outer = elevated_script(&script);
-        assert!(outer.contains("exit $p.ExitCode"));
-        assert!(outer.contains("-PassThru"));
-        assert!(!outer.contains(name));
+    }
+    #[test]
+    #[cfg(windows)]
+    fn windows_guid_strings_and_json_output_are_readable_without_elevation() {
+        let data = powershell_json("$adapter = [pscustomobject]@{InterfaceGuid='{00112233-4455-6677-8899-aabbccddeeff}'}; [pscustomobject]@{guid=([Guid]$adapter.InterfaceGuid).ToString('B'); text='Café'; values=@('one')} ").unwrap();
+        assert_eq!(data["guid"], "{00112233-4455-6677-8899-aabbccddeeff}");
+        assert_eq!(data["text"], "Café");
+        assert_eq!(data["values"], serde_json::json!(["one"]));
+        let error = powershell("throw [UnauthorizedAccessException]::new('private fixture data')")
+            .unwrap_err();
+        assert!(error.contains("administrator permission"));
+        assert!(!error.contains("private fixture data"));
     }
     fn fixture(name: &str, timeout: Duration) -> Result<String, String> {
         let exe = std::env::current_exe().unwrap();
@@ -283,7 +294,10 @@ mod tests {
             )
             .is_ok()
         );
-        assert!(started.elapsed() < Duration::from_secs(2));
+        // Starting a second copy of the test binary can exceed two seconds on
+        // a busy Windows linker/CI host. The leaked fixture sleeps for five,
+        // so a four-second ceiling still proves that inherited pipes closed.
+        assert!(started.elapsed() < Duration::from_secs(4));
         let error = fixture(
             "system::tests::fixture_private_error",
             Duration::from_secs(2),

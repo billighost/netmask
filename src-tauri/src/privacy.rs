@@ -11,9 +11,9 @@ pub fn get_device_identity() -> Result<DeviceIdentity, String> {
         let guid = platform::windows::active_interface_guid()?
             .ok_or("Connect to Wi-Fi to inspect its device identity")?;
         let data = system::powershell_json(&format!(
-            "$adapter = Get-NetAdapter | Where-Object {{ $_.InterfaceGuid.ToString('B') -eq {} }} | Select-Object -First 1; if (-not $adapter) {{ throw 'Wi-Fi adapter unavailable' }}; $key = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\NetBT\\Parameters\\Interfaces\\Tcpip_' + $adapter.InterfaceGuid.ToString('B'); $netbios = (Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue).NetbiosOptions; [pscustomobject]@{{ hostname = $env:COMPUTERNAME; name = $adapter.Name; guid = $adapter.InterfaceGuid.ToString('B'); mac = $adapter.MacAddress; netbios = $netbios }}",
+            "$adapter = Get-NetAdapter | Where-Object {{ ([Guid]$_.InterfaceGuid).ToString('B') -eq {} }} | Select-Object -First 1; if (-not $adapter) {{ throw 'Wi-Fi adapter unavailable' }}; $key = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\NetBT\\Parameters\\Interfaces\\Tcpip_' + ([Guid]$adapter.InterfaceGuid).ToString('B'); $netbios = (Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue).NetbiosOptions; [pscustomobject]@{{ hostname = $env:COMPUTERNAME; name = $adapter.Name; guid = ([Guid]$adapter.InterfaceGuid).ToString('B'); mac = $adapter.MacAddress; netbios = $netbios }}",
             system::powershell_literal(&guid)
-        ))?;
+        )).map_err(|error| format!("Device identity could not be read. {error}"))?;
         let mac_randomization = active_profile
             .as_deref()
             .and_then(|name| platform::windows::profile_randomization(name).ok())
@@ -99,13 +99,11 @@ pub fn set_mac_randomization(profile: &str, mode: &str) -> Result<bool, String> 
         if matches.len() != 1 {
             return Err("A unique saved Wi-Fi profile is required to change randomization".into());
         }
-        let command = format!(
-            "$adapter = Get-NetAdapter | Where-Object {{ $_.InterfaceGuid.ToString('B') -eq {} }} | Select-Object -First 1; if (-not $adapter) {{ throw 'Wi-Fi adapter unavailable' }}; & netsh.exe wlan set profileparameter {} ('interface=' + $adapter.Name) {}; if ($LASTEXITCODE -ne 0) {{ throw 'MAC randomization was rejected' }}",
-            system::powershell_literal(&platform::windows::guid_string(&matches[0].interface)),
-            system::powershell_literal(&format!("name={profile}")),
-            system::powershell_literal(&format!("Randomization={mode}"))
-        );
-        system::powershell(&command, !platform::is_admin())?;
+        crate::privileged::run(crate::privileged::Request::Randomization {
+            guid: platform::windows::guid_string(&matches[0].interface),
+            profile: profile.into(),
+            mode: mode.into(),
+        })?;
         let expected = match mode {
             "yes" => "enabled",
             "daily" => "daily",
@@ -128,16 +126,10 @@ pub fn set_netbios_silencer(enabled: bool) -> Result<bool, String> {
     if !platform::is_guid(&identity.interface_guid) {
         return Err("The Wi-Fi interface identifier is unavailable".into());
     }
-    let value = if enabled { 2 } else { 0 };
-    let key = format!(
-        "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\NetBT\\Parameters\\Interfaces\\Tcpip_{}",
-        identity.interface_guid
-    );
-    let command = format!(
-        "Set-ItemProperty -LiteralPath {} -Name NetbiosOptions -Type DWord -Value {value} -ErrorAction Stop",
-        system::powershell_literal(&key)
-    );
-    system::powershell(&command, !platform::is_admin())?;
+    crate::privileged::run(crate::privileged::Request::Netbios {
+        guid: identity.interface_guid,
+        enabled,
+    })?;
     if get_device_identity()?.netbios_silenced != Some(enabled) {
         return Err("Windows did not confirm the NetBIOS change".into());
     }

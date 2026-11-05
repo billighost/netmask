@@ -75,6 +75,8 @@
 .searchInputWrap { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
 .searchInput { min-width: 0; width: 100%; flex: 1; border: 0; outline: 0; background: transparent; font-size: 11px; padding: 4px 0; }
 .searchInputWrap:focus-within { border-color: var(--accent); }
+.searchInput:focus-visible { outline: none; }
+.searchInputWrap:focus-within { box-shadow: 0 1px 0 var(--accent); }
 .clearSearchBtn { font-size: 18px; color: var(--text-muted); padding-inline: 5px; }
 .emptySearch { color: var(--text-secondary); font-size: 11px; padding: 15px 0; }
 .categoryGroup + .categoryGroup { margin-top: 22px; }

@@ -19,15 +19,15 @@ Only local labels change; your router keeps its Wi-Fi name. Display privacy mask
 
 ## Get NetMask
 
-**Latest: v2.3.1** · [Release notes](https://github.com/billighost/netmask/releases/tag/v2.3.1)
+**Latest: v2.3.2** · [Release notes](https://github.com/billighost/netmask/releases/tag/v2.3.2)
 
 | Windows 10 / 11 | macOS 12+ | Linux |
 | --- | --- | --- |
-| **x64**<br>[EXE / MSI downloads](https://github.com/billighost/netmask/releases/tag/v2.3.1) | [Apple silicon / Intel downloads](https://github.com/billighost/netmask/releases/tag/v2.3.1) | **x64 · NetworkManager**<br>[DEB / AppImage downloads](https://github.com/billighost/netmask/releases/tag/v2.3.1) |
+| **x64**<br>[EXE / MSI downloads](https://github.com/billighost/netmask/releases/tag/v2.3.2) | [Apple silicon / Intel downloads](https://github.com/billighost/netmask/releases/tag/v2.3.2) | **x64 · NetworkManager**<br>[DEB / AppImage downloads](https://github.com/billighost/netmask/releases/tag/v2.3.2) |
 
 Run the Windows installer, drag the Mac app into Applications, or install the Linux package. For AppImage, make the file executable first.
 
-[Checksums](https://github.com/billighost/netmask/releases/download/v2.3.1/checksums.txt) · [Installation and privacy notes](SECURITY.md) · [All releases](https://github.com/billighost/netmask/releases)
+[Checksums](https://github.com/billighost/netmask/releases/download/v2.3.2/checksums.txt) · [Installation and privacy notes](SECURITY.md) · [All releases](https://github.com/billighost/netmask/releases)
 
 The release page lists available installers. A platform awaiting a build runner is added after a successful retry.
 
@@ -41,6 +41,10 @@ Paper and Dark themes, custom controls, and explanations where you need them. Sh
 Windows edits Network List labels, macOS edits network service labels, and Linux edits NetworkManager connection names. Available tools depend on your OS and adapter; unsupported controls explain their limits. Some Wi-Fi details and saved credentials require system permission. QR codes contain readable Wi-Fi credentials.
 
 </details>
+
+## Measured Tauri memory
+
+On the recorded Windows 11 production build, median private resident memory across NetMask and its isolated WebView2 descendants was **135.8 MiB visible** and **119.6 MiB hidden in the tray**. These are 15-sample medians after 30- and 60-second settling periods, without explicit memory trimming. Hardware, ranges, other memory metrics, method, limitations, and the raw samples are in [Performance measurement](BENCHMARKS.md).
 
 ## Build it
 
