@@ -187,6 +187,25 @@ pub async fn nm_rename(
 }
 
 #[tauri::command]
+pub async fn nm_get_name_conflict(
+    guid: String,
+    new_name: String,
+    current_name: Option<String>,
+) -> Result<Option<NameConflict>, String> {
+    blocking(move || operations::get_name_conflict(&guid, &new_name, current_name.as_deref())).await
+}
+
+#[tauri::command]
+pub async fn nm_repair_name_conflict(
+    guid: String,
+    new_name: String,
+    current_name: Option<String>,
+) -> Result<(), String> {
+    blocking(move || operations::repair_name_conflict(&guid, &new_name, current_name.as_deref()))
+        .await
+}
+
+#[tauri::command]
 pub async fn nm_restore(guid: String, current_name: Option<String>) -> Result<(), String> {
     blocking(move || operations::restore(&guid, current_name.as_deref())).await
 }
@@ -275,8 +294,71 @@ pub async fn nm_get_streamer_status() -> Result<StreamerStatus, String> {
 }
 
 #[tauri::command]
+pub async fn nm_get_diagnostic_report() -> Result<DiagnosticReport, String> {
+    blocking(|| {
+        let backup = settings::read_backup()?;
+        let (networks, connected, snapshot_error) = match platform::get_network_snapshot(&backup) {
+            Ok(snapshot) => (snapshot.networks, snapshot.connection.is_some(), false),
+            Err(_) => (Vec::new(), false, true),
+        };
+        let sharing = streamer::get_streamer_status();
+        let update = updater::get_update_status();
+        Ok(DiagnosticReport {
+            generated_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64,
+            version: updater::CURRENT_VERSION.into(),
+            platform: std::env::consts::OS.into(),
+            capabilities: platform::get_capabilities(),
+            network_count: networks.len(),
+            wifi_count: networks
+                .iter()
+                .filter(|network| network.network_type == "wifi")
+                .count(),
+            renamed_count: networks.iter().filter(|network| network.renamed).count(),
+            sync_pending_count: networks
+                .iter()
+                .filter(|network| network.name_sync_pending)
+                .count(),
+            recovery_record_count: backup.len(),
+            connected,
+            snapshot_error,
+            sharing_mode: sharing.is_cloaked,
+            sharing_timer_active: sharing.manual_seconds_remaining > 0,
+            broadcast_app_detected: sharing.detected_app.is_some(),
+            update_available: update.available_update.is_some(),
+            update_version: update.available_update.map(|info| info.version),
+            update_downloading: update.is_downloading,
+            downloaded_version: update.downloaded_version,
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn nm_get_recovery_audit() -> Result<Option<RecoveryAudit>, String> {
+    blocking(operations::get_recovery_audit).await
+}
+
+#[tauri::command]
+pub async fn nm_dismiss_recovery_audit() -> Result<(), String> {
+    blocking(operations::dismiss_recovery_audit).await
+}
+
+#[tauri::command]
 pub async fn nm_toggle_streamer_cloak(app: AppHandle) -> Result<StreamerStatus, String> {
     let status = blocking(|| Ok(streamer::toggle_streamer_cloak())).await?;
+    let _ = app.emit("nm:streamer-status", &status);
+    Ok(status)
+}
+
+#[tauri::command]
+pub async fn nm_start_streamer_timer(
+    app: AppHandle,
+    minutes: i32,
+) -> Result<StreamerStatus, String> {
+    let status = blocking(move || Ok(streamer::start_streamer_timer(minutes))).await?;
     let _ = app.emit("nm:streamer-status", &status);
     Ok(status)
 }

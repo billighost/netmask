@@ -86,6 +86,13 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     defaultKey: 'Ctrl+Shift+S'
   },
   {
+    id: 'startSharingTimer',
+    name: 'Start the sharing timer',
+    description: 'Use your private display name for the duration selected in Settings.',
+    category: 'Privacy',
+    defaultKey: 'Ctrl+Alt+S'
+  },
+  {
     id: 'peekBssid',
     name: 'Show the access point address',
     description: 'Reveal the hidden router address for three seconds.',

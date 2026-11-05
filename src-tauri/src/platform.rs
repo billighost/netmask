@@ -215,6 +215,18 @@ fn raw_connection() -> Result<Option<Connection>, String> {
         macos::get_connection()
     }
 }
+pub fn current_connection_signature() -> Result<Option<String>, String> {
+    Ok(raw_connection()?.map(|connection| {
+        serde_json::json!([
+            connection.ssid,
+            connection.profile,
+            connection.interface_guid,
+            connection.interface_name,
+            connection.bssid
+        ])
+        .to_string()
+    }))
+}
 pub fn get_network_snapshot(backup: &HashMap<String, String>) -> Result<NetworkSnapshot, String> {
     let (mut connection, connection_error) = match raw_connection() {
         Ok(connection) => (connection, None),
@@ -352,6 +364,61 @@ pub fn rename_network(
     current_name: Option<&str>,
 ) -> Result<(), String> {
     rename_with_mode(guid, new_name, current_name, true)
+}
+pub fn stable_recovery_id(
+    guid: &str,
+    current_name: Option<&str>,
+) -> Result<Option<String>, String> {
+    #[cfg(windows)]
+    {
+        windows::stable_profile_id(guid, current_name)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (guid, current_name);
+        Ok(None)
+    }
+}
+pub fn name_conflict(
+    guid: &str,
+    new_name: &str,
+    current_name: Option<&str>,
+) -> Result<Option<crate::types::NameConflict>, String> {
+    #[cfg(windows)]
+    {
+        windows::name_conflict(guid, new_name, current_name)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (guid, new_name, current_name);
+        Ok(None)
+    }
+}
+
+pub fn repair_name_conflict(
+    guid: &str,
+    new_name: &str,
+    current_name: Option<&str>,
+) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        windows::repair_name_conflict(guid, new_name, current_name)?;
+        for attempt in 0..10 {
+            let networks = get_networks(&settings::read_backup()?)?;
+            if display_name_confirmed(&networks, guid, new_name) {
+                return Ok(());
+            }
+            if attempt < 9 {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        }
+        Err("Windows completed the conflict repair but did not confirm the requested local label. Recovery records were kept.".into())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (guid, new_name, current_name);
+        Err("Saved-profile conflict repair is available only on Windows".into())
+    }
 }
 pub fn reconnect_network(profile: Option<&str>) -> Result<bool, String> {
     let profile = profile

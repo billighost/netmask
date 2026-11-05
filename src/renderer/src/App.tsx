@@ -12,6 +12,7 @@ import { KeyboardControlsModal } from './components/KeyboardControlsModal/Keyboa
 import { normalizeKeyCombination, shortcutEquals } from './keyboard-shortcuts'
 import { ContextMenu } from './components/ContextMenu/ContextMenu'
 import { UpdateBanner } from './components/UpdateBanner/UpdateBanner'
+import { RecoveryBanner } from './components/RecoveryBanner/RecoveryBanner'
 import { NetworkDetailsModal } from './components/NetworkDetailsModal/NetworkDetailsModal'
 import { CaptivePortalBanner } from './components/CaptivePortalBanner/CaptivePortalBanner'
 import { WifiShareModal } from './components/WifiShareModal/WifiShareModal'
@@ -21,9 +22,9 @@ import { RoamingTunerModal } from './components/RoamingTunerModal/RoamingTunerMo
 import { FirstRunGuide } from './components/FirstRunGuide/FirstRunGuide'
 import { ConnectionReportModal } from './components/ConnectionReportModal/ConnectionReportModal'
 import styles from './App.module.css'
-import { refreshNetworks, reconnectSelected, restoreNetworkDisplayName, toggleStreamer, selectNetworkAndFocus, runSpeedTest } from './network-actions'
+import { refreshNetworks, reconnectSelected, restoreNetworkDisplayName, toggleStreamer, startStreamerTimer, selectNetworkAndFocus, runSpeedTest } from './network-actions'
 import { errorMessage, sharingModeActive, visibleNetworks } from './network-state'
-import { subscribeToUpdates } from './update-actions'
+import { requestAutomaticUpdateCheck, subscribeToUpdates } from './update-actions'
 
 export const App: React.FC = () => {
   const autoRefreshInterval = useStore(s => s.settings.autoRefreshInterval)
@@ -42,11 +43,12 @@ export const App: React.FC = () => {
           window.nm.getSettings(),
           window.nm.getStreamerStatus(),
           window.nm.getElevationStatus(),
-          window.nm.getCapabilities()
+          window.nm.getCapabilities(),
+          window.nm.getRecoveryAudit()
         ])
         if (!active) return
         const state = useStore.getState()
-        const [admin, preferences, streamer, elevation, capabilities] = results
+        const [admin, preferences, streamer, elevation, capabilities, recoveryAudit] = results
         if (admin.status === 'fulfilled') state.setAdminOk(admin.value)
         if (preferences.status === 'fulfilled') {
           state.setSettings(preferences.value)
@@ -56,6 +58,7 @@ export const App: React.FC = () => {
         if (streamer.status === 'fulfilled') state.setStreamerStatus(streamer.value)
         if (elevation.status === 'fulfilled') state.setElevationStatus(elevation.value)
         if (capabilities.status === 'fulfilled') useStore.setState({ capabilities: capabilities.value })
+        if (recoveryAudit.status === 'fulfilled') useStore.setState({ recoveryAudit: recoveryAudit.value })
 
         await refresh()
         if (!active) return
@@ -82,6 +85,10 @@ export const App: React.FC = () => {
       useStore.getState().setCaptivePortal(status)
     })
 
+    const unsubNetworkChanged = window.nm.onNetworkChanged(() => {
+      void refreshNetworks(true).catch(error => useStore.setState({ connectionError: errorMessage(error) }))
+    })
+
     // Streamer status subscription
     const unsubStreamer = window.nm.onStreamerStatus(status => {
       const changed = useStore.getState().streamerStatus.isCloaked !== status.isCloaked
@@ -104,7 +111,10 @@ export const App: React.FC = () => {
     const onVisibility = (visible: boolean) => {
       const changed = useStore.getState().visible !== visible
       useStore.setState({ visible })
-      if (visible && changed) refresh()
+      if (visible && changed) {
+        refresh()
+        void requestAutomaticUpdateCheck().catch(() => {})
+      }
     }
     const unsubVisibility = window.nm.onVisibility(onVisibility)
     const documentVisibility = () => onVisibility(!document.hidden)
@@ -117,6 +127,7 @@ export const App: React.FC = () => {
       unsubSpeed()
       unsubPing()
       unsubCaptive()
+      unsubNetworkChanged()
       unsubStreamer()
       unsubTrayCheck()
       unsubVisibility()
@@ -272,6 +283,11 @@ export const App: React.FC = () => {
           void toggleStreamer()
           break
         }
+        case 'startSharingTimer': {
+          e.preventDefault()
+          void startStreamerTimer()
+          break
+        }
         case 'peekBssid': {
           e.preventDefault()
           state.peekBssid()
@@ -328,6 +344,7 @@ export const App: React.FC = () => {
         <div className={styles.workspace}>
         <CaptivePortalBanner />
         <UpdateBanner />
+        <RecoveryBanner />
         <div className={styles.layout}>
           <div className={styles.connection}><HeroCard /></div>
           <div className={styles.profiles}><NetworkList /></div>

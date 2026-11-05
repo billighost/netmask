@@ -3,7 +3,8 @@ import { shallow } from 'zustand/shallow'
 import { useStore } from '../../store'
 import { CheckIcon, RestoreIcon, RefreshIcon, LockIcon } from '../../icons'
 import { HelpTip } from '../Controls/HelpTip'
-import { reconnectSelected, restoreNetworkDisplayName, saveNetworkDisplayName } from '../../network-actions'
+import { reconnectSelected, repairNetworkNameConflict, restoreNetworkDisplayName, saveNetworkDisplayName } from '../../network-actions'
+import type { NameConflict } from '../../types'
 import { errorMessage, sharingModeActive } from '../../network-state'
 import styles from './ActionPanel.module.css'
 
@@ -17,10 +18,12 @@ export const ActionPanel: React.FC = () => {
   const [inputVal, setInputVal] = useState(net?.name ?? '')
   const [applying, setApplying] = useState(false)
   const [restoring, setRestoring] = useState(false)
+  const [conflict, setConflict] = useState<NameConflict | null>(null)
   const previous = useRef({ guid: net?.guid, name: net?.name ?? '' })
   useEffect(() => {
     const old = previous.current
     setInputVal(value => old.guid !== net?.guid || value === old.name ? net?.name ?? '' : value)
+    setConflict(null)
     previous.current = { guid: net?.guid, name: net?.name ?? '' }
   }, [net?.guid, net?.name])
 
@@ -34,11 +37,24 @@ export const ActionPanel: React.FC = () => {
     if (!net || disabled) return
     setApplying(true)
     try {
+      const detected = await window.nm.getNameConflict(net.guid, name, net.name)
+      if (detected) { setConflict(detected); return }
       await saveNetworkDisplayName(net.guid, name, net.name)
       const ssid = !privateNames && connection?.networkGuid === net.guid && connection.ssid !== name ? ` The router's Wi-Fi name remains ${connection.ssid}.` : ''
       addToast('Local label confirmed: ' + name + '.' + ssid, 'success')
     }
     catch (error) { addToast(errorMessage(error, 'The name could not be saved'), 'error') }
+    finally { setApplying(false) }
+  }
+  const repairConflict = async () => {
+    if (!net || !conflict || busy) return
+    if (!window.confirm(`Free “${name}” by renaming the other saved profile to “${conflict.suggestedName}”? NetMask will roll it back if your label cannot be applied.`)) return
+    setApplying(true)
+    try {
+      await repairNetworkNameConflict(net.guid, name, net.name)
+      setConflict(null)
+      addToast('Saved-profile conflict repaired and local label confirmed', 'success')
+    } catch (error) { addToast(errorMessage(error, 'The saved-profile conflict could not be repaired'), 'error') }
     finally { setApplying(false) }
   }
   const restore = async () => {
@@ -57,13 +73,14 @@ export const ActionPanel: React.FC = () => {
     <form className={styles.editLine} onSubmit={event => { event.preventDefault(); void apply() }}>
       <input id="rename-network-input" className={styles.input} type="text" maxLength={256} spellCheck={false} value={privateNames ? maskName : inputVal}
         disabled={!net || !supported || privateNames || busy} placeholder={net ? 'A name you recognize' : 'Choose a network first'}
-        onChange={event => setInputVal(event.target.value)} onKeyDown={event => { if (event.nativeEvent.isComposing) return; if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) { event.preventDefault(); event.stopPropagation(); void apply() } }} />
+        onChange={event => { setInputVal(event.target.value); setConflict(null) }} onKeyDown={event => { if (event.nativeEvent.isComposing) return; if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) { event.preventDefault(); event.stopPropagation(); void apply() } }} />
       <button id="apply-rename-btn" type="submit" className={styles.btn + ' ' + styles.btnPrimary} disabled={disabled}>
         {applying ? <span className={styles.spinner} /> : <CheckIcon size={13} />}{applying ? 'Saving…' : 'Save name'}
       </button>
     </form>
     {!privateNames && !invalid && !unchanged && net && <p className={styles.previewBox}>NetMask will display <strong>{name}</strong>. Your Wi-Fi signal keeps its existing name.</p>}
     {!privateNames && net?.nameSyncPending && <p className={styles.syncNotice}>A previous install or removal changed only part of this name. Saving or restoring will bring the Windows label and saved Wi-Fi profile back together.</p>}
+    {!privateNames && conflict && <div className={styles.conflictNotice}><p><strong>{name}</strong> is already used by another saved profile. NetMask can move that profile to <strong>{conflict.suggestedName}</strong>, then retry this name.</p><button type="button" disabled={busy} onClick={() => void repairConflict()}>Free this label</button></div>}
     {!privateNames && name && invalid && <p className={styles.error}>Use up to 128 characters without control characters.</p>}
     <div className={styles.restoreLine}>
       <p className={styles.original}>{!net ? 'No network selected' : privateNames ? 'Your original name stays saved.' : 'Original: ' + net.originalName}</p>

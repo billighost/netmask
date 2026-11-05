@@ -149,6 +149,18 @@ Mesh tools were unavailable during this follow-up. This document and the product
 | `NetMask_2.4.0_amd64.deb` | 7,388,014 | `d7d2eeac4fe79173f83f5c25d6692759e287884794181d5ef5a4fe212cdf27c7` |
 | `NetMask_2.4.0_amd64.AppImage` | 90,479,096 | `65734b90721cb070b25f7213c13fa2646b8e36ea4d124f84e12dd645a8ad361f` |
 
+## v2.5.0 reliability and sharing controls, 2026-11-06
+
+- Windows recovery now stores an NLM-to-WLAN identity link before protected mutation, separately from the original label. Merge and restore paths use the link first, reject ambiguous duplicate-SSID identities, and backfill only unambiguous legacy records during the first post-update audit.
+- Duplicate target labels are preflighted before elevation. The focused repair action saves recovery for both profiles, moves the conflict to a unique SSID-derived label, applies the requested name, and rolls the conflict back if the second mutation fails.
+- A two-second native connection-signature watcher emits refresh events without exposing identifiers to the renderer. Existing visibility and configured polling remain bounded fallbacks.
+- Sharing detection uses the native Windows process snapshot and direct Unix process enumeration, expands exact built-in app names, and accepts at most 20 validated custom executable basenames. Persisted 15/30/60-minute sessions restore automatically after expiry and survive restart.
+- Update checks now begin immediately, retry transient startup failures, recheck on visibility, and run every six hours. A late cached status cannot replace a newer result; Settings reports the last check and quiet error.
+- Private diagnostics export only versions, capability flags, safe counts, and update/sharing state. Connection-report HTML is captured as a point-in-time snapshot so live telemetry cannot reload the iframe or pull the user's scroll position away from the final section.
+- A final recovery pass keeps expired sharing timers valid after long shutdowns, requests operating-system permission when timed restoration needs it, audits skipped-to-newer app versions, and delays diagnostic download cleanup until the browser has accepted the file.
+- Verification for the release candidate passed 48 JavaScript/release/installer checks, TypeScript, hooks lint, the production renderer build, 33 browser scenarios with zero JavaScript errors, Rust formatting, the native workspace check, one desktop IPC test, and 48 executed core tests. Three subprocess fixtures remain intentionally ignored in direct enumeration and are invoked by the deadline regression test. `npm audit --omit=dev` reported zero vulnerabilities. A read-only diagnostic found the live Windows network and connection label consistent while preserving five recovery records; no live network setting was changed.
+- The final local v2.5.0 Windows build produced `NetMask_2.5.0_x64-setup.exe` at 7,385,564 bytes (SHA-256 `283F5C405B38BAF2A127B78FDFD653E8B563C6547C7945719A72CCC4DDABB7E9`) and `NetMask_2.5.0_x64_en-US.msi` at 11,313,152 bytes (SHA-256 `A378B93061EDBC22F28F2CA3B8AB50E71568035D76B133504658DBE0366FF0B6`). The executable metadata reports file and product version 2.5.0. These are local verification artifacts; publication rebuilds on the protected CI matrix.
+
 ## Boundaries
 
 The audit does not change the developer's live Wi-Fi, DNS, registry, credentials, or driver settings as a test. Parser, socket, storage, subprocess, and browser fixtures do not prove permission prompts, real reconnects, Wi-Fi hardware behavior, signing, or every desktop environment's displayed name.

@@ -71,6 +71,10 @@ pub struct StreamerStatus {
     pub detected_app: Option<String>,
     pub is_cloaked: bool,
     pub cooldown_seconds: i32,
+    #[serde(default)]
+    pub manual_seconds_remaining: i64,
+    #[serde(default)]
+    pub manual_timed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -132,6 +136,8 @@ pub struct AppSettings {
     pub ultra_low_memory: bool,
     pub auto_cloak_streamer: bool,
     pub streamer_mask_name: String,
+    pub custom_broadcast_apps: Vec<String>,
+    pub sharing_timer_minutes: i32,
     pub bssid_cloaking: bool,
     pub bssid_mask_mode: String,
     pub silent_elevation: bool,
@@ -282,4 +288,44 @@ pub struct UpdateStatus {
     pub downloaded_version: Option<String>,
     pub downloaded_file_path: Option<String>,
     pub available_update: Option<UpdateInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosticReport {
+    pub generated_at: i64,
+    pub version: String,
+    pub platform: String,
+    pub capabilities: PlatformCapabilities,
+    pub network_count: usize,
+    pub wifi_count: usize,
+    pub renamed_count: usize,
+    pub sync_pending_count: usize,
+    pub recovery_record_count: usize,
+    pub connected: bool,
+    pub snapshot_error: bool,
+    pub sharing_mode: bool,
+    pub sharing_timer_active: bool,
+    pub broadcast_app_detected: bool,
+    pub update_available: bool,
+    pub update_version: Option<String>,
+    pub update_downloading: bool,
+    pub downloaded_version: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveryAudit {
+    pub checked_version: String,
+    pub recovery_record_count: usize,
+    pub attention_count: usize,
+    pub sync_pending_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NameConflict {
+    pub conflicting_guid: String,
+    pub current_name: String,
+    pub suggested_name: String,
 }

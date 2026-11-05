@@ -11,14 +11,13 @@ import styles from './ConnectionReportModal.module.css'
 export const ConnectionReportModal: React.FC = () => {
   const snapshot = useStore(state => ({
     open: state.reportModalOpen,
-    connection: state.connection,
-    telemetry: state.pingTelemetry,
-    speed: state.speed,
-    testedSpeed: state.testedSpeed,
-    captivePortal: state.captivePortal,
-    platform: state.capabilities?.platform || 'desktop',
     sharing: sharingModeActive(state.streamerStatus, state.streamerBusy)
   }), shallow)
+  const [captured, setCaptured] = useState(() => {
+    const state = useStore.getState()
+    return { connection: state.connection, telemetry: state.pingTelemetry, speed: state.speed, testedSpeed: state.testedSpeed,
+      captivePortal: state.captivePortal, platform: state.capabilities?.platform || 'desktop' }
+  })
   const [format, setFormat] = useState<ReportFormat>('html')
   const [includeIdentifiers, setIncludeIdentifiers] = useState(false)
   const [createdAt, setCreatedAt] = useState(() => new Date())
@@ -27,21 +26,24 @@ export const ConnectionReportModal: React.FC = () => {
     if (!snapshot.open) return
     setCreatedAt(new Date())
     setIncludeIdentifiers(false)
+    const state = useStore.getState()
+    setCaptured({ connection: state.connection, telemetry: state.pingTelemetry, speed: state.speed, testedSpeed: state.testedSpeed,
+      captivePortal: state.captivePortal, platform: state.capabilities?.platform || 'desktop' })
     window.nm.getVersion().then(setVersion).catch(() => setVersion('unknown'))
   }, [snapshot.open])
   useEffect(() => { if (snapshot.sharing) setIncludeIdentifiers(false) }, [snapshot.sharing])
   const report = useMemo(() => createConnectionReport({
     generatedAt: createdAt,
     appVersion: version || 'unknown',
-    platform: snapshot.platform,
-    connection: snapshot.connection,
-    telemetry: snapshot.telemetry,
-    speed: snapshot.speed,
-    testedSpeed: snapshot.testedSpeed,
-    captivePortal: snapshot.captivePortal,
+    platform: captured.platform,
+    connection: captured.connection,
+    telemetry: captured.telemetry,
+    speed: captured.speed,
+    testedSpeed: captured.testedSpeed,
+    captivePortal: captured.captivePortal,
     includeIdentifiers,
     sharingMode: snapshot.sharing
-  }), [createdAt, version, snapshot, includeIdentifiers])
+  }), [createdAt, version, captured, snapshot.sharing, includeIdentifiers])
   if (!snapshot.open) return null
   const state = useStore.getState()
   const download = () => {

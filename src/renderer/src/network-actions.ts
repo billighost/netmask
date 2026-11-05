@@ -47,6 +47,14 @@ export async function saveNetworkDisplayName(guid: string, newName: string, curr
   return confirmedNetwork(guid, newName)
 }
 
+export async function repairNetworkNameConflict(guid: string, newName: string, currentName: string): Promise<Network> {
+  const privacy = useStore.getState()
+  if (sharingModeActive(privacy.streamerStatus, privacy.streamerBusy)) throw new Error('Exit sharing mode before repairing a saved name')
+  await window.nm.repairNameConflict(guid, newName, currentName)
+  await refreshNetworks(true)
+  return confirmedNetwork(guid, newName)
+}
+
 export async function restoreNetworkDisplayName(guid: string, originalName: string, currentName: string): Promise<Network> {
   const privacy = useStore.getState()
   if (sharingModeActive(privacy.streamerStatus, privacy.streamerBusy)) throw new Error('Exit sharing mode before restoring a saved name')
@@ -90,6 +98,19 @@ export async function toggleStreamer(): Promise<void> {
     state.setStreamerStatus(status)
     await refreshNetworks(true)
     state.addToast(status.error ?? (status.isCloaked ? 'Display-name mask applied' : 'Previous display name restored'), status.error ? 'error' : 'success')
+  } catch (error) { state.addToast(errorMessage(error), 'error') }
+  finally { useStore.setState({ streamerBusy: false }) }
+}
+
+export async function startStreamerTimer(minutes = useStore.getState().settings.sharingTimerMinutes): Promise<void> {
+  const state = useStore.getState()
+  if (state.streamerBusy) return
+  useStore.setState({ streamerBusy: true, networkSearch: '', bssidPeek: false, contextMenu: null })
+  try {
+    const status = await window.nm.startStreamerTimer(minutes)
+    state.setStreamerStatus(status)
+    await refreshNetworks(true)
+    state.addToast(status.error ?? `Private name active for ${minutes} minutes`, status.error ? 'error' : 'success')
   } catch (error) { state.addToast(errorMessage(error), 'error') }
   finally { useStore.setState({ streamerBusy: false }) }
 }

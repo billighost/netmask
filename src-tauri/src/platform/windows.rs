@@ -354,13 +354,15 @@ pub fn get_networks(
 ) -> Result<Vec<Network>, String> {
     let profiles = profiles()?;
     let rows = super::nlm::profiles()?;
-    Ok(merge_profiles(profiles, rows, backup, connection))
+    let links = crate::settings::read_name_links()?;
+    Ok(merge_profiles(profiles, rows, backup, &links, connection))
 }
 
 fn merge_profiles(
     mut profiles: Vec<Profile>,
     mut rows: Vec<super::nlm::Profile>,
     backup: &HashMap<String, String>,
+    links: &HashMap<String, String>,
     connection: Option<&Connection>,
 ) -> Vec<Network> {
     let nlm_guids: HashSet<_> = rows
@@ -411,18 +413,32 @@ fn merge_profiles(
                             })))
             })
             .collect();
-        let profile = if row.live {
-            candidates.iter().copied().find(|profile| {
-                connection.is_some_and(|c| {
-                    c.profile == profile.name
-                        && c.interface_guid.as_deref()
-                            == Some(guid_string(&profile.interface).as_str())
+        let linked_profile = links.get(guid).and_then(|stable_id| {
+            let matches: Vec<_> = profiles
+                .iter()
+                .filter(|profile| {
+                    profile.id == *stable_id
+                        && row.adapters.contains(&guid_string(&profile.interface))
+                        && !used_profiles.contains(&profile.id)
                 })
+                .collect();
+            (matches.len() == 1).then(|| matches[0])
+        });
+        let profile = linked_profile
+            .or_else(|| {
+                if row.live {
+                    candidates.iter().copied().find(|profile| {
+                        connection.is_some_and(|c| {
+                            c.profile == profile.name
+                                && c.interface_guid.as_deref()
+                                    == Some(guid_string(&profile.interface).as_str())
+                        })
+                    })
+                } else {
+                    None
+                }
             })
-        } else {
-            None
-        }
-        .or_else(|| (candidates.len() == 1).then(|| candidates[0]));
+            .or_else(|| (candidates.len() == 1).then(|| candidates[0]));
         let chosen_guid = profile
             .filter(|profile| backup.contains_key(&profile.id))
             .map(|p| p.id.as_str())
@@ -453,8 +469,7 @@ fn merge_profiles(
             live,
             network_type: if is_wifi { "wifi" } else { "ethernet" }.into(),
             profile: profile.map(|p| p.name.clone()),
-            can_rename: !chosen_guid.starts_with("wlan:")
-                || profile.is_some_and(|profile| profile.can_rename),
+            can_rename: profile.is_none_or(|profile| profile.can_rename),
         });
     }
     let remaining_profiles: Vec<_> = profiles
@@ -468,9 +483,12 @@ fn merge_profiles(
             counts
         });
     for profile in remaining_profiles {
-        let stale_recovery = (remaining_ssids.get(&profile.ssid) == Some(&1))
-            .then(|| stale_recovery_for_profile(&profile, backup, &nlm_guids))
-            .flatten();
+        let stale_recovery = linked_recovery_for_profile(&profile, backup, links, &nlm_guids)
+            .or_else(|| {
+                (remaining_ssids.get(&profile.ssid) == Some(&1))
+                    .then(|| stale_recovery_for_profile(&profile, backup, &nlm_guids))
+                    .flatten()
+            });
         let chosen_guid = stale_recovery
             .map(|(guid, _)| guid.to_owned())
             .unwrap_or_else(|| profile.id.clone());
@@ -496,6 +514,22 @@ fn merge_profiles(
         });
     }
     networks
+}
+
+fn linked_recovery_for_profile<'a>(
+    profile: &Profile,
+    backup: &'a HashMap<String, String>,
+    links: &HashMap<String, String>,
+    nlm_guids: &HashSet<String>,
+) -> Option<(&'a str, &'a str)> {
+    let mut candidates = backup
+        .iter()
+        .filter(|(guid, _)| !nlm_guids.contains(*guid) && links.get(*guid) == Some(&profile.id));
+    let candidate = candidates.next()?;
+    candidates
+        .next()
+        .is_none()
+        .then_some((candidate.0.as_str(), candidate.1.as_str()))
 }
 
 fn stale_recovery_for_profile<'a>(
@@ -568,7 +602,21 @@ fn profile_for_network(guid: &str, current_name: Option<&str>) -> Result<Profile
         .into_iter()
         .find(|row| row.guid == guid);
     let profiles = profiles()?;
+    let linked_id = crate::settings::read_name_links()?.get(guid).cloned();
     let Some(row) = row else {
+        if let Some(linked_id) = linked_id {
+            let matches: Vec<_> = profiles
+                .iter()
+                .filter(|profile| profile.id == linked_id)
+                .cloned()
+                .collect();
+            if matches.len() == 1 {
+                return Ok(ProfileMatch {
+                    profile: matches.into_iter().next(),
+                    nlm_available: false,
+                });
+            }
+        }
         let name = current_name.ok_or(
             "This Windows network is no longer available and its saved Wi-Fi profile could not be identified. Refresh and repair it from the network list.",
         )?;
@@ -580,6 +628,20 @@ fn profile_for_network(guid: &str, current_name: Option<&str>) -> Result<Profile
             nlm_available: false,
         });
     };
+    if let Some(linked_id) = linked_id {
+        let matches: Vec<_> = profiles
+            .iter()
+            .filter(|profile| {
+                profile.id == linked_id && row.adapters.contains(&guid_string(&profile.interface))
+            })
+            .collect();
+        if matches.len() == 1 {
+            return Ok(ProfileMatch {
+                profile: Some(matches[0].clone()),
+                nlm_available: true,
+            });
+        }
+    }
     let connection = get_connection().ok().flatten();
 
     if row.live {
@@ -615,6 +677,136 @@ fn profile_for_network(guid: &str, current_name: Option<&str>) -> Result<Profile
         profile: (candidates.len() == 1).then(|| candidates[0].clone()),
         nlm_available: true,
     })
+}
+
+pub fn stable_profile_id(guid: &str, current_name: Option<&str>) -> Result<Option<String>, String> {
+    if guid.starts_with("wlan:") {
+        return Ok(None);
+    }
+    if !super::is_guid(guid) {
+        return Err("Invalid Windows network identifier".into());
+    }
+    Ok(profile_for_network(guid, current_name)?
+        .profile
+        .map(|profile| profile.id))
+}
+
+fn conflict_details(
+    guid: &str,
+    new_name: &str,
+    current_name: Option<&str>,
+) -> Result<Option<(Profile, Profile, String)>, String> {
+    let source = if guid.starts_with("wlan:") {
+        profiles()?.into_iter().find(|profile| profile.id == guid)
+    } else {
+        profile_for_network(guid, current_name)?.profile
+    };
+    let Some(source) = source else {
+        return Ok(None);
+    };
+    let all = profiles()?;
+    if all.iter().filter(|profile| profile.id == source.id).count() != 1 {
+        return Err(
+            "This Wi-Fi profile identity is ambiguous and cannot be repaired automatically.".into(),
+        );
+    }
+    let interface = guid_string(&source.interface);
+    let Some(conflict) = all.iter().find(|candidate| {
+        guid_string(&candidate.interface) == interface
+            && candidate.name.eq_ignore_ascii_case(new_name)
+            && candidate.name != source.name
+    }) else {
+        return Ok(None);
+    };
+    if all
+        .iter()
+        .filter(|profile| profile.id == conflict.id)
+        .count()
+        != 1
+    {
+        return Err(
+            "The conflicting Wi-Fi profile is ambiguous and cannot be repaired automatically."
+                .into(),
+        );
+    }
+    let base: String = conflict
+        .ssid
+        .trim()
+        .chars()
+        .filter(|value| !value.is_control())
+        .take(96)
+        .collect();
+    let base = if base.is_empty() {
+        "Saved Wi-Fi"
+    } else {
+        base.as_str()
+    };
+    let suggested = (1..=50)
+        .map(|index| {
+            if index == 1 {
+                format!("{base} (saved)")
+            } else {
+                format!("{base} (saved {index})")
+            }
+        })
+        .find(|candidate| {
+            candidate.chars().count() <= 128
+                && !candidate.eq_ignore_ascii_case(new_name)
+                && all.iter().all(|profile| {
+                    guid_string(&profile.interface) != interface
+                        || !profile.name.eq_ignore_ascii_case(candidate)
+                })
+        })
+        .ok_or("Windows has no safe free label for the conflicting saved profile")?;
+    Ok(Some((source, conflict.clone(), suggested)))
+}
+
+pub fn name_conflict(
+    guid: &str,
+    new_name: &str,
+    current_name: Option<&str>,
+) -> Result<Option<crate::types::NameConflict>, String> {
+    Ok(
+        conflict_details(guid, new_name, current_name)?.map(|(_, conflict, suggested)| {
+            crate::types::NameConflict {
+                conflicting_guid: conflict.id,
+                current_name: conflict.name,
+                suggested_name: suggested,
+            }
+        }),
+    )
+}
+
+pub fn repair_name_conflict(
+    guid: &str,
+    new_name: &str,
+    current_name: Option<&str>,
+) -> Result<(), String> {
+    let Some((_, conflict, suggested)) = conflict_details(guid, new_name, current_name)? else {
+        return Err("The saved-profile conflict changed. Refresh and try the name again.".into());
+    };
+    let previous = conflict.name.clone();
+    rename_profile(&conflict, &suggested)?;
+    if let Err(error) = rename_direct(guid, new_name, current_name) {
+        let refreshed = profiles()?
+            .into_iter()
+            .find(|profile| {
+                guid_string(&profile.interface) == guid_string(&conflict.interface)
+                    && profile.name == suggested
+            })
+            .ok_or_else(|| {
+                format!("{error} The conflicting saved profile could not be found for rollback.")
+            })?;
+        return match rename_profile(&refreshed, &previous) {
+            Ok(()) => Err(format!(
+                "{error} The conflicting saved profile was rolled back."
+            )),
+            Err(rollback) => Err(format!(
+                "{error} The conflicting saved profile could not be rolled back: {rollback}"
+            )),
+        };
+    }
+    Ok(())
 }
 
 fn rename_direct(guid: &str, new_name: &str, current_name: Option<&str>) -> Result<(), String> {
@@ -779,7 +971,13 @@ mod tests {
             adapters: vec![interface],
         }];
         let backup = HashMap::from([(guid.into(), "Original display name".into())]);
-        let networks = merge_profiles(vec![profile], rows, &backup, Some(&connection));
+        let networks = merge_profiles(
+            vec![profile],
+            rows,
+            &backup,
+            &HashMap::new(),
+            Some(&connection),
+        );
         assert_eq!(networks.len(), 1);
         assert_eq!(networks[0].guid, guid);
         assert_eq!(
@@ -803,7 +1001,7 @@ mod tests {
             adapters: vec![interface],
         }];
         let backup = HashMap::from([(guid.into(), "Router SSID".into())]);
-        let networks = merge_profiles(vec![saved], rows, &backup, None);
+        let networks = merge_profiles(vec![saved], rows, &backup, &HashMap::new(), None);
         assert_eq!(networks.len(), 1);
         assert!(!networks[0].renamed);
         assert!(networks[0].name_sync_pending);
@@ -815,13 +1013,30 @@ mod tests {
         saved.ssid = "Router SSID".into();
         let guid = "{00112233-4455-6677-8899-aabbccddeeff}";
         let backup = HashMap::from([(guid.into(), "Router SSID".into())]);
-        let networks = merge_profiles(vec![saved], vec![], &backup, None);
+        let networks = merge_profiles(vec![saved], vec![], &backup, &HashMap::new(), None);
 
         assert_eq!(networks.len(), 1);
         assert_eq!(networks[0].guid, guid);
         assert_eq!(networks[0].name, "Old alias");
         assert_eq!(networks[0].original_name, "Router SSID");
         assert!(networks[0].renamed);
+        assert!(networks[0].name_sync_pending);
+    }
+
+    #[test]
+    fn persisted_profile_link_survives_a_missing_nlm_row_and_non_ssid_original() {
+        let mut saved = profile("Reading room");
+        saved.ssid = "Router SSID".into();
+        let stable_id = saved.id.clone();
+        let guid = "{00112233-4455-6677-8899-aabbccddeeff}";
+        let backup = HashMap::from([(guid.into(), "Old Windows label".into())]);
+        let links = HashMap::from([(guid.into(), stable_id)]);
+        let networks = merge_profiles(vec![saved], vec![], &backup, &links, None);
+
+        assert_eq!(networks.len(), 1);
+        assert_eq!(networks[0].guid, guid);
+        assert_eq!(networks[0].name, "Reading room");
+        assert_eq!(networks[0].original_name, "Old Windows label");
         assert!(networks[0].name_sync_pending);
     }
 
@@ -840,7 +1055,7 @@ mod tests {
                 "Router SSID".into(),
             ),
         ]);
-        let networks = merge_profiles(vec![saved], vec![], &backup, None);
+        let networks = merge_profiles(vec![saved], vec![], &backup, &HashMap::new(), None);
 
         assert_eq!(networks.len(), 1);
         assert_eq!(networks[0].guid, profile_id);
@@ -863,6 +1078,7 @@ mod tests {
         let networks = merge_profiles(
             vec![profile("First"), profile("Second")],
             vec![],
+            &HashMap::new(),
             &HashMap::new(),
             None,
         );
@@ -905,7 +1121,13 @@ mod tests {
             },
         ];
         let backup = HashMap::from([(profile.id.clone(), "Original profile".into())]);
-        let networks = merge_profiles(vec![profile.clone()], rows, &backup, Some(&connection));
+        let networks = merge_profiles(
+            vec![profile.clone()],
+            rows,
+            &backup,
+            &HashMap::new(),
+            Some(&connection),
+        );
         assert_eq!(
             networks
                 .iter()

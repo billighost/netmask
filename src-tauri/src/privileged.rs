@@ -52,6 +52,12 @@ pub enum Request {
         #[serde(default)]
         current_name: Option<String>,
     },
+    RepairConflict {
+        id: String,
+        name: String,
+        #[serde(default)]
+        current_name: Option<String>,
+    },
     Dns {
         index: u32,
         servers: Option<Vec<String>>,
@@ -79,6 +85,11 @@ impl Request {
     fn validate(&self) -> Result<(), String> {
         match self {
             Self::Rename {
+                id,
+                name,
+                current_name,
+            }
+            | Self::RepairConflict {
                 id,
                 name,
                 current_name,
@@ -154,7 +165,7 @@ impl Request {
         self.validate()?;
         let quote = system::powershell_literal;
         Ok(Some(match self {
-            Self::Rename { .. } => return Ok(None),
+            Self::Rename { .. } | Self::RepairConflict { .. } => return Ok(None),
             Self::Dns { index, servers: None } => format!("Set-DnsClientServerAddress -InterfaceIndex {index} -ResetServerAddresses -ErrorAction Stop"),
             Self::Dns { index, servers: Some(servers) } => format!("Set-DnsClientServerAddress -InterfaceIndex {index} -ServerAddresses @({}) -ErrorAction Stop", servers.iter().map(|s| quote(s)).collect::<Vec<_>>().join(",")),
             Self::Randomization { guid, profile, mode } => format!("$adapter = Get-NetAdapter | Where-Object {{ ([Guid]$_.InterfaceGuid).ToString('B') -eq {} }} | Select-Object -First 1; if (-not $adapter) {{ throw 'Adapter unavailable' }}; & netsh.exe wlan set profileparameter {} ('interface=' + $adapter.Name) {}; if ($LASTEXITCODE -ne 0) {{ throw 'Driver rejected randomization' }}", quote(guid), quote(&format!("name={profile}")), quote(&format!("Randomization={mode}"))),
@@ -190,8 +201,17 @@ impl Request {
         {
             return platform::windows::rename(id, name, current_name.as_deref(), false);
         }
+        #[cfg(windows)]
+        if let Self::RepairConflict {
+            id,
+            name,
+            current_name,
+        } = self
+        {
+            return platform::windows::repair_name_conflict(id, name, current_name.as_deref());
+        }
         #[cfg(not(windows))]
-        if matches!(self, Self::Rename { .. }) {
+        if matches!(self, Self::Rename { .. } | Self::RepairConflict { .. }) {
             return Err("Windows operation unavailable".into());
         }
         system::powershell(&self.script()?.ok_or("Missing operation")?).map(|_| ())
@@ -214,6 +234,7 @@ fn decode(value: &str) -> Result<Request, String> {
         .ok_or("Invalid elevation request")?;
     let allowed: &[&str] = match operation {
         "Rename" => &["operation", "id", "name", "current_name"],
+        "RepairConflict" => &["operation", "id", "name", "current_name"],
         "Dns" => &["operation", "index", "servers"],
         "Randomization" => &["operation", "guid", "profile", "mode"],
         "Netbios" => &["operation", "guid", "enabled"],
@@ -411,6 +432,11 @@ mod tests {
                 name: "Private".into(),
                 current_name: Some("Original".into()),
             },
+            Request::RepairConflict {
+                id: "{00112233-4455-6677-8899-aabbccddeeff}".into(),
+                name: "Private".into(),
+                current_name: Some("Original".into()),
+            },
             Request::Dns {
                 index: 12,
                 servers: Some(vec!["1.1.1.1".into(), "1.0.0.1".into()]),
@@ -440,7 +466,10 @@ mod tests {
         for request in requests {
             request.validate().unwrap();
             let script = request.script().unwrap();
-            if matches!(request, Request::Rename { .. }) {
+            if matches!(
+                request,
+                Request::Rename { .. } | Request::RepairConflict { .. }
+            ) {
                 assert!(script.is_none());
             } else {
                 assert!(script.is_some_and(|value| !value.is_empty() && value.len() < 8000));

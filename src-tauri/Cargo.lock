@@ -2074,7 +2074,7 @@ dependencies = [
 
 [[package]]
 name = "netmask"
-version = "2.4.1"
+version = "2.5.0"
 dependencies = [
  "embed-resource",
  "log",
@@ -2089,7 +2089,7 @@ dependencies = [
 
 [[package]]
 name = "netmask-core"
-version = "2.4.1"
+version = "2.5.0"
 dependencies = [
  "base64 0.23.1",
  "libc",

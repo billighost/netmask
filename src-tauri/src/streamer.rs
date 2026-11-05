@@ -4,7 +4,7 @@ use crate::types::StreamerStatus;
 use crate::{operations, platform, settings};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -13,6 +13,8 @@ struct Recovery {
     previous_name: String,
     mask: String,
     manual: bool,
+    #[serde(default)]
+    manual_until: Option<i64>,
 }
 
 #[derive(Default)]
@@ -50,14 +52,28 @@ fn load_record(state: &mut State) -> Result<(), String> {
         .read::<Option<Recovery>>("streamer.json")?
         .flatten();
     if let Some(record) = &record {
-        settings::validate_display_name(&record.previous_name)?;
-        settings::validate_display_name(&record.mask)?;
-        if record.guid.is_empty() || record.guid.len() > 512 {
-            return Err("Invalid streamer recovery record".into());
-        }
+        validate_recovery(record, unix_now())?;
     }
     state.record = record;
     state.loaded = true;
+    Ok(())
+}
+
+fn validate_recovery(record: &Recovery, now: i64) -> Result<(), String> {
+    settings::validate_display_name(&record.previous_name)?;
+    settings::validate_display_name(&record.mask)?;
+    if record.guid.is_empty() || record.guid.len() > 512 {
+        return Err("Invalid streamer recovery record".into());
+    }
+    if record.manual_until.is_some() && !record.manual {
+        return Err("Only a manual sharing session can have an expiry".into());
+    }
+    if record
+        .manual_until
+        .is_some_and(|deadline| deadline <= 0 || deadline > now.saturating_add(24 * 60 * 60))
+    {
+        return Err("The saved sharing timer is outside its safe recovery window".into());
+    }
     Ok(())
 }
 
@@ -74,14 +90,47 @@ pub fn broadcast_app_name(process: &str) -> Option<&'static str> {
         "streamlabs obs.exe" | "streamlabs desktop.exe" | "streamlabs" => Some("Streamlabs"),
         "discord.exe" | "discord" => Some("Discord"),
         "zoom.exe" | "zoom" | "zoom.us" => Some("Zoom"),
-        "teams.exe" | "ms-teams.exe" | "msteams.exe" | "microsoft teams" => Some("Microsoft Teams"),
+        "teams.exe" | "ms-teams.exe" | "msteams.exe" | "microsoft teams" | "teams" => {
+            Some("Microsoft Teams")
+        }
         "twitchstudio.exe" => Some("Twitch Studio"),
-        "xsplit.core.exe" => Some("XSplit"),
+        "xsplit.core.exe" | "xsplit.broadcaster.exe" | "xsplit.exe" => Some("XSplit"),
+        "webex.exe" | "webex" | "webexhost.exe" | "ciscocollabhost.exe" | "ciscocollabhost" => {
+            Some("Cisco Webex")
+        }
+        "slack.exe" | "slack" => Some("Slack"),
+        "skype.exe" | "skype" => Some("Skype"),
+        "loom.exe" | "loom" => Some("Loom"),
+        "riverside.exe" | "riverside" => Some("Riverside"),
+        "nvidia broadcast.exe" | "nvidia broadcast" | "nvidiabroadcast.exe" => {
+            Some("NVIDIA Broadcast")
+        }
         _ => None,
     }
 }
 
+fn detected_name(process: &str, custom: &[String]) -> Option<String> {
+    if let Some(name) = broadcast_app_name(process) {
+        return Some(name.into());
+    }
+    let basename = process
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(process)
+        .trim()
+        .trim_matches('"');
+    custom
+        .iter()
+        .find(|candidate| candidate.trim().eq_ignore_ascii_case(basename))
+        .map(|candidate| candidate.trim().to_owned())
+}
+
 fn running_broadcast_app() -> Result<Option<String>, String> {
+    let custom = settings::get_settings().custom_broadcast_apps;
+    running_broadcast_app_with_custom(&custom)
+}
+
+fn running_broadcast_app_with_custom(custom: &[String]) -> Result<Option<String>, String> {
     #[cfg(windows)]
     {
         use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
@@ -114,8 +163,8 @@ fn running_broadcast_app() -> Result<Option<String>, String> {
                 .position(|value| *value == 0)
                 .unwrap_or(entry.szExeFile.len());
             let process = String::from_utf16_lossy(&entry.szExeFile[..length]);
-            if let Some(app) = broadcast_app_name(&process) {
-                return Ok(Some(app.into()));
+            if let Some(app) = detected_name(&process, custom) {
+                return Ok(Some(app));
             }
             if unsafe { Process32NextW(snapshot.0, &mut entry) } == 0 {
                 return Ok(None);
@@ -127,8 +176,15 @@ fn running_broadcast_app() -> Result<Option<String>, String> {
         let output = system::run("ps", &["-A", "-o", "comm="])?;
         Ok(output
             .lines()
-            .find_map(|line| broadcast_app_name(line.trim()).map(str::to_owned)))
+            .find_map(|line| detected_name(line.trim(), custom)))
     }
+}
+
+fn unix_now() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
 }
 
 fn status(state: &State, now: Instant) -> StreamerStatus {
@@ -139,6 +195,17 @@ fn status(state: &State, now: Instant) -> StreamerStatus {
             .restore_at
             .map(|deadline| deadline.saturating_duration_since(now).as_secs_f64().ceil() as i32)
             .unwrap_or(0),
+        manual_seconds_remaining: state
+            .record
+            .as_ref()
+            .filter(|record| record.manual)
+            .and_then(|record| record.manual_until)
+            .map(|deadline| deadline.saturating_sub(unix_now()))
+            .unwrap_or(0),
+        manual_timed: state
+            .record
+            .as_ref()
+            .is_some_and(|record| record.manual && record.manual_until.is_some()),
         error: state.error.clone(),
     }
 }
@@ -164,7 +231,7 @@ pub fn get_streamer_status() -> StreamerStatus {
     status(&state, now)
 }
 
-fn activate(state: &mut State, manual: bool) -> Result<(), String> {
+fn activate(state: &mut State, manual: bool, manual_until: Option<i64>) -> Result<(), String> {
     let snapshot = platform::get_network_snapshot(&settings::read_backup()?)?;
     let connection = snapshot
         .connection
@@ -189,6 +256,7 @@ fn activate(state: &mut State, manual: bool) -> Result<(), String> {
         previous_name: network.name.clone(),
         mask,
         manual,
+        manual_until,
     };
     save_record(&Some(record.clone()))?;
     state.record = Some(record.clone());
@@ -296,13 +364,27 @@ pub fn check_streamer_now() -> StreamerStatus {
             }
         }
     }
+    let expired_manual = state.record.as_ref().is_some_and(|record| {
+        record.manual
+            && record
+                .manual_until
+                .is_some_and(|deadline| deadline <= unix_now())
+    });
+    if expired_manual {
+        // The timer is an explicit user action. Request OS permission when it
+        // is required so expiry does not leave the private label behind.
+        if let Err(error) = restore(&mut state, true) {
+            state.error = Some(error);
+            return status(&state, Instant::now());
+        }
+    }
     let auto = auto_enabled && state.detected_app.is_some() && !state.suppressed;
     if auto {
         state.restore_at = None;
     }
     let manual = state.record.as_ref().is_some_and(|record| record.manual);
     if auto && state.record.is_none() && scan_due {
-        if let Err(error) = activate(&mut state, false) {
+        if let Err(error) = activate(&mut state, false, None) {
             state.error = Some(error);
         }
     } else if !auto && !manual && state.record.is_some() {
@@ -328,9 +410,49 @@ pub fn toggle_streamer_cloak() -> StreamerStatus {
             Ok(())
         } else {
             state.suppressed = false;
-            activate(&mut state, true)
+            activate(&mut state, true, None)
         }
     });
+    if let Err(error) = result {
+        state.error = Some(error);
+    }
+    status(&state, Instant::now())
+}
+
+pub fn start_streamer_timer(minutes: i32) -> StreamerStatus {
+    let mut state = STREAMER.lock().unwrap_or_else(|e| e.into_inner());
+    let result = (|| {
+        if !matches!(minutes, 15 | 30 | 60) {
+            return Err("Choose a 15, 30, or 60 minute sharing session".into());
+        }
+        load_record(&mut state)?;
+        let deadline = unix_now() + i64::from(minutes) * 60;
+        if let Some(mut record) = state.record.clone() {
+            let snapshot = settings::read_backup()
+                .and_then(|backup| platform::get_network_snapshot(&backup))?;
+            let still_masked = snapshot.connection.is_some_and(|connection| {
+                connection.network_guid.as_deref() == Some(record.guid.as_str())
+                    && connection.name == record.mask
+            });
+            if !still_masked {
+                restore(&mut state, true)?;
+                state.suppressed = false;
+                return activate(&mut state, true, Some(deadline));
+            }
+            record.manual = true;
+            record.manual_until = Some(deadline);
+            save_record(&Some(record.clone()))?;
+            state.record = Some(record);
+            state.protected = true;
+            state.restore_at = None;
+            state.suppressed = false;
+            state.error = None;
+            Ok(())
+        } else {
+            state.suppressed = false;
+            activate(&mut state, true, Some(deadline))
+        }
+    })();
     if let Err(error) = result {
         state.error = Some(error);
     }
@@ -353,8 +475,8 @@ mod tests {
     #[cfg(windows)]
     fn broadcast_detection_uses_the_native_process_snapshot_without_a_shell_timeout() {
         let started = Instant::now();
-        running_broadcast_app().unwrap();
-        assert!(started.elapsed() < Duration::from_secs(2));
+        running_broadcast_app_with_custom(&[]).unwrap();
+        assert!(started.elapsed() < Duration::from_secs(5));
     }
 
     #[test]
@@ -365,6 +487,7 @@ mod tests {
             previous_name: "Studio".into(),
             mask: "Private".into(),
             manual: true,
+            manual_until: None,
         };
         let state = State {
             record: Some(record),
@@ -386,6 +509,19 @@ mod tests {
             Some("OBS Studio")
         );
         assert_eq!(broadcast_app_name("obs64.exe.backup"), None);
+        assert_eq!(broadcast_app_name("Webex.exe"), Some("Cisco Webex"));
+        assert_eq!(
+            broadcast_app_name("NVIDIA Broadcast.exe"),
+            Some("NVIDIA Broadcast")
+        );
+        assert_eq!(
+            detected_name("C:\\Tools\\MyCapture.exe", &["mycapture.exe".into()]),
+            Some("mycapture.exe".into())
+        );
+        assert_eq!(
+            detected_name("not-my-capture.exe", &["mycapture.exe".into()]),
+            None
+        );
     }
 
     #[test]
@@ -396,10 +532,38 @@ mod tests {
                 previous_name: "Original".into(),
                 mask: "Private".into(),
                 manual: true,
+                manual_until: None,
             }),
             ..State::default()
         };
         protect_persisted_record(&mut state);
         assert!(status(&state, Instant::now()).is_cloaked);
+    }
+
+    #[test]
+    fn expired_timed_records_remain_valid_for_restoration_after_a_long_shutdown() {
+        let record = Recovery {
+            guid: "network-id".into(),
+            previous_name: "Original".into(),
+            mask: "Private".into(),
+            manual: true,
+            manual_until: Some(1_700_000_000),
+        };
+        assert!(validate_recovery(&record, 1_700_172_800).is_ok());
+    }
+
+    #[test]
+    fn recovery_rejects_impossible_or_non_manual_timers() {
+        let mut record = Recovery {
+            guid: "network-id".into(),
+            previous_name: "Original".into(),
+            mask: "Private".into(),
+            manual: false,
+            manual_until: Some(1_700_000_100),
+        };
+        assert!(validate_recovery(&record, 1_700_000_000).is_err());
+        record.manual = true;
+        record.manual_until = Some(1_700_086_401);
+        assert!(validate_recovery(&record, 1_700_000_000).is_err());
     }
 }

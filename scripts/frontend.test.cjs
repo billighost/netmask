@@ -26,9 +26,9 @@ const reset = () => {
   useStore.getState().setSettings(baseSettings)
   useStore.setState({ networks: [], connection: null, connectionError: null, selectedGuid: null, toasts: [], networkSearch: '',
     refreshing: false, reconnecting: false, streamerBusy: false, speedTesting: false, updateInfo: null, updateDownloading: false,
-    downloadProgress: null, downloadedVersion: null, capabilities, contextMenu: null, settingsOpen: false, shortcutsModalOpen: false,
+    downloadProgress: null, downloadedVersion: null, updateLastCheckedAt: null, updateError: null, capabilities, contextMenu: null, settingsOpen: false, shortcutsModalOpen: false,
     onboardingOpen: false, reportModalOpen: false,
-    streamerStatus: { detectedApp: null, isCloaked: false, cooldownSeconds: 0 } })
+    streamerStatus: { detectedApp: null, isCloaked: false, cooldownSeconds: 0, manualSecondsRemaining: 0, manualTimed: false } })
 }
 
 test('filters and keyboard selection use only visible networks and hide original names when masked', () => {
@@ -246,6 +246,19 @@ test('rapid mask clicks coalesce and a failed native status is shown as an error
   assert.equal(useStore.getState().streamerBusy, false)
   assert.ok(!useStore.getState().toasts.some(toast => toast.type === 'success'))
 })
+test('sharing timer clicks coalesce and keep the native remaining time', async () => {
+  reset()
+  const request = deferred()
+  let calls = 0
+  window.nm.startStreamerTimer = minutes => { calls++; assert.equal(minutes, 30); return request.promise }
+  window.nm.getNetworkSnapshot = async () => ({ networks: [], connection: null })
+  const clicks = [actions.startStreamerTimer(30), actions.startStreamerTimer(30)]
+  request.resolve({ detectedApp: null, isCloaked: true, cooldownSeconds: 0, manualSecondsRemaining: 1800, manualTimed: true })
+  await Promise.all(clicks)
+  assert.equal(calls, 1)
+  assert.equal(useStore.getState().streamerStatus.manualSecondsRemaining, 1800)
+  assert.equal(useStore.getState().streamerBusy, false)
+})
 test('enabling privacy preserves an existing mask and reports individual failures', async () => {
   let toggles = 0
   const outcomes = await enablePrivacyControls({
@@ -356,11 +369,35 @@ test('a late initial update status cannot undo a newer downloaded event', async 
   window.nm.onUpdateProgress = callback => { handlers.progress = callback; return () => {} }
   window.nm.onUpdateDownloaded = callback => { handlers.downloaded = callback; return () => {} }
   window.nm.getUpdateStatus = () => pending.promise
+  window.nm.checkUpdate = async () => null
   const unsubscribe = updates.subscribeToUpdates()
   handlers.downloaded({ version: '2.4.0' })
   pending.resolve({ availableUpdate: null, downloadedVersion: null, progress: null, isDownloading: false })
   await Promise.resolve()
   assert.equal(useStore.getState().downloadedVersion, '2.4.0')
+  unsubscribe()
+})
+
+test('the first automatic update check runs immediately and stale cached status cannot hide it', async () => {
+  reset()
+  const cached = deferred()
+  const handlers = {}
+  let checks = 0
+  window.nm.onUpdateAvailable = callback => { handlers.available = callback; return () => {} }
+  window.nm.onUpdateProgress = callback => { handlers.progress = callback; return () => {} }
+  window.nm.onUpdateDownloaded = callback => { handlers.downloaded = callback; return () => {} }
+  window.nm.getUpdateStatus = () => cached.promise
+  window.nm.checkUpdate = async () => { checks++; return update }
+  const unsubscribe = updates.subscribeToUpdates()
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(checks, 1)
+  assert.equal(useStore.getState().updateInfo.version, '2.3.0')
+  cached.resolve({ availableUpdate: null, downloadedVersion: null, progress: null, isDownloading: false })
+  await Promise.resolve()
+  assert.equal(useStore.getState().updateInfo.version, '2.3.0')
+  assert.equal(useStore.getState().updateError, null)
+  assert.ok(useStore.getState().updateLastCheckedAt)
   unsubscribe()
 })
 

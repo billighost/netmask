@@ -1,0 +1,7 @@
+.banner { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--note); border-radius: var(--radius-md); background: var(--red-dim); color: var(--text-primary); }
+.banner > div { min-width: 0; flex: 1; }
+.banner strong, .banner span { display: block; }
+.banner strong { font-size: 11px; }
+.banner span { margin-top: 3px; color: var(--text-secondary); font-size: 10px; }
+.banner button { color: var(--accent); font-size: 10px; text-decoration: underline; text-underline-offset: 3px; }
+.dismiss { width: 24px; height: 24px; text-decoration: none !important; font-size: 18px !important; color: var(--text-muted) !important; }
