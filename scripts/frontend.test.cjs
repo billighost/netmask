@@ -138,6 +138,42 @@ test('a mutation triggers a new snapshot after an earlier read finishes', async 
   assert.equal(calls, 2)
   assert.equal(useStore.getState().networks[0].name, 'New name')
 })
+test('rename success is withheld until the refreshed network and connection confirm the label', async () => {
+  reset()
+  useStore.setState({ networks: [{ ...wifi }], connection: { ...connection }, selectedGuid: 'wifi-id' })
+  window.nm.rename = async () => {}
+  window.nm.getNetworkSnapshot = async () => ({ networks: [{ ...wifi }], connection: { ...connection }, connectionError: null })
+  await assert.rejects(actions.saveNetworkDisplayName('wifi-id', 'Reading room', 'Studio'), /refreshed local label did not change/)
+  assert.equal(useStore.getState().networks[0].name, 'Studio')
+
+  window.nm.getNetworkSnapshot = async () => ({
+    networks: [{ ...wifi, name: 'Reading room', renamed: true }],
+    connection: { ...connection, name: 'Reading room' },
+    connectionError: null
+  })
+  const confirmed = await actions.saveNetworkDisplayName('wifi-id', 'Reading room', 'Studio')
+  assert.equal(confirmed.name, 'Reading room')
+  assert.equal(useStore.getState().connection.name, 'Reading room')
+})
+test('restore success is withheld until the refreshed network and connection confirm the original label', async () => {
+  reset()
+  useStore.setState({ networks: [{ ...wifi, name: 'Reading room' }], connection: { ...connection, name: 'Reading room' }, selectedGuid: 'wifi-id' })
+  window.nm.restore = async () => {}
+  window.nm.getNetworkSnapshot = async () => ({
+    networks: [{ ...wifi, name: 'Reading room' }], connection: { ...connection, name: 'Reading room' }, connectionError: null
+  })
+  await assert.rejects(actions.restoreNetworkDisplayName('wifi-id', wifi.originalName, 'Reading room'), /refreshed local label did not change/)
+  assert.equal(useStore.getState().networks[0].name, 'Reading room')
+
+  window.nm.getNetworkSnapshot = async () => ({
+    networks: [{ ...wifi, name: wifi.originalName, renamed: false }],
+    connection: { ...connection, name: wifi.originalName },
+    connectionError: null
+  })
+  const confirmed = await actions.restoreNetworkDisplayName('wifi-id', wifi.originalName, 'Reading room')
+  assert.equal(confirmed.name, wifi.originalName)
+  assert.equal(useStore.getState().connection.name, wifi.originalName)
+})
 test('refresh failure clears stale connection state and always ends loading', async () => {
   reset()
   useStore.setState({ networks: [wifi], connection })

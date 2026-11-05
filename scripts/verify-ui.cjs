@@ -22,7 +22,7 @@ const server = http.createServer((request, response) => {
 })
 function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0' } = {}) {
   let sequence = 0, priorName = ''
-  const callbacks = new Map(), listeners = new Map(), failures = new Map(), calls = []
+  const callbacks = new Map(), listeners = new Map(), failures = new Map(), ignored = new Set(), calls = []
   const networks = [
     { guid: 'wifi-id', name: 'Studio', originalName: 'HomeFiber_5G', renamed: true, live: true, type: 'wifi', profile: 'Saved Studio profile', canRename: true },
     { guid: 'ethernet-id', name: 'Workshop', originalName: 'Workshop', renamed: false, live: false, type: 'ethernet', canRename: true }
@@ -44,6 +44,7 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
   window.__NM_FIXTURE__ = {
     calls, settings, capabilities, networks, connection, resolvers,
     fail: (command, message = 'Permission denied by the test fixture') => failures.set(command, message),
+    ignoreNext: command => ignored.add(command),
     emit,
     longName: () => { networks[0].name = 'A'.repeat(128); connection.name = networks[0].name }
   }
@@ -57,6 +58,7 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
       if (command === 'plugin:event|unlisten') { listeners.delete(args.eventId); return null }
       calls.push({ command, args })
       if (failures.has(command)) { const error = failures.get(command); failures.delete(command); throw Error(error) }
+      if (ignored.delete(command)) return null
       const values = {
         nm_is_admin: true, nm_get_version: version, nm_is_maximized: false, nm_get_settings: settings,
         nm_get_network_snapshot: { networks, connection, connectionError: null }, nm_get_streamer_status: streamer,
@@ -168,11 +170,12 @@ async function appChecks(browser, base, errors, results) {
         await page.screenshot({ path: path.join(output, 'about-' + theme + '.png') })
       }
       await page.getByRole('tab', { name: 'Tools', exact: true }).click()
-      for (const [tool, title] of [['Keyboard controls', 'Keyboard controls'], ['Device identity', 'Device identity'], ['Compare DNS resolvers', 'Compare DNS'], ['Wi-Fi adapter settings', 'Wi-Fi adapter settings']]) {
+      for (const [tool, title] of [['Keyboard controls', 'Keyboard controls'], ['This device and adapter', 'This device and adapter'], ['Compare DNS resolvers', 'Compare DNS'], ['Wi-Fi adapter settings', 'Wi-Fi adapter settings']]) {
         await page.getByRole('dialog', { name: 'Settings', exact: true }).getByRole('button', { name: tool, exact: true }).click()
         const dialog = page.getByRole('dialog', { name: title, exact: true })
         await dialog.waitFor(); await geometry(page, label + ' ' + title, true)
         assert.ok(await dialog.evaluate(element => element.contains(document.activeElement)), 'Dialog focus escaped')
+        if (tool === 'This device and adapter') await dialog.getByText('They do not describe the selected network or router.', { exact: false }).waitFor()
         if (title === 'Wi-Fi adapter settings') {
           const band = page.getByRole('combobox', { name: 'Preferred band', exact: true })
           await band.waitFor(); await band.click(); await popupGeometry(page)
@@ -207,18 +210,29 @@ async function appChecks(browser, base, errors, results) {
   page.on('pageerror', error => errors.push(error.message))
   await page.addInitScript(nativeFixture, { version: appVersion })
   await page.goto(base + '/dist/index.html'); await page.locator('[data-network-guid]').first().waitFor()
+  assert.equal(await page.getByRole('button', { name: 'Device identity', exact: true }).count(), 0, 'Device identity belongs only in Settings')
   await page.locator('#rename-network-input').fill('Reading room')
   await page.getByRole('button', { name: 'Save name', exact: true }).click()
   await page.waitForFunction(() => document.getElementById('connection-name').textContent === 'Reading room')
+  await page.getByText("The router's Wi-Fi name remains HomeFiber_5G.", { exact: false }).waitFor()
   await page.getByRole('switch', { name: 'Hide network names while sharing', exact: true }).click()
   await page.waitForFunction(() => document.getElementById('connection-name').textContent === 'Private network')
   assert.equal(await page.getByText('Wi-Fi name: HomeFiber_5G', { exact: true }).count(), 0)
   await page.getByRole('switch', { name: 'Hide network names while sharing', exact: true }).click()
   await page.waitForFunction(() => document.getElementById('connection-name').textContent === 'Reading room')
+  await page.evaluate(() => window.__NM_FIXTURE__.ignoreNext('nm_rename'))
+  await page.locator('#rename-network-input').fill('Unconfirmed name')
+  await page.getByRole('button', { name: 'Save name', exact: true }).click()
+  await page.getByRole('alert').filter({ hasText: 'refreshed local label did not change' }).waitFor()
+  assert.equal(await page.locator('#connection-name').textContent(), 'Reading room')
   await page.evaluate(() => window.__NM_FIXTURE__.fail('nm_rename'))
   await page.locator('#rename-network-input').fill('Rejected name')
   await page.getByRole('button', { name: 'Save name', exact: true }).click()
   await page.getByRole('alert').filter({ hasText: 'Permission denied' }).waitFor()
+  assert.equal(await page.locator('#connection-name').textContent(), 'Reading room')
+  await page.evaluate(() => window.__NM_FIXTURE__.ignoreNext('nm_restore'))
+  await page.getByRole('button', { name: 'Restore original', exact: true }).click()
+  await page.getByRole('alert').filter({ hasText: 'refreshed local label did not change' }).last().waitFor()
   assert.equal(await page.locator('#connection-name').textContent(), 'Reading room')
   await page.getByRole('button', { name: 'Restore original', exact: true }).click()
   await page.waitForFunction(() => document.getElementById('connection-name').textContent === 'HomeFiber_5G')
@@ -228,6 +242,7 @@ async function appChecks(browser, base, errors, results) {
   await page.getByRole('button', { name: 'Close download speed test', exact: true }).click()
   await page.getByRole('button', { name: 'Actions for HomeFiber_5G', exact: true }).click()
   await page.getByRole('menu').waitFor(); await page.keyboard.press('End')
+  assert.equal(await page.getByRole('menuitem', { name: 'Device identity', exact: true }).count(), 0, 'Per-network menus must not show device-specific identity')
   assert.equal(await page.evaluate(() => document.activeElement.getAttribute('role')), 'menuitem')
   await page.keyboard.press('Control+,')
   assert.equal(await page.getByRole('menu').count(), 0)

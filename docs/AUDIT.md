@@ -100,6 +100,18 @@ PR [#14](https://github.com/billighost/netmask/pull/14) merged the v2.3.1 releas
 
 Mesh tools were unavailable during this follow-up. This document and the product/performance guides provide the durable handoff: source fixes and regression checks are complete; supported-platform manual install/permission/reconnect/DNS/recovery/update checks, release CI, and the proposed launch work remain separate validation and product tasks.
 
+## v2.3.3 local-label confirmation and tool scope, 2026-11-05
+
+- A read-only diagnostic of the installed v2.3.2 state found that Windows had persisted the local network label, the active network row and connection label agreed, and the label intentionally differed from the router SSID. The app now states this distinction beside the editor and in its success message.
+- Rename and restore actions no longer trust a successful native return by itself. The renderer refreshes the network snapshot and requires the same stable network identity to contain the expected label; an active connection must also report the expected label before success is shown.
+- The native rename path separately verifies the same stable identity and expected label, preserving the recovery record when the operating system does not confirm the result.
+- Computer and adapter identity is no longer exposed as a selected-network action. It remains in Settings as **This device and adapter**, with explicit scope text and matching native error wording.
+- Frontend and browser fixtures cover native false-success responses for both rename and restore, verify that the displayed value stays unchanged on failure, and confirm that device/adapter controls are absent from per-network actions.
+- Verification passed 39 JavaScript tests, TypeScript, hooks lint, the production renderer build, 28 browser scenarios, Rust formatting, the native workspace check, 35 executed native tests, actionlint 1.7.12, 65 local documentation links, a tracked-source credential-signature scan, and the production npm dependency audit. Three subprocess fixtures remain intentionally ignored in direct enumeration and are exercised by the deadline regression test.
+- A local optimized v2.3.3 Windows build produced a 7,316,500-byte NSIS installer and an 11,231,232-byte MSI with matching 2.3.3 executable metadata. These are local verification artifacts; publication rebuilds packages on the protected multi-platform CI matrix.
+- The final read-only v2.3.3 diagnostic ran without elevation. It returned a connected 479-network snapshot, successful identity/DNS/adapter reads, and confirmed that the live row and connection use the same local label while that label differs from the router SSID.
+- The diagnostic and automated tests do not rename a live network, reconnect Wi-Fi, approve an elevation prompt, or change protected network settings. Supported-platform CI and target-hardware checks remain the evidence for OS integration and installer behavior.
+
 ## Boundaries
 
 The audit does not change the developer's live Wi-Fi, DNS, registry, credentials, or driver settings as a test. Parser, socket, storage, subprocess, and browser fixtures do not prove permission prompts, real reconnects, Wi-Fi hardware behavior, signing, or every desktop environment's displayed name.

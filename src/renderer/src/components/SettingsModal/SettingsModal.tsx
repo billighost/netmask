@@ -103,7 +103,7 @@ export const SettingsModal: React.FC = () => {
   }
   const toolButtons = [
     { label: 'Keyboard controls', icon: <KeyboardIcon size={14} />, action: () => state.setShortcutsModalOpen(true), disabled: false },
-    { label: 'Device identity', icon: <ShieldIcon size={14} />, action: () => state.setPrivacyCloakModalOpen(true), disabled: false },
+    { label: 'This device and adapter', icon: <ShieldIcon size={14} />, action: () => state.setPrivacyCloakModalOpen(true), disabled: false },
     { label: 'Compare DNS resolvers', icon: <DnsIcon size={14} />, action: () => state.setDnsModalOpen(true), disabled: false },
     { label: 'Wi-Fi adapter settings', icon: <RadioIcon size={14} />, action: () => state.setRoamingModalOpen(true), disabled: capabilities?.roamingTuning === false }
   ]

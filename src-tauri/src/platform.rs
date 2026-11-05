@@ -328,14 +328,16 @@ pub fn rename_with_mode(
     #[cfg(target_os = "macos")]
     macos::rename(guid, new_name, current_name, allow_prompt)?;
     let networks = get_networks(&settings::read_backup()?)?;
-    if networks
-        .iter()
-        .any(|n| n.guid == guid && n.name == new_name)
-    {
+    if display_name_confirmed(&networks, guid, new_name) {
         Ok(())
     } else {
         Err("The operating system did not confirm the new display name. The original name is still saved.".into())
     }
+}
+fn display_name_confirmed(networks: &[Network], guid: &str, expected_name: &str) -> bool {
+    networks
+        .iter()
+        .any(|network| network.guid == guid && network.name == expected_name)
 }
 pub fn rename_network(
     guid: &str,
@@ -549,6 +551,37 @@ mod tests {
         assert_eq!(band_from_mhz(6115), "6 GHz");
         assert_eq!(map_radio_to_generation("802.11ax", "6 GHz"), "Wi-Fi 6E");
         assert_eq!(map_radio_to_generation("802.11ax", "2.4 GHz"), "Wi-Fi 6");
+    }
+    #[test]
+    fn rename_confirmation_requires_the_same_identity_and_refreshed_name() {
+        let network = Network {
+            guid: "stable-id".into(),
+            name: "Reading room".into(),
+            original_name: "Router SSID".into(),
+            renamed: true,
+            live: true,
+            network_type: "wifi".into(),
+            profile: Some("Saved profile".into()),
+            can_rename: true,
+        };
+        assert!(display_name_confirmed(
+            std::slice::from_ref(&network),
+            "stable-id",
+            "Reading room"
+        ));
+        assert!(!display_name_confirmed(
+            std::slice::from_ref(&network),
+            "stable-id",
+            "Unconfirmed"
+        ));
+        assert!(!display_name_confirmed(
+            &[Network {
+                guid: "new-id".into(),
+                ..network
+            }],
+            "stable-id",
+            "Reading room"
+        ));
     }
     #[test]
     fn identifiers_and_bssid_masks_reject_malformed_input() {
