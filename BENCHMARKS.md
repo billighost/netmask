@@ -1,8 +1,29 @@
 # Performance measurement
 
-The current app uses Tauri and a system webview. No complete, reproducible Tauri memory benchmark has been published in this repository yet. Installer size, Rust binary size, resident RAM, private working set, and committed memory are different measurements.
+The current app uses Tauri and the operating system's webview. Previous numbers came from the retired Electron runtime and contained inconsistent memory labels and claims; they do not establish the current app's footprint. Installer size, Rust binary size, resident RAM, private working set, total working set, and committed memory are different measurements.
 
-Previous numbers came from the former runtime and contained inconsistent memory labels and claims. They do not establish this app's memory footprint. Historical data remains available in Git history; current documentation does not reuse it as a Tauri result.
+## Native memory, Windows, 2026-11-05
+
+Measured the optimized v2.3.2 pre-release executable on Windows 11 Pro build 22000, an Intel Core i5-7200U with 7.9 GiB visible RAM, and WebView2 156.0.4314.58. The executable SHA-256 was `9a255cb718e6d4df3a30c5edfb6bdad79fac24700c7fa8e2d302c8b518ee7d29`. NetMask settings and WebView2 data were isolated so an already-running installed copy could not share renderer processes with the measured build.
+
+| Metric, 15 one-second samples per state | Visible after 30 s | Hidden in tray after 60 s |
+| --- | ---: | ---: |
+| Private resident memory, median (range) | **135.1 MiB** (127.6–199.1) | **119.1 MiB** (118.5–120.3) |
+| Total working set, median (range) | 384.4 MiB (377.2–503.2) | 371.2 MiB (369.7–371.6) |
+| Private commit, median (range) | 181.7 MiB (173.5–278.6) | 163.9 MiB (163.4–165.3) |
+
+Private resident memory is the sum of resident `QueryWorkingSet` pages whose Shared bit is unset across the NetMask host and its descendants. The visible median comprised 5.1 MiB in the Rust host, 126.8 MiB in WebView2, and the remainder in short-lived command descendants; the tray median comprised 5.1 MiB in the host and 114.0 MiB in WebView2. Total working set includes shared pages and can count them in more than one process. Private commit includes nonresident committed pages, so neither of those values should be relabelled as resident RAM.
+
+The run used actual local saved networks and normal visible telemetry, Paper theme, automation disabled, no speed test or update download, and no explicit working-set trim. The source tree was still a dirty v2.3.2 release candidate based on `d00ce49abda2f783e192ad6cd7559176c33b9236`; the exact binary hash above identifies what was measured. See the [raw report](docs/benchmarks/native-memory-v2.3.2-2026-11-05.json) for every sample and process. This is one machine, not a cross-platform guarantee.
+
+To repeat the same safe measurement with an optimized Windows build:
+
+```powershell
+npm run tauri:build -- --no-bundle
+npm run benchmark:memory
+```
+
+The harness creates isolated settings and WebView2 data, performs no network mutation, and writes `.tmp/native-memory.json`.
 
 ## What is implemented
 

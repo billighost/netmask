@@ -1,6 +1,6 @@
 {
   "name": "netmask",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "Cross-platform local network display name manager for Windows, macOS, and Linux",
   "author": {
     "name": "Bello Bilal",
@@ -37,6 +37,7 @@
     "test": "node --test scripts/frontend.test.cjs scripts/hooks.test.cjs scripts/release.test.cjs scripts/test-verification.js",
     "test:ui": "node scripts/verify-ui.cjs",
     "benchmark:ui": "node scripts/benchmark-ui.cjs",
+    "benchmark:memory": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/benchmark-memory.ps1",
     "test:native": "cargo test --manifest-path src-tauri/Cargo.toml --workspace --locked",
     "check:native": "cargo check --manifest-path src-tauri/Cargo.toml --workspace --locked",
     "format:native": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check",

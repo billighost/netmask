@@ -6,6 +6,7 @@ pub mod ping;
 pub mod platform;
 pub mod portal;
 pub mod privacy;
+pub mod privileged;
 pub mod qr;
 pub mod roaming;
 pub mod settings;

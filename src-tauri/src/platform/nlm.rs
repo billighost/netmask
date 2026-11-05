@@ -118,8 +118,13 @@ pub fn rename(id: &str, name: &str) -> Result<(), String> {
     with_manager(|manager| {
         let network = unsafe { manager.GetNetwork(guid) }
             .map_err(|_| "This Windows network is no longer available")?;
-        unsafe { network.SetName(&BSTR::from(name)) }
-            .map_err(|_| "Windows could not update the network display name")?;
+        unsafe { network.SetName(&BSTR::from(name)) }.map_err(|error| {
+            if error.code().0 == 0x80070005u32 as i32 {
+                "Administrator permission is required to change this network display name"
+            } else {
+                "Windows could not update the network display name"
+            }
+        })?;
         if unsafe { network.GetName() }
             .map_err(|_| "Cannot verify the updated network name")?
             .to_string()

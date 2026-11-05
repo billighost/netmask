@@ -1,5 +1,5 @@
 use crate::types::DnsResolverResult;
-use crate::{platform, settings, system};
+use crate::{settings, system};
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::time::{Duration, Instant};
@@ -217,8 +217,8 @@ fn configuration(interface: Option<&str>) -> Result<Configuration, String> {
         "$route = Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop | Sort-Object @{ Expression = { $_.RouteMetric + (Get-NetIPInterface -AddressFamily IPv4 -InterfaceIndex $_.InterfaceIndex).InterfaceMetric } } | Select-Object -First 1; $adapter = Get-NetAdapter -InterfaceIndex $route.InterfaceIndex -ErrorAction Stop;".into()
     };
     let data = system::powershell_json(&format!(
-        "{select} if (-not $adapter) {{ throw 'No active network adapter' }}; $key = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\' + $adapter.InterfaceGuid.ToString('B'); $manual = (Get-ItemProperty -LiteralPath $key -ErrorAction Stop).NameServer; [pscustomobject]@{{ target = [string]$adapter.InterfaceIndex; interface = $adapter.Name; manual = [string]$manual; servers = @((Get-DnsClientServerAddress -InterfaceIndex $adapter.InterfaceIndex -AddressFamily IPv4 -ErrorAction Stop).ServerAddresses) }}"
-    ))?;
+        "{select} if (-not $adapter) {{ throw 'No active network adapter' }}; $key = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\' + ([Guid]$adapter.InterfaceGuid).ToString('B'); $manual = (Get-ItemProperty -LiteralPath $key -ErrorAction Stop).NameServer; [pscustomobject]@{{ target = [string]$adapter.InterfaceIndex; interface = $adapter.Name; manual = [string]$manual; servers = @((Get-DnsClientServerAddress -InterfaceIndex $adapter.InterfaceIndex -AddressFamily IPv4 -ErrorAction Stop).ServerAddresses) }}"
+    )).map_err(|error| format!("DNS settings could not be read. {error}"))?;
     let manual = addresses(data["manual"].as_str().unwrap_or(""));
     let effective = data["servers"]
         .as_array()
@@ -458,22 +458,10 @@ fn benchmark_resolvers(config: &Configuration) -> Vec<DnsResolverResult> {
 #[cfg(windows)]
 fn apply_configuration(config: &Configuration) -> Result<(), String> {
     let index: u32 = config.target.parse().map_err(|_| "Invalid adapter index")?;
-    let command = if config.automatic {
-        format!(
-            "Set-DnsClientServerAddress -InterfaceIndex {index} -ResetServerAddresses -ErrorAction Stop"
-        )
-    } else {
-        format!(
-            "Set-DnsClientServerAddress -InterfaceIndex {index} -ServerAddresses @({}) -ErrorAction Stop",
-            config
-                .servers
-                .iter()
-                .map(|ip| system::powershell_literal(ip))
-                .collect::<Vec<_>>()
-                .join(",")
-        )
-    };
-    system::powershell(&command, !platform::is_admin())?;
+    crate::privileged::run(crate::privileged::Request::Dns {
+        index,
+        servers: (!config.automatic).then(|| config.servers.clone()),
+    })?;
     Ok(())
 }
 

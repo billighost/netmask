@@ -1,4 +1,4 @@
-# NetMask v2.3.0 audit
+# NetMask release audit
 
 Audit date: **2026-11-04**. Scope: the Tauri host, native commands, operating-system integrations, persistence, workers, React behavior, accessibility, branding, installers, release tooling, and documentation.
 
@@ -80,11 +80,23 @@ Follow-up verification:
 
 The former v2.3.0 release workflow (`41863350341`) passed source verification and Windows/Linux tests and installers. Both Mac jobs were cancelled with no executed steps because GitHub reported: “The job was not acquired by Runner of type hosted even after multiple attempts.” Publication skipped because those required jobs did not finish. The v2.2.0 release was already published with its five original native packages; it needed no repair.
 
-The v2.3.0 failed jobs were rerun against the unchanged tag at `923ad7c9335e7e2b73ed683f2d24311be1d86b4e`. Both Mac runners subsequently acquired jobs. Recovery/publication evidence will be recorded after the packages are verified.
+The v2.3.0 failed jobs were rerun against the unchanged tag at `923ad7c9335e7e2b73ed683f2d24311be1d86b4e`. Both Mac runners subsequently acquired jobs. The recovered [v2.3.0 release](https://github.com/billighost/netmask/releases/tag/v2.3.0) now contains all six native packages and checksums.
 
 At the user's explicit request, new release automation publishes successful platforms while an OS with a confirmed allocation failure remains unavailable. A cancelled job must have no runner, no executed steps, and the capacity annotation; actual test/build failures, unexplained cancellations, missing jobs and incomplete package sets remain blocking. The always-running CI Gate and merge helper enforce that distinction. Installer compilation now runs before merging as well as after tagging. Publication generates accurate availability notes and checksums; a separate workflow retries capacity failures up to three attempts, and manual dispatch can add one missing platform later without moving the tag.
 
-The follow-up source changes are being prepared on `release/v2.3.1`; they have not been installed over the user's existing app. Earlier installer and shortcut results above belong to the initial work. The launch plan explicitly distinguishes proposed features from shipped functionality.
+PR [#14](https://github.com/billighost/netmask/pull/14) merged the v2.3.1 release work at `d00ce49abda2f783e192ad6cd7559176c33b9236`. Workflow run `41959214377` completed successfully, and the published [v2.3.1 release](https://github.com/billighost/netmask/releases/tag/v2.3.1) contains all six packages, checksums, and `availability.json`.
+
+## v2.3.2 Windows and interface follow-up, 2026-11-05
+
+- Device identity, DNS configuration, and adapter settings failed because Windows exposed `InterfaceGuid` as `System.String`, while scripts called `.ToString('B')` as though it were already a `Guid`. All affected reads now cast with `([Guid]$value).ToString('B')`.
+- A read-only diagnostic run in a standard, non-elevated Windows session succeeded for the network snapshot, device identity, DNS settings/comparison, and adapter capabilities. It observed 479 saved networks without mutating Wi-Fi, DNS, registry, credentials, or drivers.
+- Protected operations now elevate the branded NetMask executable through native `ShellExecuteExW`. A bounded base64 JSON request permits only validated NetMask rename, DNS, MAC-randomization, NetBIOS, driver, and elevation-task operations. Network-label changes use native NLM/WLAN APIs; PowerShell remains for Windows cmdlets that do not yet have a native implementation.
+- Generic `powershell.exe failed (exit code Some(1))` messages were replaced with administrator, unavailable-command, invalid-parameter, cancellation, and unsupported-setting guidance. Admin accounts still normally run applications without elevation under UAC, so protected changes may legitimately request approval.
+- Saved networks now occupy a responsive 76–360 px internal scroll region, including 1,000-row browser coverage. Saved-network and shortcut searches suppress the global red focus ring and use the Fieldnotes underline.
+- The Windows memory benchmark isolates both settings and WebView2 data, includes the host and renderer descendants, and performs no explicit memory trim or live network mutation. Median private resident memory was **135.1 MiB visible** and **119.1 MiB in the tray**; [the performance guide](../BENCHMARKS.md) records ranges, other metrics, limitations, the binary hash, and raw samples.
+- Verification passed 37 JavaScript tests, TypeScript, hooks lint, the production renderer build, 28 browser scenarios, Rust formatting, the native workspace check, 35 executed native tests, actionlint, release-source/link review, and the production dependency audit. Three subprocess fixtures remain intentionally ignored in direct enumeration and are exercised by the deadline regression test.
+- The final read-only Windows diagnostic ran without elevation and returned a connected snapshot with 479 saved networks plus successful identity, DNS settings/comparison, and adapter-capability results. Protected UAC operations were not exercised against live network state.
+- Before this release, three installed NetMask entries (v2.3.1, v2.2.0, and a stale v1.0.0 record) were removed from the test machine. Verification found zero registered installs, processes, installed executables, shortcuts, Appx packages, or Winget packages. User settings and recovery data were preserved outside the install directory for the new release.
 
 Mesh tools were unavailable during this follow-up. This document and the product/performance guides provide the durable handoff: source fixes and regression checks are complete; supported-platform manual install/permission/reconnect/DNS/recovery/update checks, release CI, and the proposed launch work remain separate validation and product tasks.
 

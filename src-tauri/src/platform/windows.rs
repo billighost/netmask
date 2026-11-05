@@ -1,5 +1,4 @@
 //! Native WLAN reads avoid localized netsh text and preserve Unicode profile names.
-use crate::system::{powershell, powershell_literal};
 use crate::types::{Connection, Network};
 use base64::Engine;
 use std::collections::HashMap;
@@ -499,6 +498,12 @@ pub fn rename(guid: &str, new_name: &str, allow_prompt: bool) -> Result<(), Stri
             )
         };
         if code != 0 {
+            if code == 5 && !super::is_admin() && allow_prompt {
+                return crate::privileged::run(crate::privileged::Request::Rename {
+                    id: guid.into(),
+                    name: new_name.into(),
+                });
+            }
             return Err(format!(
                 "Windows could not rename the Wi-Fi profile ({code}). Administrator permission may be required."
             ));
@@ -508,21 +513,24 @@ pub fn rename(guid: &str, new_name: &str, allow_prompt: bool) -> Result<(), Stri
     if !super::is_guid(guid) {
         return Err("Invalid Windows network identifier".into());
     }
-    if super::is_admin() {
-        return super::nlm::rename(guid, new_name);
+    let result = super::nlm::rename(guid, new_name);
+    if result.is_ok()
+        || super::is_admin()
+        || !result
+            .as_ref()
+            .is_err_and(|error| error.contains("Administrator permission"))
+    {
+        return result;
     }
-    if !super::is_admin() && !allow_prompt {
+    if !allow_prompt {
         return Err(
             "Administrator permission is required to mask this network automatically".into(),
         );
     }
-    let script = format!(
-        "$manager = [Activator]::CreateInstance([Type]::GetTypeFromCLSID([Guid]'dcb00c01-570f-4a9b-8d69-199fdba5723b')); $network = $manager.GetNetwork([Guid]{}); $network.SetName({}); if ($network.GetName() -cne {}) {{ throw 'Windows did not confirm the network name' }}",
-        powershell_literal(guid),
-        powershell_literal(new_name),
-        powershell_literal(new_name)
-    );
-    powershell(&script, !super::is_admin())?;
+    crate::privileged::run(crate::privileged::Request::Rename {
+        id: guid.into(),
+        name: new_name.into(),
+    })?;
     Ok(())
 }
 

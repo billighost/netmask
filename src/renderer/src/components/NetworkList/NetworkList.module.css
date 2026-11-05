@@ -1,5 +1,5 @@
 .root { min-width: 0; }
-.list { max-height: 360px; max-height: clamp(180px, 38vh, 360px); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.list { height: clamp(76px, 38vh, 360px); height: clamp(76px, 38dvh, 360px); min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .title { font-size: 13px; font-weight: 600; letter-spacing: -.1px; }
 .count { color: var(--text-muted); font: 10px var(--font-mono); font-weight: 400; margin-left: 8px; }
@@ -11,7 +11,10 @@
 .search { flex: 1; width: 100%; min-width: 0; border: 0; background: transparent; padding: 4px 0; font-size: 11px; outline: 0; }
 .search::placeholder { color: var(--text-muted); }
 .searchWrap:focus-within { border-color: var(--accent); }
+.search:focus-visible { outline: none; }
+.searchWrap:focus-within { box-shadow: 0 1px 0 var(--accent); }
 .clearBtn { display: grid; place-items: center; width: 22px; height: 24px; font-size: 16px; color: var(--text-muted); }
 .list { display: flex; flex-direction: column; }
+.list > * { flex-shrink: 0; }
 .empty { padding: 20px 0; color: var(--text-secondary); font-size: 11px; line-height: 1.7; }
 
