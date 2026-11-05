@@ -8,3 +8,15 @@
 !ifndef MUI_FINISHPAGE_TITLE
   !define MUI_FINISHPAGE_TITLE "NetMask is ready"
 !endif
+
+!macro NSIS_HOOK_PREUNINSTALL
+  ; Restore every recoverable local network label before the executable is
+  ; removed. Recovery data lives outside $INSTDIR, so a cancelled permission
+  ; prompt or unavailable network remains recoverable after reinstall.
+  IfFileExists "$INSTDIR\netmask.exe" 0 netmask_uninstall_done
+  ExecWait '"$INSTDIR\netmask.exe" --nm-uninstall' $0
+  StrCmp $0 0 netmask_uninstall_done
+  IfSilent netmask_uninstall_done 0
+  MessageBox MB_ICONEXCLAMATION|MB_OK "NetMask could not restore every network name. Your recovery records were kept and can be restored after reinstalling NetMask."
+netmask_uninstall_done:
+!macroend

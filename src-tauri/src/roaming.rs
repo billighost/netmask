@@ -1,5 +1,7 @@
+#[cfg(windows)]
+use crate::platform;
 use crate::types::RoamingSettings;
-use crate::{platform, settings, system};
+use crate::{settings, system};
 
 #[derive(Clone)]
 struct Property {

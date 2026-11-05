@@ -15,4 +15,4 @@ All candidates describe the same implemented app. Screenshots come from the buil
 
 The previews use GitHub-compatible Markdown and HTML. The gallery approximates GitHub's light and dark rendering; GitHub determines its own fonts and spacing. Downloaded Markdown has paths prepared for the repository's root `README.md`. The source candidates use paths that also render correctly from this directory.
 
-These layouts accompany **v2.3.0** and link to its native packages. Viewing another direction in the gallery does not change the selected repository README.
+The selected Showcase layout accompanies **v2.3.4** and links directly to its native packages. The other historical concepts remain comparison references. Viewing another direction in the gallery does not change the selected repository README.

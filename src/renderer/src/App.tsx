@@ -19,7 +19,7 @@ import { DnsBenchmarkModal } from './components/DnsBenchmarkModal/DnsBenchmarkMo
 import { DeviceIdentityModal } from './components/DeviceIdentityModal/DeviceIdentityModal'
 import { RoamingTunerModal } from './components/RoamingTunerModal/RoamingTunerModal'
 import styles from './App.module.css'
-import { refreshNetworks, reconnectSelected, toggleStreamer, selectNetworkAndFocus, runSpeedTest } from './network-actions'
+import { refreshNetworks, reconnectSelected, restoreNetworkDisplayName, toggleStreamer, selectNetworkAndFocus, runSpeedTest } from './network-actions'
 import { errorMessage, visibleNetworks } from './network-state'
 import { subscribeToUpdates } from './update-actions'
 
@@ -195,8 +195,7 @@ export const App: React.FC = () => {
           e.preventDefault()
           const net = state.networks.find(n => n.guid === state.selectedGuid)
           if (net && net.renamed) {
-            window.nm.restore(net.guid, net.name).then(async () => {
-              await refresh()
+            restoreNetworkDisplayName(net.guid, net.originalName, net.name).then(() => {
               state.addToast(`Restored original name "${net.originalName}"`, 'success')
             }).catch(error => state.addToast(errorMessage(error, 'Failed to restore original name'), 'error'))
           }

@@ -10,6 +10,8 @@ pub enum Request {
     Rename {
         id: String,
         name: String,
+        #[serde(default)]
+        current_name: Option<String>,
     },
     Dns {
         index: u32,
@@ -37,11 +39,18 @@ pub enum Request {
 impl Request {
     fn validate(&self) -> Result<(), String> {
         match self {
-            Self::Rename { id, name } => {
+            Self::Rename {
+                id,
+                name,
+                current_name,
+            } => {
                 if !platform::is_guid(id) && !id.starts_with("wlan:") {
                     return Err("Invalid network identifier".into());
                 }
                 settings::validate_display_name(name)?;
+                if let Some(current_name) = current_name {
+                    settings::validate_display_name(current_name)?;
+                }
             }
             Self::Dns { index, servers } => {
                 if *index == 0
@@ -127,15 +136,20 @@ impl Request {
                 let exe = std::env::current_exe().map_err(|_| "NetMask executable is unavailable")?;
                 format!("$action = New-ScheduledTaskAction -Execute {} -Argument '--handoff'; $principal = New-ScheduledTaskPrincipal -UserId {} -LogonType Interactive -RunLevel Highest; $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; Register-ScheduledTask -TaskName 'NetMask_Elevated' -Action $action -Principal $principal -Settings $settings -Force -ErrorAction Stop | Out-Null", quote(&exe.to_string_lossy()), quote(user_sid))
             }
-            Self::RemoveTask => "Unregister-ScheduledTask -TaskName 'NetMask_Elevated' -Confirm:$false -ErrorAction Stop".into(),
+            Self::RemoveTask => "$task = Get-ScheduledTask -TaskName 'NetMask_Elevated' -ErrorAction SilentlyContinue; if ($task) { $task | Unregister-ScheduledTask -Confirm:$false -ErrorAction Stop }".into(),
         }))
     }
 
     fn execute(&self) -> Result<(), String> {
         self.validate()?;
         #[cfg(windows)]
-        if let Self::Rename { id, name } = self {
-            return platform::windows::rename(id, name, false);
+        if let Self::Rename {
+            id,
+            name,
+            current_name,
+        } = self
+        {
+            return platform::windows::rename(id, name, current_name.as_deref(), false);
         }
         #[cfg(not(windows))]
         if matches!(self, Self::Rename { .. }) {
@@ -160,7 +174,7 @@ fn decode(value: &str) -> Result<Request, String> {
         .and_then(serde_json::Value::as_str)
         .ok_or("Invalid elevation request")?;
     let allowed: &[&str] = match operation {
-        "Rename" => &["operation", "id", "name"],
+        "Rename" => &["operation", "id", "name", "current_name"],
         "Dns" => &["operation", "index", "servers"],
         "Randomization" => &["operation", "guid", "profile", "mode"],
         "Netbios" => &["operation", "guid", "enabled"],
@@ -180,6 +194,28 @@ fn decode(value: &str) -> Result<Request, String> {
 
 pub fn handle_cli() -> Option<i32> {
     let arguments: Vec<_> = std::env::args().skip(1).collect();
+    if arguments.first().map(String::as_str) == Some("--nm-uninstall") {
+        let result = (|| {
+            if arguments.len() != 1 {
+                return Err("Invalid uninstall recovery request".into());
+            }
+            #[cfg(windows)]
+            if !platform::is_admin() {
+                return launch_elevated("--nm-uninstall", true);
+            }
+            settings::ensure_data_dir()?;
+            settings::migrate_legacy_data()?;
+            let restore = crate::operations::restore_all();
+            #[cfg(windows)]
+            let _ = Request::RemoveTask.execute();
+            if restore.is_ok() {
+                let _ =
+                    settings::storage().write("streamer.json", &Option::<serde_json::Value>::None);
+            }
+            restore
+        })();
+        return Some(if result.is_ok() { 0 } else { 1 });
+    }
     if arguments.first().map(String::as_str) != Some("--nm-privileged") {
         return None;
     }
@@ -304,6 +340,7 @@ mod tests {
             Request::Rename {
                 id: "{00112233-4455-6677-8899-aabbccddeeff}".into(),
                 name: "Private".into(),
+                current_name: Some("Original".into()),
             },
             Request::Dns {
                 index: 12,

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "NetMask",
-  "version": "2.3.3",
+  "version": "2.3.4",
   "identifier": "com.billighost.netmask",
   "build": {
     "frontendDist": "../dist",
@@ -56,7 +56,13 @@
       },
       "wix": {
         "bannerPath": "installer/wix-banner.bmp",
-        "dialogImagePath": "installer/wix-dialog.bmp"
+        "dialogImagePath": "installer/wix-dialog.bmp",
+        "fragmentPaths": [
+          "installer/uninstall.wxs"
+        ],
+        "componentRefs": [
+          "NetMaskUninstallRecoveryComponent"
+        ]
       }
     },
     "macOS": {

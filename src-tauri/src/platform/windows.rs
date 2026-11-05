@@ -475,7 +475,69 @@ fn merge_profiles(
     networks
 }
 
-pub fn rename(guid: &str, new_name: &str, allow_prompt: bool) -> Result<(), String> {
+fn rename_profile(profile: &Profile, new_name: &str) -> Result<(), String> {
+    if profile.name == new_name {
+        return Ok(());
+    }
+    let client = client()?;
+    let old = wide_argument(&profile.name);
+    let new = wide_argument(new_name);
+    let code = unsafe {
+        WlanRenameProfile(
+            client.0,
+            &profile.interface,
+            old.as_ptr(),
+            new.as_ptr(),
+            null(),
+        )
+    };
+    if code == 0 {
+        Ok(())
+    } else {
+        Err(format!(
+            "Windows could not rename the saved Wi-Fi profile ({code}). Administrator permission may be required."
+        ))
+    }
+}
+
+fn profile_for_network(guid: &str, current_name: Option<&str>) -> Result<Option<Profile>, String> {
+    let row = super::nlm::profiles()?
+        .into_iter()
+        .find(|row| row.guid == guid)
+        .ok_or("This Windows network is no longer available")?;
+    let profiles = profiles()?;
+    let connection = get_connection().ok().flatten();
+
+    if row.live {
+        if let Some(profile) = profiles
+            .iter()
+            .filter(|profile| row.adapters.contains(&guid_string(&profile.interface)))
+            .find(|profile| {
+                connection.as_ref().is_some_and(|connection| {
+                    connection.profile == profile.name
+                        && connection.interface_guid.as_deref()
+                            == Some(guid_string(&profile.interface).as_str())
+                })
+            })
+        {
+            return Ok(Some(profile.clone()));
+        }
+    }
+
+    let candidates: Vec<_> = profiles
+        .iter()
+        .filter(|profile| row.adapters.contains(&guid_string(&profile.interface)))
+        .filter(|profile| {
+            [Some(row.name.as_str()), current_name]
+                .into_iter()
+                .flatten()
+                .any(|name| profile.name == name || profile.ssid == name)
+        })
+        .collect();
+    Ok((candidates.len() == 1).then(|| candidates[0].clone()))
+}
+
+fn rename_direct(guid: &str, new_name: &str, current_name: Option<&str>) -> Result<(), String> {
     if guid.starts_with("wlan:") {
         let matches: Vec<_> = profiles()?.into_iter().filter(|p| p.id == guid).collect();
         if matches.len() > 1 {
@@ -485,53 +547,44 @@ pub fn rename(guid: &str, new_name: &str, allow_prompt: bool) -> Result<(), Stri
             .into_iter()
             .next()
             .ok_or("This Wi-Fi profile is no longer available")?;
-        let client = client()?;
-        let old = wide_argument(&profile.name);
-        let new = wide_argument(new_name);
-        let code = unsafe {
-            WlanRenameProfile(
-                client.0,
-                &profile.interface,
-                old.as_ptr(),
-                new.as_ptr(),
-                null(),
-            )
-        };
-        if code != 0 {
-            if code == 5 && !super::is_admin() && allow_prompt {
-                return crate::privileged::run(crate::privileged::Request::Rename {
-                    id: guid.into(),
-                    name: new_name.into(),
-                });
-            }
-            return Err(format!(
-                "Windows could not rename the Wi-Fi profile ({code}). Administrator permission may be required."
-            ));
-        }
-        return Ok(());
+        return rename_profile(&profile, new_name);
     }
     if !super::is_guid(guid) {
         return Err("Invalid Windows network identifier".into());
     }
-    let result = super::nlm::rename(guid, new_name);
-    if result.is_ok()
-        || super::is_admin()
-        || !result
-            .as_ref()
-            .is_err_and(|error| error.contains("Administrator permission"))
-    {
-        return result;
+    let profile = profile_for_network(guid, current_name)?;
+    let previous_display = super::nlm::name(guid)?;
+    super::nlm::rename(guid, new_name)?;
+    if let Some(profile) = profile {
+        if let Err(error) = rename_profile(&profile, new_name) {
+            return match super::nlm::rename(guid, &previous_display) {
+                Ok(()) => Err(format!("{error} The local network label was rolled back.")),
+                Err(rollback) => Err(format!(
+                    "{error} The local network label could not be rolled back: {rollback}"
+                )),
+            };
+        }
     }
-    if !allow_prompt {
-        return Err(
-            "Administrator permission is required to mask this network automatically".into(),
-        );
-    }
-    crate::privileged::run(crate::privileged::Request::Rename {
-        id: guid.into(),
-        name: new_name.into(),
-    })?;
     Ok(())
+}
+
+pub fn rename(
+    guid: &str,
+    new_name: &str,
+    current_name: Option<&str>,
+    allow_prompt: bool,
+) -> Result<(), String> {
+    // User-requested Windows changes run once in the elevated native helper.
+    // This keeps the NLM label and saved WLAN profile in sync without leaving a
+    // half-applied rename if the second protected write is rejected.
+    if allow_prompt && !super::is_admin() {
+        return crate::privileged::run(crate::privileged::Request::Rename {
+            id: guid.into(),
+            name: new_name.into(),
+            current_name: current_name.map(str::to_owned),
+        });
+    }
+    rename_direct(guid, new_name, current_name)
 }
 
 pub fn wifi_credentials(name: &str) -> Result<(String, String, String), String> {
