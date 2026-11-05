@@ -566,6 +566,7 @@ mod tests {
             name: "Reading room".into(),
             original_name: "Router SSID".into(),
             renamed: true,
+            name_sync_pending: false,
             live: true,
             network_type: "wifi".into(),
             profile: Some("Saved profile".into()),

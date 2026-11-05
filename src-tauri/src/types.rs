@@ -8,6 +8,8 @@ pub struct Network {
     pub name: String,
     pub original_name: String,
     pub renamed: bool,
+    #[serde(default)]
+    pub name_sync_pending: bool,
     pub live: bool,
     #[serde(rename = "type")]
     pub network_type: String, // "wifi" | "ethernet"

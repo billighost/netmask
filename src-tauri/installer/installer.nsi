@@ -243,10 +243,10 @@ Function PageReinstall
     !insertmacro MUI_HEADER_TEXT "$(alreadyInstalled)" "$(chooseMaintenanceOption)"
   ; Upgrading
   ${ElseIf} $R0 = 1
-    StrCpy $R1 "$(olderOrUnknownVersionInstalled)"
-    StrCpy $R2 "$(uninstallBeforeInstalling)"
-    StrCpy $R3 "$(dontUninstall)"
-    !insertmacro MUI_HEADER_TEXT "$(alreadyInstalled)" "$(choowHowToInstall)"
+    StrCpy $R1 "A previous version of NetMask is installed. Updating in place keeps your network aliases, settings, and shortcuts."
+    StrCpy $R2 "Remove the current app first (restores network aliases)"
+    StrCpy $R3 "Update in place and keep network aliases (recommended)"
+    !insertmacro MUI_HEADER_TEXT "Update NetMask" "Choose how the new version should be installed"
   ; Downgrading
   ${ElseIf} $R0 = -1
     StrCpy $R1 "$(newerVersionInstalled)"
@@ -258,6 +258,13 @@ Function PageReinstall
     !endif
     !insertmacro MUI_HEADER_TEXT "$(alreadyInstalled)" "$(choowHowToInstall)"
   ${Else}
+    Abort
+  ${EndIf}
+
+  ; The in-app updater uses /UPDATE and proceeds directly to the dedicated
+  ; progress UI without showing maintenance choices.
+  ${If} $UpdateMode = 1
+    Call PageLeaveReinstall
     Abort
   ${EndIf}
 
@@ -292,13 +299,20 @@ Function PageReinstall
     ; Check the first radio button if this the first time
     ; we enter this page or if the second button wasn't
     ; selected the last time we were on this page
-    ${If} $ReinstallPageCheck <> 2
+    ${If} $R0 = 1
+      SendMessage $R3 ${BM_SETCHECK} ${BST_CHECKED} 0
+      StrCpy $ReinstallPageCheck 2
+    ${ElseIf} $ReinstallPageCheck <> 2
       SendMessage $R2 ${BM_SETCHECK} ${BST_CHECKED} 0
     ${Else}
       SendMessage $R3 ${BM_SETCHECK} ${BST_CHECKED} 0
     ${EndIf}
 
-    ${NSD_SetFocus} $R2
+    ${If} $R0 = 1
+      ${NSD_SetFocus} $R3
+    ${Else}
+      ${NSD_SetFocus} $R2
+    ${EndIf}
     nsDialogs::Show
   ${EndIf}
 FunctionEnd
@@ -311,16 +325,21 @@ Function PageReinstallUpdateSelection
   ${EndIf}
 FunctionEnd
 Function PageLeaveReinstall
+  ; In update mode, an existing NSIS install is replaced in place. A WiX
+  ; migration still removes the old package, marked as an upgrade below.
+  ${If} $UpdateMode = 1
+    ${If} $WixMode = 1
+      Goto reinst_uninstall
+    ${Else}
+      Goto reinst_done
+    ${EndIf}
+  ${EndIf}
+
   ${NSD_GetState} $R2 $R1
 
   ; If migrating from Wix, always uninstall
   ${If} $WixMode = 1
     Goto reinst_uninstall
-  ${EndIf}
-
-  ; In update mode, always proceeds without uninstalling
-  ${If} $UpdateMode = 1
-    Goto reinst_done
   ${EndIf}
 
   ; $R0 holds whether same(0)/upgrading(1)/downgrading(-1) version
@@ -353,6 +372,9 @@ Function PageLeaveReinstall
 
     ${If} $WixMode = 1
       ReadRegStr $R1 HKLM "$R6" "UninstallString"
+      ; Existing MSI packages already skip alias recovery when Windows marks
+      ; removal as part of an upgrade. Preserve that signal during migration.
+      StrCpy $R1 "$R1 UPGRADINGPRODUCTCODE=NetMaskUpdate"
       ExecWait '$R1' $0
     ${Else}
       ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
@@ -424,11 +446,24 @@ Var AppStartMenuFolder
 ; Show run app after installation.
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_FUNCTION RunMainBinary
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW FinishPageShow
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
 !insertmacro MUI_PAGE_FINISH
 
+Function FinishPageShow
+  ${If} $UpdateMode = 1
+    SendMessage $mui.FinishPage.Title ${WM_SETTEXT} 0 "STR:Update complete"
+    SendMessage $mui.FinishPage.Text ${WM_SETTEXT} 0 "STR:NetMask has been updated successfully.$\r$\n$\r$\nClick Finish to close Setup."
+    SendMessage $mui.FinishPage.Run ${WM_SETTEXT} 0 "STR:Open updated NetMask"
+    SendMessage $mui.FinishPage.ShowReadme ${BM_SETCHECK} ${BST_UNCHECKED} 0
+    ShowWindow $mui.FinishPage.ShowReadme ${SW_HIDE}
+  ${EndIf}
+FunctionEnd
+
 Function RunMainBinary
-  nsis_tauri_utils::RunAsUser "$INSTDIR\${MAINBINARYNAME}.exe" ""
+  ; The current-user installer is not elevated. ShellExecute starts NetMask
+  ; asynchronously so the Finish button never waits for app startup.
+  ExecShell "open" "$INSTDIR\${MAINBINARYNAME}.exe"
 FunctionEnd
 
 ; Uninstaller Pages

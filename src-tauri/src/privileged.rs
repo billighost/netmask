@@ -4,6 +4,45 @@ use crate::{platform, settings, system};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 
+fn helper_exit_code(error: &str) -> i32 {
+    if error.contains("already uses this label") {
+        10
+    } else if error.contains("rejected this label") {
+        11
+    } else if error.contains("denied permission")
+        || error.contains("Administrator permission is required")
+    {
+        12
+    } else if error.contains("no longer available") || error.contains("changed before Windows") {
+        13
+    } else if error.contains("network display name") || error.contains("local network label") {
+        14
+    } else {
+        1
+    }
+}
+
+fn helper_error(code: u32) -> Option<&'static str> {
+    match code {
+        10 => Some(
+            "Another saved Wi-Fi profile already uses this label on this adapter. Choose a different label or restore that saved network first.",
+        ),
+        11 => Some(
+            "Windows rejected this label for the saved Wi-Fi profile. Choose a shorter label without reserved filename characters.",
+        ),
+        12 => Some(
+            "Windows denied permission to change the saved Wi-Fi profile. Approve the administrator prompt and check that WLAN AutoConfig is running.",
+        ),
+        13 => Some(
+            "The Windows network or saved Wi-Fi profile changed during the operation. Refresh and try again.",
+        ),
+        14 => Some(
+            "Windows could not change the local network label. Refresh the connection and try again.",
+        ),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "operation", deny_unknown_fields)]
 pub enum Request {
@@ -227,7 +266,10 @@ pub fn handle_cli() -> Option<i32> {
         return request.execute();
     })();
     // The parent verifies the OS result. No private details enter stdout or a shared file.
-    Some(if result.is_ok() { 0 } else { 1 })
+    Some(match result {
+        Ok(()) => 0,
+        Err(error) => helper_exit_code(&error),
+    })
 }
 
 pub fn run(request: Request) -> Result<(), String> {
@@ -291,8 +333,13 @@ pub fn launch_elevated(arguments: &str, wait: bool) -> Result<(), String> {
         return Err("The administrator operation has not finished. Refresh to check its result before retrying.".into());
     }
     let mut code = 1;
-    if unsafe { GetExitCodeProcess(process.0, &mut code) } == 0 || code != 0 {
-        return Err("Windows rejected the administrator operation. Refresh and check this device's supported settings.".into());
+    if unsafe { GetExitCodeProcess(process.0, &mut code) } == 0 {
+        return Err("Windows could not read the administrator operation result.".into());
+    }
+    if code != 0 {
+        return Err(helper_error(code)
+            .unwrap_or("Windows rejected the administrator operation. Refresh and check this device's supported settings.")
+            .into());
     }
     Ok(())
 }
@@ -333,6 +380,28 @@ mod tests {
             script.find("-notcontains").unwrap()
                 < script.find("Set-NetAdapterAdvancedProperty").unwrap()
         );
+    }
+
+    #[test]
+    fn elevated_helper_errors_are_classified_without_private_values() {
+        for (message, code) in [
+            ("Another saved Wi-Fi profile already uses this label", 10),
+            (
+                "Windows rejected this label for the saved Wi-Fi profile",
+                11,
+            ),
+            (
+                "Windows denied permission to rename the saved Wi-Fi profile",
+                12,
+            ),
+            ("This Windows network is no longer available", 13),
+            ("Windows could not update the network display name", 14),
+            ("unexpected failure containing PrivateNetworkName", 1),
+        ] {
+            assert_eq!(helper_exit_code(message), code);
+        }
+        assert!(helper_error(10).unwrap().contains("already uses"));
+        assert_eq!(helper_error(99), None);
     }
     #[test]
     fn every_request_has_a_bounded_script_or_native_rename() {

@@ -215,6 +215,8 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   addToast: (message, type = 'info') => {
+    const duplicate = get().toasts.find(toast => toast.message === message && toast.type === type)
+    if (duplicate) return duplicate.id
     const id = String(++toastSeq)
     set(s => ({ toasts: [...s.toasts.slice(-2), { id, message, type }] }))
     if (type !== 'loading') {

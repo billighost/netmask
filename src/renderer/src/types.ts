@@ -3,6 +3,7 @@ export type Network = {
   name: string
   originalName: string
   renamed: boolean
+  nameSyncPending?: boolean
   live: boolean
   type: 'wifi' | 'ethernet'
   profile?: string
