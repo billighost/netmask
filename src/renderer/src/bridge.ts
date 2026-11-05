@@ -96,6 +96,7 @@ export const tauriApi = {
 
   onMaximizeChange: createListener<boolean>('nm:maximize-change'),
   onVisibility: createListener<boolean>('nm:visibility'),
+  onTrayConnectionCheck: createListener<void>('nm:tray-connection-check'),
   onSpeed: createListener<SpeedSample>('nm:speed'),
 
   getVersion: (): Promise<string> => invoke('nm_get_version'),

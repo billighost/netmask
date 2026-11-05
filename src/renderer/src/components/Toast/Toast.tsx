@@ -4,14 +4,15 @@ import { createPortal } from 'react-dom'
 import { useStore } from '../../store'
 import { CheckIcon, CloseIcon, InfoIcon } from '../../icons'
 import styles from './Toast.module.css'
+import { sharingModeActive } from '../../network-state'
 
 export const ToastContainer: React.FC = () => {
-  const { toasts } = useStore(state => ({ toasts: state.toasts }), shallow)
+  const { toasts, sharing } = useStore(state => ({ toasts: state.toasts, sharing: sharingModeActive(state.streamerStatus, state.streamerBusy) }), shallow)
 
   return createPortal(
     <div className={styles.container} aria-label="Notifications">
       {toasts.map(t => (
-        <ToastItem key={t.id} id={t.id} message={t.message} type={t.type} />
+        <ToastItem key={t.id} id={t.id} message={sharing ? t.type === 'error' ? 'An action needs attention. Exit sharing mode for details.' : t.type === 'loading' ? 'Working…' : 'Action completed.' : t.message} type={t.type} />
       ))}
     </div>, document.body
   )

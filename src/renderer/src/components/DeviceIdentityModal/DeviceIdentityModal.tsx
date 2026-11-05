@@ -5,13 +5,14 @@ import { CloseIcon, ShieldIcon, CopyIcon, BoltIcon, RefreshIcon } from '../../ic
 import { Dialog } from '../Dialog/Dialog'
 import { HelpTip } from '../Controls/HelpTip'
 import { copyText, refreshNetworks } from '../../network-actions'
-import { errorMessage } from '../../network-state'
+import { errorMessage, sharingModeActive } from '../../network-state'
 import { enablePrivacyControls } from '../../privacy-actions'
 import styles from '../Dialog/Panel.module.css'
 
 export const DeviceIdentityModal: React.FC = () => {
-  const { open, identity, capabilities, epoch } = useStore(state => ({
-    open: state.privacyCloakModalOpen, identity: state.deviceIdentity, capabilities: state.capabilities, epoch: state.connectionEpoch
+  const { open, identity, capabilities, epoch, sharing } = useStore(state => ({
+    open: state.privacyCloakModalOpen, identity: state.deviceIdentity, capabilities: state.capabilities, epoch: state.connectionEpoch,
+    sharing: sharingModeActive(state.streamerStatus, state.streamerBusy)
   }), shallow)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -66,16 +67,16 @@ export const DeviceIdentityModal: React.FC = () => {
     <div className={styles.body}>
       <p className={styles.sectionSub}>These values belong to this computer and its active network adapter. They do not describe the selected network or router.</p>
       {loading && <p role="status">Reading device identity…</p>}
-      {error && <p className="nm-error" role="alert">{error}</p>}
+      {error && <p className="nm-error" role="alert">{sharing ? 'Device details are hidden while sharing.' : error}</p>}
       <div className={styles.identityCard}>
         <div className={styles.cardHeader}><span className={styles.cardTitle}>This device</span>
           <button className={styles.refreshBtn} aria-label="Refresh device identity" disabled={loading || busy} onClick={() => void fetchIdentity()}><RefreshIcon size={12} /></button>
         </div>
         {([['Computer name', identity?.hostname, 'The name your operating system gives this computer. Some network discovery features can share this name with nearby devices.'], ['Adapter address', identity?.macAddress, 'The MAC address identifies your computer’s network adapter. It is different from the router’s access point address.']] as const).map(([label, value, help]) => <div className={styles.row} key={label}>
-          <div className={styles.rowLeft}><span className={styles.rowLabel}>{label}<HelpTip label={label}>{help}</HelpTip></span><span className={styles.rowValue}>{value || 'Unavailable'}</span></div>
-          <button className={styles.copyBtn} aria-label={'Copy ' + label} disabled={!value} onClick={() => value && void copyText(value)}><CopyIcon size={13} /></button>
+          <div className={styles.rowLeft}><span className={styles.rowLabel}>{label}<HelpTip label={label}>{help}</HelpTip></span><span className={styles.rowValue}>{sharing ? 'Hidden while sharing' : value || 'Unavailable'}</span></div>
+          <button className={styles.copyBtn} aria-label={'Copy ' + label} disabled={sharing || !value} onClick={() => value && void copyText(value)}><CopyIcon size={13} /></button>
         </div>)}
-        <p className={styles.sectionSub}>Adapter: {identity?.interfaceName || 'Unavailable'}</p>
+        <p className={styles.sectionSub}>Adapter: {sharing ? 'Hidden while sharing' : identity?.interfaceName || 'Unavailable'}</p>
       </div>
       <div className={styles.section}>
         <div className={styles.sectionTitleRow}><span className={styles.sectionTitle}>Use a changing adapter address<HelpTip label="MAC randomization">Uses a randomized address for this saved Wi-Fi profile when supported. Daily asks the driver to change it each day. A reconnect may be needed, and this does not make all network activity anonymous.</HelpTip></span><span className={styles.statusBadge}>{mode === 'unknown' ? 'Unknown' : mode === 'daily' ? 'Daily' : mode === 'enabled' ? 'On' : 'Off'}</span></div>

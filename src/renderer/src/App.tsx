@@ -18,9 +18,11 @@ import { WifiShareModal } from './components/WifiShareModal/WifiShareModal'
 import { DnsBenchmarkModal } from './components/DnsBenchmarkModal/DnsBenchmarkModal'
 import { DeviceIdentityModal } from './components/DeviceIdentityModal/DeviceIdentityModal'
 import { RoamingTunerModal } from './components/RoamingTunerModal/RoamingTunerModal'
+import { FirstRunGuide } from './components/FirstRunGuide/FirstRunGuide'
+import { ConnectionReportModal } from './components/ConnectionReportModal/ConnectionReportModal'
 import styles from './App.module.css'
 import { refreshNetworks, reconnectSelected, restoreNetworkDisplayName, toggleStreamer, selectNetworkAndFocus, runSpeedTest } from './network-actions'
-import { errorMessage, visibleNetworks } from './network-state'
+import { errorMessage, sharingModeActive, visibleNetworks } from './network-state'
 import { subscribeToUpdates } from './update-actions'
 
 export const App: React.FC = () => {
@@ -48,6 +50,7 @@ export const App: React.FC = () => {
         if (admin.status === 'fulfilled') state.setAdminOk(admin.value)
         if (preferences.status === 'fulfilled') {
           state.setSettings(preferences.value)
+          state.setOnboardingOpen(!preferences.value.onboardingCompleted)
           document.documentElement.setAttribute('data-theme', useStore.getState().settings.theme)
         } else state.addToast(errorMessage(preferences.reason, 'Settings could not be loaded'), 'error')
         if (streamer.status === 'fulfilled') state.setStreamerStatus(streamer.value)
@@ -86,6 +89,18 @@ export const App: React.FC = () => {
       if (changed) refresh()
     })
 
+    const unsubTrayCheck = window.nm.onTrayConnectionCheck(() => {
+      const state = useStore.getState()
+      void (async () => {
+        if (state.onboardingOpen) {
+          if (!await state.updateSetting('onboardingCompleted', true)) return
+          state.setOnboardingOpen(false)
+        }
+        state.setReportModalOpen(true)
+        void runSpeedTest()
+      })()
+    })
+
     const onVisibility = (visible: boolean) => {
       const changed = useStore.getState().visible !== visible
       useStore.setState({ visible })
@@ -103,6 +118,7 @@ export const App: React.FC = () => {
       unsubPing()
       unsubCaptive()
       unsubStreamer()
+      unsubTrayCheck()
       unsubVisibility()
       document.removeEventListener('visibilitychange', documentVisibility)
     }
@@ -149,6 +165,8 @@ export const App: React.FC = () => {
         state.dnsModalOpen ||
         state.privacyCloakModalOpen ||
         state.roamingModalOpen
+        || state.onboardingOpen
+        || state.reportModalOpen
       if (isAnyModalOpen) {
         if (matchedAction !== 'closeModals' && matchedAction !== 'openSettings' && matchedAction !== 'openShortcuts') {
           return
@@ -193,10 +211,14 @@ export const App: React.FC = () => {
         }
         case 'restoreOriginal': {
           e.preventDefault()
+          if (sharingModeActive(state.streamerStatus, state.streamerBusy)) {
+            state.addToast('Exit sharing mode before restoring a saved name', 'info')
+            break
+          }
           const net = state.networks.find(n => n.guid === state.selectedGuid)
           if (net && net.renamed) {
             restoreNetworkDisplayName(net.guid, net.originalName, net.name).then(() => {
-              state.addToast(`Restored original name "${net.originalName}"`, 'success')
+              state.addToast('Original local label restored', 'success')
             }).catch(error => state.addToast(errorMessage(error, 'Failed to restore original name'), 'error'))
           }
           break
@@ -208,7 +230,8 @@ export const App: React.FC = () => {
         }
         case 'selectNext': {
           e.preventDefault()
-          const nets = visibleNetworks(state.networks, state.settings, state.networkSearch, state.streamerStatus.isCloaked)
+          const sharing = sharingModeActive(state.streamerStatus, state.streamerBusy)
+          const nets = visibleNetworks(state.networks, state.settings, sharing ? '' : state.networkSearch, sharing)
           if (nets.length > 0) {
             const currentIndex = nets.findIndex(n => n.guid === state.selectedGuid)
             const nextIndex = (currentIndex + 1) % nets.length
@@ -218,7 +241,8 @@ export const App: React.FC = () => {
         }
         case 'selectPrev': {
           e.preventDefault()
-          const nets = visibleNetworks(state.networks, state.settings, state.networkSearch, state.streamerStatus.isCloaked)
+          const sharing = sharingModeActive(state.streamerStatus, state.streamerBusy)
+          const nets = visibleNetworks(state.networks, state.settings, sharing ? '' : state.networkSearch, sharing)
           if (nets.length > 0) {
             const currentIndex = nets.findIndex(n => n.guid === state.selectedGuid)
             const prevIndex = currentIndex <= 0 ? nets.length - 1 : currentIndex - 1
@@ -228,6 +252,7 @@ export const App: React.FC = () => {
         }
         case 'filterSearch': {
           e.preventDefault()
+          if (sharingModeActive(state.streamerStatus, state.streamerBusy)) break
           const searchInput = document.getElementById('filter-networks-input') as HTMLInputElement | null
           if (searchInput) {
             searchInput.focus()
@@ -285,6 +310,8 @@ export const App: React.FC = () => {
           else if (state.dnsModalOpen) state.setDnsModalOpen(false)
           else if (state.privacyCloakModalOpen) state.setPrivacyCloakModalOpen(false)
           else if (state.roamingModalOpen) state.setRoamingModalOpen(false)
+          else if (state.reportModalOpen) state.setReportModalOpen(false)
+          else if (state.onboardingOpen) void state.updateSetting('onboardingCompleted', true).then(saved => { if (saved) state.setOnboardingOpen(false) })
           break
         }
       }
@@ -320,6 +347,8 @@ export const App: React.FC = () => {
       <DnsBenchmarkModal />
       <DeviceIdentityModal />
       <RoamingTunerModal />
+      <ConnectionReportModal />
+      <FirstRunGuide />
     </div>
   )
 }

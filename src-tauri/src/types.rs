@@ -121,6 +121,7 @@ pub struct WindowBounds {
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
 pub struct AppSettings {
+    pub onboarding_completed: bool,
     pub minimize_to_tray: bool,
     pub launch_on_startup: bool,
     pub auto_refresh_interval: i32,

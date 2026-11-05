@@ -5,11 +5,11 @@ import { Tooltip } from '../Controls/Tooltip'
 import { NetworkRow } from '../NetworkRow/NetworkRow'
 import styles from './NetworkList.module.css'
 import { refreshNetworks } from '../../network-actions'
-import { visibleNetworks, errorMessage } from '../../network-state'
+import { visibleNetworks, errorMessage, sharingModeActive } from '../../network-state'
 import { shallow } from 'zustand/shallow'
 
 export const NetworkList: React.FC = () => {
-  const { networks, settings, refreshing, addToast, search, setSearch, privateNames, platform } = useStore(state => ({ networks: state.networks, settings: state.settings, refreshing: state.refreshing, addToast: state.addToast, search: state.networkSearch, setSearch: state.setNetworkSearch, privateNames: state.streamerStatus.isCloaked, platform: state.capabilities?.platform }), shallow)
+  const { networks, settings, refreshing, addToast, search, setSearch, privateNames, platform } = useStore(state => ({ networks: state.networks, settings: state.settings, refreshing: state.refreshing, addToast: state.addToast, search: state.networkSearch, setSearch: state.setNetworkSearch, privateNames: sharingModeActive(state.streamerStatus, state.streamerBusy), platform: state.capabilities?.platform }), shallow)
   const visible = useMemo(() => visibleNetworks(networks, settings, search, privateNames), [networks, settings.showEthernet, search, privateNames])
 
   const handleRefresh = async () => {
@@ -42,9 +42,10 @@ export const NetworkList: React.FC = () => {
           id="filter-networks-input"
           className={styles.search}
           type="text"
-          placeholder="Find a saved network…"
+          placeholder={privateNames ? 'Search hidden while sharing' : 'Find a saved network…'}
           aria-label="Filter saved networks"
           value={search}
+          disabled={privateNames}
           onChange={e => setSearch(e.target.value)}
           spellCheck={false}
         />

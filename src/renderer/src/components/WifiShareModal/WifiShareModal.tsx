@@ -5,12 +5,13 @@ import type { WifiQrData } from '../../types'
 import { CloseIcon, CopyIcon, EyeIcon, EyeOffIcon, QrCodeIcon } from '../../icons'
 import { Dialog } from '../Dialog/Dialog'
 import { HelpTip } from '../Controls/HelpTip'
-import { copyText } from '../../network-actions'
-import { errorMessage } from '../../network-state'
+import { copyText, toggleStreamer } from '../../network-actions'
+import { errorMessage, sharingModeActive } from '../../network-state'
 import styles from '../Dialog/Panel.module.css'
 
 export const WifiShareModal: React.FC = () => {
-  const { profile, close } = useStore(state => ({ profile: state.wifiShareModalProfile, close: state.setWifiShareModalProfile }), shallow)
+  const { profile, close, sharing, sharingBusy } = useStore(state => ({ profile: state.wifiShareModalProfile, close: state.setWifiShareModalProfile,
+    sharing: sharingModeActive(state.streamerStatus, state.streamerBusy), sharingBusy: state.streamerBusy }), shallow)
   const [data, setData] = useState<WifiQrData | null>(null)
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -18,14 +19,14 @@ export const WifiShareModal: React.FC = () => {
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     setData(null); setShowPassword(false); setError(null)
-    if (!profile) return
+    if (!profile || sharing) return
     let active = true
     setLoading(true)
     window.nm.getWifiQr(profile).then(value => { if (active) setData(value) })
       .catch(error => { if (active) setError(errorMessage(error)) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [profile, attempt])
+  }, [profile, attempt, sharing])
   if (!profile) return null
   return <Dialog label="Share Wi-Fi" onClose={() => close(null)} scrimClass={styles.scrim} modalClass={styles.modal}>
     <div className={styles.header}>
@@ -33,7 +34,10 @@ export const WifiShareModal: React.FC = () => {
       <button className={styles.closeBtn} aria-label="Close Wi-Fi sharing" onClick={() => close(null)}><CloseIcon size={14} /></button>
     </div>
     <div className={styles.body}>
-      {loading ? <div className={styles.loadingWrap} role="status"><div className={styles.spinner} />Reading saved Wi-Fi credentials…</div>
+      {sharing ? <div className={styles.actionCard}><div className={styles.actionText}><div className={styles.actionTitle}>Credentials stay hidden while sharing</div>
+        <p className={styles.actionSub}>The QR code, Wi-Fi name, and password will not be loaded until you explicitly exit sharing mode.</p></div>
+        <button className={styles.btn + ' ' + styles.btnPrimary} disabled={sharingBusy} onClick={() => void toggleStreamer()}>{sharingBusy ? 'Restoring…' : 'Exit sharing mode'}</button></div>
+        : loading ? <div className={styles.loadingWrap} role="status"><div className={styles.spinner} />Reading saved Wi-Fi credentials…</div>
         : error ? <div className="nm-error" role="alert">{error}<button className={styles.btn} onClick={() => setAttempt(value => value + 1)}>Try again</button></div>
         : data && <>
           <p className={styles.scanInstruction}>This QR code contains the network name and password. Anyone who scans it can read these credentials.</p>

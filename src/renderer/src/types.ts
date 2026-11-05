@@ -70,6 +70,7 @@ export type SpeedTestResult = {
 }
 
 export type AppSettings = {
+  onboardingCompleted: boolean
   minimizeToTray: boolean
   launchOnStartup: boolean
   autoRefreshInterval: number

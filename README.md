@@ -19,31 +19,31 @@ Only local labels change; your router keeps its Wi-Fi name. Display privacy mask
 
 ## Get NetMask
 
-**Latest: v2.3.4** · [What changed](https://github.com/billighost/netmask/releases/tag/v2.3.4)
+**Latest: v2.4.0** · [What changed](https://github.com/billighost/netmask/releases/tag/v2.4.0)
 
 ### Windows 10 / 11 · x64
 
-**[Download the Windows setup file (.exe)](https://github.com/billighost/netmask/releases/download/v2.3.4/NetMask_2.3.4_x64-setup.exe)** — Recommended for most people. Open it and follow the installer.
+**[Download the Windows setup file (.exe)](https://github.com/billighost/netmask/releases/download/v2.4.0/NetMask_2.4.0_x64-setup.exe)** — Recommended for most people. Open it and follow the installer.
 
-[Download the MSI package](https://github.com/billighost/netmask/releases/download/v2.3.4/NetMask_2.3.4_x64_en-US.msi) — An alternative for Windows administrators and managed deployments. It installs the same app.
+[Download the MSI package](https://github.com/billighost/netmask/releases/download/v2.4.0/NetMask_2.4.0_x64_en-US.msi) — An alternative for Windows administrators and managed deployments. It installs the same app.
 
 ### macOS 12+
 
-- **[Apple silicon DMG](https://github.com/billighost/netmask/releases/download/v2.3.4/NetMask_2.3.4_aarch64.dmg)** — Choose this for a Mac with an Apple M1, M2, M3, M4, or newer chip.
-- **[Intel DMG](https://github.com/billighost/netmask/releases/download/v2.3.4/NetMask_2.3.4_x64.dmg)** — Choose this for an Intel Mac.
+- **[Apple silicon DMG](https://github.com/billighost/netmask/releases/download/v2.4.0/NetMask_2.4.0_aarch64.dmg)** — Choose this for a Mac with an Apple M1, M2, M3, M4, or newer chip.
+- **[Intel DMG](https://github.com/billighost/netmask/releases/download/v2.4.0/NetMask_2.4.0_x64.dmg)** — Choose this for an Intel Mac.
 
 Open the DMG, then drag NetMask into **Applications**.
 
 ### Linux · x64
 
-- **[Debian / Ubuntu package (.deb)](https://github.com/billighost/netmask/releases/download/v2.3.4/NetMask_2.3.4_amd64.deb)** — Recommended for Debian, Ubuntu, Linux Mint, and related distributions.
-- **[Portable AppImage](https://github.com/billighost/netmask/releases/download/v2.3.4/NetMask_2.3.4_amd64.AppImage)** — Use this when you do not want to install a package. Make it executable, then open it.
+- **[Debian / Ubuntu package (.deb)](https://github.com/billighost/netmask/releases/download/v2.4.0/NetMask_2.4.0_amd64.deb)** — Recommended for Debian, Ubuntu, Linux Mint, and related distributions.
+- **[Portable AppImage](https://github.com/billighost/netmask/releases/download/v2.4.0/NetMask_2.4.0_amd64.AppImage)** — Use this when you do not want to install a package. Make it executable, then open it.
 
 Linux network controls require NetworkManager.
 
-[Verify checksums](https://github.com/billighost/netmask/releases/download/v2.3.4/checksums.txt) · [Installation and privacy notes](SECURITY.md) · [See every release](https://github.com/billighost/netmask/releases)
+[Verify checksums](https://github.com/billighost/netmask/releases/download/v2.4.0/checksums.txt) · [Installation and privacy notes](SECURITY.md) · [See every release](https://github.com/billighost/netmask/releases)
 
-If a direct download is temporarily unavailable, open the [v2.3.4 release page](https://github.com/billighost/netmask/releases/tag/v2.3.4) to see which platform builds are ready.
+If a direct download is temporarily unavailable, open the [v2.4.0 release page](https://github.com/billighost/netmask/releases/tag/v2.4.0) to see which platform builds are ready.
 
 ## A little room goes a long way
 

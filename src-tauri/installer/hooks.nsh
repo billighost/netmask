@@ -6,7 +6,13 @@
   !define MUI_WELCOMEPAGE_TEXT "Install NetMask for your Windows account.$\r$\n$\r$\nManage local network display names, inspect your connection, and control what NetMask shows during screen sharing.$\r$\n$\r$\nYour router's broadcast Wi-Fi name stays the same."
 !endif
 !ifndef MUI_FINISHPAGE_TITLE
-  !define MUI_FINISHPAGE_TITLE "NetMask is ready"
+  !define MUI_FINISHPAGE_TITLE "Installation complete"
+!endif
+!ifndef MUI_FINISHPAGE_TEXT
+  !define MUI_FINISHPAGE_TEXT "NetMask has been installed successfully.$\r$\n$\r$\nClick Finish to close Setup. Leave Launch NetMask now checked to open the app."
+!endif
+!ifndef MUI_FINISHPAGE_RUN_TEXT
+  !define MUI_FINISHPAGE_RUN_TEXT "Launch NetMask now"
 !endif
 
 !macro NSIS_HOOK_PREUNINSTALL

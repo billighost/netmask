@@ -1,5 +1,5 @@
 import { useStore } from './store'
-import { visibleNetworks, nextSelection, errorMessage, connectionKey, reconcileNetworks, sameFields } from './network-state'
+import { visibleNetworks, nextSelection, errorMessage, connectionKey, reconcileNetworks, sameFields, sharingModeActive } from './network-state'
 import type { Network } from './types'
 
 let refreshPromise: Promise<void> | null = null
@@ -40,12 +40,16 @@ function confirmedNetwork(guid: string, expectedName: string): Network {
 }
 
 export async function saveNetworkDisplayName(guid: string, newName: string, currentName: string): Promise<Network> {
+  const privacy = useStore.getState()
+  if (sharingModeActive(privacy.streamerStatus, privacy.streamerBusy)) throw new Error('Exit sharing mode before changing a saved name')
   await window.nm.rename(guid, newName, currentName)
   await refreshNetworks(true)
   return confirmedNetwork(guid, newName)
 }
 
 export async function restoreNetworkDisplayName(guid: string, originalName: string, currentName: string): Promise<Network> {
+  const privacy = useStore.getState()
+  if (sharingModeActive(privacy.streamerStatus, privacy.streamerBusy)) throw new Error('Exit sharing mode before restoring a saved name')
   await window.nm.restore(guid, currentName)
   await refreshNetworks(true)
   return confirmedNetwork(guid, originalName)
@@ -80,7 +84,7 @@ export function selectNetworkAndFocus(guid: string): void {
 export async function toggleStreamer(): Promise<void> {
   const state = useStore.getState()
   if (state.streamerBusy) return
-  useStore.setState({ streamerBusy: true })
+  useStore.setState({ streamerBusy: true, networkSearch: '', bssidPeek: false, contextMenu: null })
   try {
     const status = await window.nm.toggleStreamerCloak()
     state.setStreamerStatus(status)

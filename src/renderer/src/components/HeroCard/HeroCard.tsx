@@ -4,6 +4,7 @@ import { WifiIcon, ArrowDownIcon, ArrowUpIcon } from '../../icons'
 import { HelpTip } from '../Controls/HelpTip'
 import { SpeedInfoPanel } from '../SpeedInfoPanel/SpeedInfoPanel'
 import styles from './HeroCard.module.css'
+import { sharingModeActive } from '../../network-state'
 
 function speed(value: number): { value: string; unit: string } {
   if (!Number.isFinite(value) || value <= 0) return { value: '0', unit: 'KB/s' }
@@ -66,15 +67,16 @@ const Latency: React.FC = () => {
 export const HeroCard: React.FC = () => {
   const connection = useStore(state => state.connection)
   const error = useStore(state => state.connectionError)
-  const cloaked = useStore(state => state.streamerStatus.isCloaked)
+  const cloaked = useStore(state => sharingModeActive(state.streamerStatus, state.streamerBusy))
+  const privateName = useStore(state => state.settings.streamerMaskName)
   const [infoOpen, setInfoOpen] = useState(false)
   const renamed = Boolean(connection && connection.name !== connection.ssid)
   return <section className={styles.card} aria-labelledby="connection-name">
     <div className={styles.connectionLabel}><span className={styles.eyebrow}>YOUR CONNECTION</span><span className={styles.liveLabel}><span className={styles.dot + (connection ? ' ' + styles.dotLive : '')} />{connection ? 'Connected' : error ? 'Unavailable' : 'Not connected'}</span></div>
-    <div className={styles.heroTop}><div><h1 id="connection-name" className={styles.netName}>{connection?.name || (error ? 'Connection unavailable' : 'Connect to Wi-Fi')}</h1>
+    <div className={styles.heroTop}><div><h1 id="connection-name" className={styles.netName}>{connection ? cloaked ? privateName : connection.name : error ? 'Connection unavailable' : 'Connect to Wi-Fi'}</h1>
       <p className={styles.realName}>{!connection ? 'Saved networks stay available below.' : cloaked ? 'A private display name is active.' : renamed ? 'Wi-Fi name: ' + connection.ssid : 'Your network, on this computer.'}</p>
     </div><span className={styles.heroIcon} aria-hidden="true"><WifiIcon size={23} /></span></div>
-    {error && <p className={styles.error} role="status">{error}</p>}
+    {error && <p className={styles.error} role="status">{cloaked ? 'Connection details are hidden while sharing.' : error}</p>}
     <LiveRates onInfo={() => setInfoOpen(value => !value)} expanded={infoOpen} />
     <Latency />
     {connection && <div className={styles.linkInfo}><span>{[connection.generation, connection.band].filter(Boolean).join(' · ') || 'Wi-Fi connection'}</span>{connection.rxRateMbps != null && <span>{Math.round(connection.rxRateMbps)} Mbps link <HelpTip label="Wi-Fi link rate">The speed your computer and router negotiated over Wi-Fi. Actual internet downloads are usually slower and depend on your internet plan, signal, and traffic.</HelpTip></span>}</div>}

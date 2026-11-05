@@ -20,7 +20,7 @@ const server = http.createServer((request, response) => {
     response.end(fs.readFileSync(file))
   } catch { response.writeHead(404).end() }
 })
-function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0' } = {}) {
+function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0', onboardingCompleted = true } = {}) {
   let sequence = 0, priorName = ''
   const callbacks = new Map(), listeners = new Map(), failures = new Map(), ignored = new Set(), calls = []
   const networks = [
@@ -28,7 +28,7 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
     { guid: 'ethernet-id', name: 'Workshop', originalName: 'Workshop', renamed: false, live: false, type: 'ethernet', canRename: true }
   ]
   const connection = { ssid: 'HomeFiber_5G', profile: 'Saved Studio profile', name: 'Studio', signal: 94, signalDbm: -47, snr: 40, channel: 44, frequency: '5.220 GHz', band: '5 GHz', generation: 'Wi-Fi 5', radioType: '802.11ac', bssid: 'AA:BB:CC:DD:EE:FF', rxRateMbps: 866, txRateMbps: 866, networkGuid: 'wifi-id', interfaceName: 'Wi-Fi', interfaceGuid: 'adapter-id', auth: 'WPA2-Personal' }
-  const settings = { minimizeToTray: true, launchOnStartup: false, autoRefreshInterval: 0, theme, showEthernet: true, ultraLowMemory: false, autoCloakStreamer: false, streamerMaskName: 'Private network', bssidCloaking: true, bssidMaskMode: 'partial', silentElevation: false, shortcuts: {} }
+  const settings = { onboardingCompleted, minimizeToTray: true, launchOnStartup: false, autoRefreshInterval: 0, theme, showEthernet: true, ultraLowMemory: false, autoCloakStreamer: false, streamerMaskName: 'Private network', bssidCloaking: true, bssidMaskMode: 'partial', silentElevation: false, shortcuts: {} }
   const streamer = { detectedApp: null, isCloaked: false, cooldownSeconds: 0 }
   const identity = { hostname: 'Studio laptop', macAddress: '11:22:33:44:55:66', interfaceName: 'Wi-Fi', interfaceGuid: 'adapter-id', netbiosSilenced: false, macRandomization: 'disabled', activeProfile: 'Saved Studio profile' }
   const roaming = { supported: true, adapterName: 'Sample Wi-Fi adapter', preferredBand: '5 GHz', validPreferredBands: ['5 GHz', '2.4 GHz'], roamingAggressiveness: 'Medium', validRoamingAggressiveness: ['Low', 'Medium', 'High'] }
@@ -408,6 +408,91 @@ async function regressionChecks(browser, base, errors, results) {
   results.push('1000 saved networks remain scrollable, selectable, searchable, and keyboard accessible')
   await page.close()
 }
+async function productFeatureChecks(browser, base, errors, results) {
+  const page = await browser.newPage({ viewport: { width: 900, height: 700 }, reducedMotion: 'reduce', acceptDownloads: true })
+  page.on('pageerror', error => errors.push(error.message))
+  await page.addInitScript(nativeFixture, { version: appVersion })
+  await page.goto(base + '/dist/index.html')
+  await page.locator('[data-network-guid]').first().waitFor()
+
+  await page.getByRole('button', { name: 'Connection report', exact: true }).click()
+  const report = page.getByRole('dialog', { name: 'Connection report', exact: true })
+  await report.waitFor(); await geometry(page, 'Connection report HTML', true)
+  const htmlSource = await page.locator('iframe[title="HTML report preview"]').getAttribute('srcdoc')
+  assert.match(htmlSource, /Redacted/)
+  assert.doesNotMatch(htmlSource, /HomeFiber_5G|Studio|AA:BB:CC|Saved Studio profile/)
+  await report.getByRole('button', { name: 'Markdown', exact: true }).click()
+  const markdown = await report.locator('pre').innerText()
+  assert.match(markdown, /\| Connection \| Redacted \|/)
+  assert.doesNotMatch(markdown, /HomeFiber_5G|Studio|AA:BB:CC|Saved Studio profile/)
+  await report.getByRole('switch', { name: 'Include network identifiers', exact: true }).click()
+  await report.getByText(/HomeFiber_5G/).waitFor()
+  const download = page.waitForEvent('download')
+  await report.getByRole('button', { name: 'Save Markdown', exact: true }).click()
+  assert.match((await download).suggestedFilename(), /^netmask-connection-report-\d{4}-\d{2}-\d{2}\.md$/)
+  await page.keyboard.press('Escape')
+
+  await page.getByRole('button', { name: 'Share Wi-Fi', exact: true }).click()
+  await page.getByRole('img', { name: 'Wi-Fi connection QR code', exact: true }).waitFor()
+  await page.evaluate(() => {
+    const fixture = window.__NM_FIXTURE__
+    fixture.emit('nm:streamer-status', { detectedApp: null, isCloaked: true, cooldownSeconds: 0, error: 'HomeFiber_5G private failure' })
+  })
+  await page.getByText('Credentials stay hidden while sharing', { exact: true }).waitFor()
+  assert.equal(await page.getByRole('img', { name: 'Wi-Fi connection QR code', exact: true }).count(), 0)
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Connection report', exact: true }).click()
+  const sharingReport = page.getByRole('dialog', { name: 'Connection report', exact: true })
+  assert.ok(await sharingReport.getByRole('switch', { name: 'Include network identifiers', exact: true }).isDisabled())
+  assert.doesNotMatch(await sharingReport.locator('pre').innerText(), /HomeFiber_5G|Studio|AA:BB:CC|Private network/)
+  results.push('Reports preview and download exact HTML or Markdown with identifier redaction and sharing-mode lockout')
+  results.push('Wi-Fi credentials unload immediately when sharing mode becomes active')
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Open settings', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+  await settings.getByRole('tab', { name: 'Privacy', exact: true }).click()
+  assert.ok(await settings.locator('#streamer-mask-name').isDisabled())
+  assert.equal(await settings.getByText('HomeFiber_5G private failure', { exact: true }).count(), 0)
+  await settings.getByRole('tab', { name: 'Tools', exact: true }).click()
+  assert.ok(await settings.getByRole('button', { name: 'Export backup', exact: true }).isDisabled())
+  assert.ok(await settings.getByRole('button', { name: 'Restore all original names', exact: true }).isDisabled())
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Compare DNS', exact: true }).click()
+  const dns = page.getByRole('dialog', { name: 'Compare DNS', exact: true })
+  await dns.getByText('Hidden while sharing', { exact: true }).first().waitFor()
+  assert.equal(await dns.getByText('1.1.1.1', { exact: false }).count(), 0)
+  results.push('Sharing mode blocks original-name operations and hides detailed Settings and DNS identifiers')
+  await page.close()
+
+  const fresh = await browser.newPage({ viewport: { width: 440, height: 700 }, reducedMotion: 'reduce' })
+  fresh.on('pageerror', error => errors.push(error.message))
+  await fresh.addInitScript(nativeFixture, { version: appVersion, onboardingCompleted: false })
+  await fresh.goto(base + '/dist/index.html')
+  const guide = fresh.getByRole('dialog', { name: 'Welcome to NetMask', exact: true })
+  await guide.waitFor(); await geometry(fresh, 'First-run guide', true)
+  for (const action of ['Name a network', 'Check my connection', 'Prepare for sharing', 'Explore on my own']) {
+    assert.ok(await guide.getByRole('button', { name: new RegExp(action) }).isVisible())
+  }
+  assert.equal(await fresh.evaluate(() => window.__NM_FIXTURE__.calls.some(call => ['nm_rename', 'nm_toggle_streamer_cloak', 'nm_run_speed_test'].includes(call.command))), false)
+  await guide.getByRole('button', { name: /Name a network/ }).click()
+  await fresh.locator('#rename-network-input').waitFor()
+  await fresh.waitForFunction(() => document.activeElement?.id === 'rename-network-input')
+  assert.equal(await fresh.evaluate(() => window.__NM_FIXTURE__.settings.onboardingCompleted), true)
+  results.push('Fresh profiles receive one action-focused guide without permission-triggering work on open')
+  await fresh.close()
+
+  const trayFresh = await browser.newPage({ viewport: { width: 440, height: 700 }, reducedMotion: 'reduce' })
+  trayFresh.on('pageerror', error => errors.push(error.message))
+  await trayFresh.addInitScript(nativeFixture, { version: appVersion, onboardingCompleted: false })
+  await trayFresh.goto(base + '/dist/index.html')
+  await trayFresh.locator('[data-network-guid]').first().waitFor()
+  await trayFresh.evaluate(() => window.__NM_FIXTURE__.emit('nm:tray-connection-check'))
+  await trayFresh.getByRole('dialog', { name: 'Connection report', exact: true }).waitFor()
+  assert.equal(await trayFresh.getByRole('dialog', { name: 'Welcome to NetMask', exact: true }).count(), 0)
+  assert.equal(await trayFresh.evaluate(() => window.__NM_FIXTURE__.settings.onboardingCompleted), true)
+  results.push('Tray connection checks complete onboarding before opening one report')
+  await trayFresh.close()
+}
 async function main() {
   if (!fs.existsSync(path.join(root, 'dist/index.html'))) throw Error('Run npm run build before npm run test:ui')
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -419,6 +504,7 @@ async function main() {
     browser = await chromium.launch({ executablePath, headless: true })
     await appChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
     await regressionChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
+    await productFeatureChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
     await previewChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
     assert.deepEqual(errors, [], 'Browser JavaScript errors')
     fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify({ results, errors, boundary: 'Fictional native IPC. No live OS mutations.' }, null, 2))

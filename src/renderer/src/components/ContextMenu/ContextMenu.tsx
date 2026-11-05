@@ -3,7 +3,7 @@ import { shallow } from 'zustand/shallow'
 import { useStore } from '../../store'
 import { CopyIcon, RestoreIcon, InfoIcon, ShieldIcon, QrCodeIcon } from '../../icons'
 import { copyText, restoreNetworkDisplayName, toggleStreamer } from '../../network-actions'
-import { errorMessage, maskBssid } from '../../network-state'
+import { displayNetworkName, errorMessage, maskBssid, sharingModeActive } from '../../network-state'
 import styles from './ContextMenu.module.css'
 
 export const ContextMenu: React.FC = () => {
@@ -33,12 +33,15 @@ export const ContextMenu: React.FC = () => {
   if (!contextMenu) return null
   const net = networks.find(network => network.guid === contextMenu.guid)
   if (!net) return null
+  const netIndex = Math.max(0, networks.findIndex(network => network.guid === net.guid))
+  const privateNames = sharingModeActive(streamerStatus, useStore.getState().streamerBusy)
+  const displayName = displayNetworkName(net, netIndex, privateNames, settings.streamerMaskName)
   const state = useStore.getState()
   const current = connection?.networkGuid === net.guid ? connection : null
   const profile = net.profile ?? current?.profile
   const items = [
     { label: 'Select network', icon: null, action: () => state.selectNetwork(net.guid) },
-    ...(net.type === 'wifi' && profile && capabilities?.wifiSharing !== false ? [{
+    ...(!privateNames && net.type === 'wifi' && profile && capabilities?.wifiSharing !== false ? [{
       label: 'Share Wi-Fi', icon: <QrCodeIcon size={13} />, action: () => state.setWifiShareModalProfile(profile)
     }] : []),
     { label: 'Network details', icon: <InfoIcon size={13} />, action: () => state.setDetailsModalGuid(net.guid) },
@@ -46,14 +49,14 @@ export const ContextMenu: React.FC = () => {
       label: streamerStatus.isCloaked ? 'Restore display name' : 'Mask display name',
       icon: <ShieldIcon size={13} />, action: toggleStreamer
     }] : []),
-    { label: 'Copy name', icon: <CopyIcon size={13} />, action: () => copyText(net.name) },
-    { label: 'Copy network ID', icon: <CopyIcon size={13} />, action: () => copyText(net.guid, 'Network ID copied') },
-    ...(current?.bssid ? [{
+    ...(!privateNames ? [{ label: 'Copy name', icon: <CopyIcon size={13} />, action: () => copyText(net.name) },
+      { label: 'Copy network ID', icon: <CopyIcon size={13} />, action: () => copyText(net.guid, 'Network ID copied') }] : []),
+    ...(!privateNames && current?.bssid ? [{
       label: settings.bssidCloaking && !bssidPeek ? 'Copy masked BSSID' : 'Copy BSSID',
       icon: <CopyIcon size={13} />, action: () => copyText(settings.bssidCloaking && !bssidPeek
         ? maskBssid(current.bssid, settings.bssidMaskMode) : current.bssid!)
     }] : []),
-    ...(net.renamed && net.canRename !== false ? [{
+    ...(!privateNames && net.renamed && net.canRename !== false ? [{
       label: 'Restore original name', icon: <RestoreIcon size={13} />, action: async () => {
         try {
           await restoreNetworkDisplayName(net.guid, net.originalName, net.name)
@@ -65,7 +68,7 @@ export const ContextMenu: React.FC = () => {
   const x = Math.max(8, Math.min(contextMenu.x, window.innerWidth - 230))
   const y = Math.max(8, Math.min(contextMenu.y, window.innerHeight - Math.min(items.length * 34 + 42, window.innerHeight - 16) - 8))
   return (
-    <div ref={ref} className={styles.menu} role="menu" aria-label={`Actions for ${net.name}`}
+    <div ref={ref} className={styles.menu} role="menu" aria-label={`Actions for ${displayName}`}
       style={{ top: y, left: x }} onKeyDown={event => {
         const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button'))
         const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
@@ -77,7 +80,7 @@ export const ContextMenu: React.FC = () => {
           buttons[next]?.focus()
         }
       }}>
-      <div className={styles.netName}>{net.name}</div>
+      <div className={styles.netName}>{displayName}</div>
       <div className={styles.divider} />
       {items.map(item => <button key={item.label} role="menuitem" className={styles.item} onClick={() => {
         hide()

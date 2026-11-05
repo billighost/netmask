@@ -5,11 +5,12 @@ import { CloseIcon, RadioIcon, CheckIcon } from '../../icons'
 import { Dialog } from '../Dialog/Dialog'
 import { Select } from '../Controls/Select'
 import { HelpTip } from '../Controls/HelpTip'
-import { errorMessage } from '../../network-state'
+import { errorMessage, sharingModeActive } from '../../network-state'
 import styles from '../Dialog/Panel.module.css'
 
 export const RoamingTunerModal: React.FC = () => {
-  const { open, settings, capabilities, epoch } = useStore(state => ({ open: state.roamingModalOpen, settings: state.roamingSettings, capabilities: state.capabilities, epoch: state.connectionEpoch }), shallow)
+  const { open, settings, capabilities, epoch, sharing } = useStore(state => ({ open: state.roamingModalOpen, settings: state.roamingSettings, capabilities: state.capabilities,
+    epoch: state.connectionEpoch, sharing: sharingModeActive(state.streamerStatus, state.streamerBusy) }), shallow)
   const [band, setBand] = useState('')
   const [roaming, setRoaming] = useState('')
   const [loading, setLoading] = useState(false)
@@ -52,9 +53,9 @@ export const RoamingTunerModal: React.FC = () => {
     <div className={styles.header}><div className={styles.titleGroup}><RadioIcon size={16} /><span className={styles.title}>Wi-Fi adapter settings</span></div>
       <button className={styles.closeBtn} aria-label="Close adapter settings" onClick={() => state.setRoamingModalOpen(false)}><CloseIcon size={14} /></button></div>
     <div className={styles.body}>
-      {loading ? <p role="status">Reading adapter settings…</p> : error ? <p className="nm-error" role="alert">{error}</p>
+      {loading ? <p role="status">Reading adapter settings…</p> : error ? <p className="nm-error" role="alert">{sharing ? 'Adapter details are hidden while sharing.' : error}</p>
         : !supported ? <p>This adapter does not expose configurable roaming or band preferences.</p> : <>
-          <p className={styles.tipText}>Options come from {settings?.adapterName || 'your Wi-Fi driver'}. Preferences can affect roaming and connectivity; results depend on your network.</p>
+          <p className={styles.tipText}>Options come from {sharing ? 'your hidden Wi-Fi adapter' : settings?.adapterName || 'your Wi-Fi driver'}. Preferences can affect roaming and connectivity; results depend on your network.</p>
           <div className={styles.card}><label className={styles.cardTitle} htmlFor="preferred-band">Preferred band<HelpTip label="Preferred band">Tells your Wi-Fi adapter which band to try first. A 5 GHz connection can be quicker nearby; 2.4 GHz often reaches farther. The router and driver still decide what is available.</HelpTip></label>
             <p className={styles.cardSub}>Prefer a band when the access point offers more than one.</p>
             <Select id="preferred-band" label="Preferred band" value={band} onChange={setBand} disabled={applying || !settings?.validPreferredBands.length}

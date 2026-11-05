@@ -26,8 +26,19 @@ export function visibleNetworks(networks: Network[], settings: Pick<AppSettings,
   return networks.filter(network => {
     if (!settings.showEthernet && network.type === 'ethernet') return false
     if (!term) return true
+    if (privateNames) return false
     return network.name.toLocaleLowerCase().includes(term) || (!privateNames && network.originalName.toLocaleLowerCase().includes(term))
   })
+}
+
+export function sharingModeActive(status: { isCloaked: boolean }, busy = false): boolean {
+  return status.isCloaked || busy
+}
+
+export function displayNetworkName(network: Network, index: number, privateNames: boolean, maskName = 'Private network'): string {
+  if (!privateNames) return network.name
+  if (network.live) return maskName
+  return network.type === 'ethernet' ? `Wired connection ${index + 1}` : `Saved Wi-Fi ${index + 1}`
 }
 
 export function nextSelection(networks: Network[], selected: string | null): string | null {

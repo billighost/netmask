@@ -8,6 +8,7 @@ const { useStore, getSpeedRingBuffer } = load('store.ts')
 const actions = load('network-actions.ts')
 const updates = load('update-actions.ts')
 const { normalizeKeyCombination, parseKeyCombination, shortcutEquals } = load('keyboard-shortcuts.ts')
+const { createConnectionReport } = load('connection-report.ts')
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
 const wifi = { guid: 'wifi-id', name: 'Studio', originalName: 'Private SSID', live: true, renamed: true, type: 'wifi', profile: 'Saved profile' }
 const ethernet = { guid: 'ethernet-id', name: 'Wired', originalName: 'Wired', live: true, renamed: false, type: 'ethernet' }
@@ -26,15 +27,48 @@ const reset = () => {
   useStore.setState({ networks: [], connection: null, connectionError: null, selectedGuid: null, toasts: [], networkSearch: '',
     refreshing: false, reconnecting: false, streamerBusy: false, speedTesting: false, updateInfo: null, updateDownloading: false,
     downloadProgress: null, downloadedVersion: null, capabilities, contextMenu: null, settingsOpen: false, shortcutsModalOpen: false,
+    onboardingOpen: false, reportModalOpen: false,
     streamerStatus: { detectedApp: null, isCloaked: false, cooldownSeconds: 0 } })
 }
 
 test('filters and keyboard selection use only visible networks and hide original names when masked', () => {
   assert.deepEqual(visibleNetworks([wifi, ethernet], { showEthernet: false }, ''), [wifi])
   assert.deepEqual(visibleNetworks([wifi], { showEthernet: true }, 'PRIVATE', true), [])
-  assert.deepEqual(visibleNetworks([wifi], { showEthernet: true }, 'studio', true), [wifi])
+  assert.deepEqual(visibleNetworks([wifi], { showEthernet: true }, 'studio', true), [])
   assert.equal(nextSelection([wifi], 'ethernet-id'), 'wifi-id')
   assert.equal(nextSelection([], 'wifi-id'), null)
+})
+test('sharing mode clears search and report exports redact identifiers by default', () => {
+  reset()
+  useStore.setState({ networks: [wifi], connection, networkSearch: 'Private SSID', contextMenu: { x: 1, y: 1, guid: wifi.guid }, bssidPeek: true })
+  useStore.getState().setStreamerStatus({ detectedApp: null, isCloaked: true, cooldownSeconds: 0 })
+  assert.equal(useStore.getState().networkSearch, '')
+  assert.equal(useStore.getState().contextMenu, null)
+  assert.equal(useStore.getState().bssidPeek, false)
+  const report = createConnectionReport({ generatedAt: new Date('2026-11-05T12:00:00Z'), appVersion: '2.4.0', platform: 'windows',
+    connection: { ...connection, interfaceName: '<Adapter>', bssid: '11:22:33:44:55:66' }, telemetry: { gatewayIp: '192.168.1.1', gatewayMs: 12, internetMs: 24, jitterMs: 3, timestamp: 1 },
+    speed: { available: true, downMBps: 1, upMBps: .2, downKbps: 1000, upKbps: 200 }, testedSpeed: { mbps: 80, mbPerSec: 10 }, captivePortal: null,
+    includeIdentifiers: false, sharingMode: false })
+  assert.doesNotMatch(report.markdown, /Private SSID|Saved profile|11:22:33|<Adapter>|Private network/)
+  assert.match(report.markdown, /redacted/i)
+  assert.doesNotMatch(report.html, /<Adapter>/)
+  assert.match(report.html, /Fieldnotes/)
+  const unsafe = createConnectionReport({ generatedAt: new Date('2026-11-05T12:00:00Z'), appVersion: '2.4.0', platform: 'windows',
+    connection: { ...connection, name: 'Name|<script>\nnext', ssid: 'Wi-Fi <unsafe>' }, telemetry: null,
+    speed: { downMBps: 0, upMBps: 0, downKbps: 0, upKbps: 0 }, testedSpeed: null, captivePortal: null,
+    includeIdentifiers: true, sharingMode: false })
+  assert.match(unsafe.markdown, /Name\\\|&lt;script&gt;<br>next/)
+  assert.doesNotMatch(unsafe.markdown, /<script>|Live transfer measurements are unavailable/)
+})
+test('sharing mode blocks save and restore calls at the action boundary', async () => {
+  reset()
+  let calls = 0
+  window.nm.rename = async () => { calls++ }
+  window.nm.restore = async () => { calls++ }
+  useStore.getState().setStreamerStatus({ detectedApp: null, isCloaked: true, cooldownSeconds: 0 })
+  await assert.rejects(actions.saveNetworkDisplayName(wifi.guid, 'New name', wifi.name), /Exit sharing mode/)
+  await assert.rejects(actions.restoreNetworkDisplayName(wifi.guid, wifi.originalName, wifi.name), /Exit sharing mode/)
+  assert.equal(calls, 0)
 })
 test('BSSID masking rejects malformed addresses and preserves the selected mask style', () => {
   assert.equal(maskBssid('9a-b3-e0-f6-36-c3'), '9A:B3:E0:••:••:••')
