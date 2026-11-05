@@ -4,6 +4,7 @@ const { releaseAssetPlan, nativePackages, verifyNativePackages } = require('./re
 const { requiredChecks, verifyMergeChecks } = require('./release-checks.cjs')
 const { platformRunners, runnerUnavailable, platformStatus } = require('./workflow-status.cjs')
 const { availablePlatforms, releaseNotes } = require('./release-notes.cjs')
+const { busyTemporaryDisk, buildMacDmg } = require('./build-macos-dmg.cjs')
 const native = ['NetMask_2.2.0_x64-setup.exe', 'NetMask_2.2.0_x64_en-US.msi', 'NetMask_2.2.0_aarch64.dmg', 'NetMask_2.2.0_amd64.deb', 'NetMask_2.2.0_amd64.AppImage']
   .map((name, index) => ({ id: index + 1, name, size: name.endsWith('AppImage') ? 87468536 : 4000000, state: 'uploaded' }))
 test('release cleanup retains every native package and removes only known compatibility assets', () => {
@@ -64,6 +65,39 @@ test('only confirmed runner-allocation cancellations permit an unavailable platf
   }
   assert.throws(() => platformStatus(jobs.slice(1)), /Missing/)
   assert.throws(() => platformStatus(jobs.map(job => ({ ...unavailable, name: job.name }))), /At least one platform/)
+})
+
+test('macOS DMG packaging retries only the exact temporary disk ejection failure', () => {
+  const busy = 'Searching for mounted interstitial disk image using /dev/disk2s...\nhdiutil: couldn\'t eject "disk2" - Resource busy'
+  assert.equal(busyTemporaryDisk(busy), 'disk2')
+  assert.equal(busyTemporaryDisk(busy.replace('"disk2"', '"disk3"')), undefined)
+  assert.equal(busyTemporaryDisk('failed to bundle project'), undefined)
+
+  let builds = 0
+  const detached = []
+  const retried = buildMacDmg({
+    platform: 'darwin',
+    build: () => ++builds === 1 ? { status: 1, output: busy } : { status: 0, output: '' },
+    detach: device => detached.push(device),
+    wait: () => {},
+    report: () => {}
+  })
+  assert.equal(retried.status, 0)
+  assert.equal(builds, 2)
+  assert.deepEqual(detached, ['disk2'])
+
+  for (const [platform, output] of [['darwin', 'another bundle failure'], ['linux', busy]]) {
+    builds = 0
+    const failed = buildMacDmg({
+      platform,
+      build: () => { builds += 1; return { status: 1, output } },
+      detach: () => assert.fail('an unrelated disk must not be detached'),
+      wait: () => {},
+      report: () => {}
+    })
+    assert.equal(failed.status, 1)
+    assert.equal(builds, 1)
+  }
 })
 
 test('partial publication requires complete OS package sets and removes unavailable download links', () => {

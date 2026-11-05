@@ -30,7 +30,7 @@
     "vite:build": "vite build",
     "dist": "tauri build",
     "dist:win": "tauri build --bundles nsis,msi",
-    "dist:mac": "tauri build --bundles dmg",
+    "dist:mac": "node scripts/build-macos-dmg.cjs",
     "dist:linux": "tauri build --bundles deb,appimage",
     "typecheck": "tsc --noEmit",
     "lint": "node scripts/lint-hooks.js",
