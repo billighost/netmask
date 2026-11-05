@@ -292,6 +292,7 @@ pub fn parse_services(
                 guid: id.clone(),
                 name: name.into(),
                 renamed: name != original,
+                name_sync_pending: false,
                 original_name: original,
                 live,
                 network_type: kind.into(),

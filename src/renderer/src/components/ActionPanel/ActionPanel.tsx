@@ -51,7 +51,7 @@ export const ActionPanel: React.FC = () => {
 
   return <section className={styles.panel} aria-labelledby="editor-title">
     <div className={styles.header}><h2 className={styles.title} id="editor-title">{privateNames ? 'Names are hidden.' : 'Make it yours.'}<HelpTip label="Local network label">This changes only the local label used by this computer and NetMask. It cannot rename the Wi-Fi signal broadcast by your router.</HelpTip></h2>
-      <p className={styles.subtitle}>{privateNames ? 'Exit sharing mode before viewing or editing saved names.' : net ? 'Choose a local label you recognize. The router name and Wi-Fi SSID do not change.' : 'Choose a saved network above to give it a local label.'}</p>
+      <p className={styles.subtitle}>{privateNames ? 'Exit sharing mode before viewing or editing saved names.' : net?.nameSyncPending ? 'Windows has a saved Wi-Fi profile and local label that no longer match. Save a name or restore the original to repair both.' : net ? 'Choose a local label you recognize. The router name and Wi-Fi SSID do not change.' : 'Choose a saved network above to give it a local label.'}</p>
     </div>
     <label className={styles.fieldLabel} htmlFor="rename-network-input">LOCAL LABEL ON THIS COMPUTER</label>
     <form className={styles.editLine} onSubmit={event => { event.preventDefault(); void apply() }}>
@@ -63,10 +63,11 @@ export const ActionPanel: React.FC = () => {
       </button>
     </form>
     {!privateNames && !invalid && !unchanged && net && <p className={styles.previewBox}>NetMask will display <strong>{name}</strong>. Your Wi-Fi signal keeps its existing name.</p>}
+    {!privateNames && net?.nameSyncPending && <p className={styles.syncNotice}>A previous install or removal changed only part of this name. Saving or restoring will bring the Windows label and saved Wi-Fi profile back together.</p>}
     {!privateNames && name && invalid && <p className={styles.error}>Use up to 128 characters without control characters.</p>}
     <div className={styles.restoreLine}>
       <p className={styles.original}>{!net ? 'No network selected' : privateNames ? 'Your original name stays saved.' : 'Original: ' + net.originalName}</p>
-      <button type="button" className={styles.textButton} disabled={privateNames || !net?.renamed || !supported || busy} onClick={() => void restore()}>{restoring ? 'Restoring…' : 'Restore original'}</button>
+      <button type="button" className={styles.textButton} disabled={privateNames || (!net?.renamed && !net?.nameSyncPending) || !supported || busy} onClick={() => void restore()}>{restoring ? 'Restoring…' : 'Restore original'}</button>
     </div>
     <div className={styles.bottomRow}>
       <p className={styles.permission}>{capabilities?.platform === 'windows' && <LockIcon size={11} />}<span>{!supported ? 'Local-label changes are unavailable here.' : 'This does not rename the router or Wi-Fi SSID.'}</span>

@@ -20,7 +20,7 @@ export const NetworkRow = React.memo(function NetworkRow({ net, index }: { net: 
         }
       }}>
       <span className={styles.icon + (net.live ? ' ' + styles.iconLive : '')}>{net.type === 'wifi' ? <WifiIcon size={16} /> : <EthernetIcon size={16} />}</span>
-      <span className={styles.meta}><span className={styles.name}>{displayName}</span><span className={styles.sub}>{privateNames ? 'Hidden while sharing' : net.renamed ? 'Originally ' + net.originalName : net.type === 'ethernet' ? 'Wired connection' : 'Saved Wi-Fi network'}</span></span>
+      <span className={styles.meta}><span className={styles.name}>{displayName}</span><span className={styles.sub}>{privateNames ? 'Hidden while sharing' : net.nameSyncPending ? 'Name needs repair · saved profile differs' : net.renamed ? 'Originally ' + net.originalName : net.type === 'ethernet' ? 'Wired connection' : 'Saved Wi-Fi network'}</span></span>
       {net.live && <span className={styles.tags}><span className={styles.liveTag}>Connected</span></span>}
     </button>
     <button type="button" className={styles.menuButton} aria-label={'Actions for ' + displayName} tabIndex={selected ? 0 : -1}

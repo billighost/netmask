@@ -56,7 +56,7 @@ export const ContextMenu: React.FC = () => {
       icon: <CopyIcon size={13} />, action: () => copyText(settings.bssidCloaking && !bssidPeek
         ? maskBssid(current.bssid, settings.bssidMaskMode) : current.bssid!)
     }] : []),
-    ...(!privateNames && net.renamed && net.canRename !== false ? [{
+    ...(!privateNames && (net.renamed || net.nameSyncPending) && net.canRename !== false ? [{
       label: 'Restore original name', icon: <RestoreIcon size={13} />, action: async () => {
         try {
           await restoreNetworkDisplayName(net.guid, net.originalName, net.name)

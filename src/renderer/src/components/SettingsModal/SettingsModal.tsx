@@ -89,7 +89,7 @@ export const SettingsModal: React.FC = () => {
   const restoreAll = async () => {
     const privacy = useStore.getState()
     if (sharingModeActive(privacy.streamerStatus, privacy.streamerBusy)) { state.addToast('Exit sharing mode before restoring original names', 'info'); return }
-    if (!state.networks.some(network => network.renamed)) { state.addToast('No renamed networks to restore', 'info'); return }
+    if (!state.networks.some(network => network.renamed || network.nameSyncPending)) { state.addToast('No renamed networks to restore', 'info'); return }
     setDataBusy(true)
     try { await window.nm.restoreAll(); state.addToast('Original display names restored', 'success') }
     catch (error) { state.addToast(errorMessage(error), 'error') }

@@ -452,6 +452,7 @@ pub fn install_update(requested_path: Option<&str>) -> Result<bool, String> {
                 .map_err(|_| "Cannot launch the Windows installer")?;
         } else {
             system::hidden_command(&verified.path.to_string_lossy())
+                .args(["/UPDATE", "/P", "/R"])
                 .spawn()
                 .map_err(|_| "Cannot launch the Windows installer")?;
         }

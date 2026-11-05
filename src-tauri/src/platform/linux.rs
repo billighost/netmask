@@ -53,6 +53,7 @@ pub fn parse_networks(
                 guid: fields[0].clone(),
                 name: fields[1].clone(),
                 renamed: fields[1] != original,
+                name_sync_pending: false,
                 original_name: original,
                 live: active == Some(fields[0].as_str()),
                 network_type: kind.into(),

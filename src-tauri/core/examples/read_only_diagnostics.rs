@@ -3,6 +3,23 @@ fn main() {
     use netmask_core::{dns, platform, privacy, roaming, settings};
     let backup = settings::read_backup().unwrap_or_default();
     let snapshot = platform::get_network_snapshot(&backup);
+    #[cfg(windows)]
+    let recovery_records = platform::nlm::profiles().map(|rows| {
+        backup
+            .iter()
+            .map(|(guid, original)| {
+                let row = rows.iter().find(|row| row.guid == *guid);
+                serde_json::json!({
+                    "nlm_present": row.is_some(),
+                    "nlm_connected": row.is_some_and(|row| row.live),
+                    "original_matches_nlm": row.is_some_and(|row| row.name == *original),
+                    "original_length": original.chars().count()
+                })
+            })
+            .collect::<Vec<_>>()
+    });
+    #[cfg(not(windows))]
+    let recovery_records: Result<Vec<serde_json::Value>, String> = Ok(Vec::new());
     let rename_state = snapshot.as_ref().map(|snapshot| {
         let live = snapshot.networks.iter().find(|network| network.live);
         serde_json::json!({
@@ -10,6 +27,8 @@ fn main() {
             "renamed_networks": snapshot.networks.iter().filter(|network| network.renamed).count(),
             "live_network_found": live.is_some(),
             "live_network_renamed": live.is_some_and(|network| network.renamed),
+            "live_name_sync_pending": live.is_some_and(|network| network.name_sync_pending),
+            "name_sync_pending": snapshot.networks.iter().filter(|network| network.name_sync_pending).count(),
             "live_id_kind": live.map(|network| if network.guid.starts_with("wlan:") { "wlan-profile" } else if platform::is_guid(&network.guid) { "system-network" } else { "other" }),
             "live_id_has_recovery": live.is_some_and(|network| backup.contains_key(&network.guid)),
             "connection_name_differs_from_ssid": snapshot.connection.as_ref().is_some_and(|connection| connection.name != connection.ssid),
@@ -21,6 +40,7 @@ fn main() {
         "elevated": platform::is_admin(),
         "snapshot": snapshot.as_ref().map(|s| serde_json::json!({"saved_networks":s.networks.len(),"connected":s.connection.is_some(),"connection_error":s.connection_error})).map_err(String::clone),
         "rename_state": rename_state,
+        "recovery_records": recovery_records,
         "identity": privacy::get_device_identity().map(|_| "success"),
         "dns_settings": dns::get_current_dns(None).map(|_| "success"),
         "dns_comparison": dns::benchmark_dns().map(|rows| serde_json::json!({"resolvers":rows.len(),"measured":rows.iter().filter(|row| row.latency_ms.is_some()).count()})),

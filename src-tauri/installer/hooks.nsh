@@ -15,7 +15,19 @@
   !define MUI_FINISHPAGE_RUN_TEXT "Launch NetMask now"
 !endif
 
+!macro NSIS_HOOK_PREINSTALL
+  ${If} $UpdateMode = 1
+    !insertmacro MUI_HEADER_TEXT "Updating NetMask" "Keeping your network aliases, settings, and shortcuts."
+    DetailPrint "Updating NetMask in place. Network aliases will not be restored or removed."
+  ${EndIf}
+!macroend
+
 !macro NSIS_HOOK_PREUNINSTALL
+  ; The old executable is removed during some upgrade paths. Do not run
+  ; user-requested uninstall recovery while an update is replacing the app.
+  ${If} $UpdateMode = 1
+    Goto netmask_uninstall_done
+  ${EndIf}
   ; Restore every recoverable local network label before the executable is
   ; removed. Recovery data lives outside $INSTDIR, so a cancelled permission
   ; prompt or unavailable network remains recoverable after reinstall.
