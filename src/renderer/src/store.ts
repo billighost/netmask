@@ -63,7 +63,7 @@ interface Store {
   updateInfo: import('./types').UpdateInfo | null
   updateDownloading: boolean
 
-  // Hotspot Privacy Cloak, DNS, Roaming, Ping, Captive, Share
+  // Device/adapter controls, DNS, roaming, ping, captive portal, and sharing.
   pingTelemetry: import('./types').PingTelemetry | null
   deviceIdentity: import('./types').DeviceIdentity | null
   dnsResults: import('./types').DnsResolverResult[] | null

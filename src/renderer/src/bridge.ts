@@ -33,7 +33,7 @@ export const tauriApi = {
   setupSilentElevation: (): Promise<{ success: boolean; message?: string }> => invoke('nm_setup_silent_elevation'),
   removeSilentElevation: (): Promise<{ success: boolean; message?: string }> => invoke('nm_remove_silent_elevation'),
 
-  // Hotspot Device Identity & Privacy Cloak Suite
+  // This computer's active adapter identity and privacy controls.
   getDeviceIdentity: (): Promise<DeviceIdentity> => invoke('nm_get_device_identity'),
   setMacRandomization: (profileName: string, mode: 'yes' | 'no' | 'daily'): Promise<boolean> =>
     invoke('nm_set_mac_randomization', { profileName, mode }),

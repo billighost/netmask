@@ -19,15 +19,15 @@ Only local labels change; your router keeps its Wi-Fi name. Display privacy mask
 
 ## Get NetMask
 
-**Latest: v2.3.2** · [Release notes](https://github.com/billighost/netmask/releases/tag/v2.3.2)
+**Latest: v2.3.3** · [Release notes](https://github.com/billighost/netmask/releases/tag/v2.3.3)
 
 | Windows 10 / 11 | macOS 12+ | Linux |
 | --- | --- | --- |
-| **x64**<br>[EXE / MSI downloads](https://github.com/billighost/netmask/releases/tag/v2.3.2) | [Apple silicon / Intel downloads](https://github.com/billighost/netmask/releases/tag/v2.3.2) | **x64 · NetworkManager**<br>[DEB / AppImage downloads](https://github.com/billighost/netmask/releases/tag/v2.3.2) |
+| **x64**<br>[EXE / MSI downloads](https://github.com/billighost/netmask/releases/tag/v2.3.3) | [Apple silicon / Intel downloads](https://github.com/billighost/netmask/releases/tag/v2.3.3) | **x64 · NetworkManager**<br>[DEB / AppImage downloads](https://github.com/billighost/netmask/releases/tag/v2.3.3) |
 
 Run the Windows installer, drag the Mac app into Applications, or install the Linux package. For AppImage, make the file executable first.
 
-[Checksums](https://github.com/billighost/netmask/releases/download/v2.3.2/checksums.txt) · [Installation and privacy notes](SECURITY.md) · [All releases](https://github.com/billighost/netmask/releases)
+[Checksums](https://github.com/billighost/netmask/releases/download/v2.3.3/checksums.txt) · [Installation and privacy notes](SECURITY.md) · [All releases](https://github.com/billighost/netmask/releases)
 
 The release page lists available installers. A platform awaiting a build runner is added after a successful retry.
 

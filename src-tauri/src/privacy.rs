@@ -9,11 +9,11 @@ pub fn get_device_identity() -> Result<DeviceIdentity, String> {
     #[cfg(windows)]
     {
         let guid = platform::windows::active_interface_guid()?
-            .ok_or("Connect to Wi-Fi to inspect its device identity")?;
+            .ok_or("Connect to Wi-Fi to inspect this device and its active adapter")?;
         let data = system::powershell_json(&format!(
             "$adapter = Get-NetAdapter | Where-Object {{ ([Guid]$_.InterfaceGuid).ToString('B') -eq {} }} | Select-Object -First 1; if (-not $adapter) {{ throw 'Wi-Fi adapter unavailable' }}; $key = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\NetBT\\Parameters\\Interfaces\\Tcpip_' + ([Guid]$adapter.InterfaceGuid).ToString('B'); $netbios = (Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue).NetbiosOptions; [pscustomobject]@{{ hostname = $env:COMPUTERNAME; name = $adapter.Name; guid = ([Guid]$adapter.InterfaceGuid).ToString('B'); mac = $adapter.MacAddress; netbios = $netbios }}",
             system::powershell_literal(&guid)
-        )).map_err(|error| format!("Device identity could not be read. {error}"))?;
+        )).map_err(|error| format!("This device and adapter could not be read. {error}"))?;
         let mac_randomization = active_profile
             .as_deref()
             .and_then(|name| platform::windows::profile_randomization(name).ok())
@@ -38,7 +38,7 @@ pub fn get_device_identity() -> Result<DeviceIdentity, String> {
     {
         let interface = connection
             .and_then(|connection| connection.interface_name)
-            .ok_or("Connect to Wi-Fi to inspect its device identity")?;
+            .ok_or("Connect to Wi-Fi to inspect this device and its active adapter")?;
         let mac = std::fs::read_to_string(
             std::path::Path::new("/sys/class/net")
                 .join(&interface)
@@ -60,7 +60,7 @@ pub fn get_device_identity() -> Result<DeviceIdentity, String> {
     {
         let interface = connection
             .and_then(|connection| connection.interface_name)
-            .ok_or("Connect to Wi-Fi to inspect its device identity")?;
+            .ok_or("Connect to Wi-Fi to inspect this device and its active adapter")?;
         let output = system::run("ifconfig", &[&interface])?;
         let mac = output
             .lines()

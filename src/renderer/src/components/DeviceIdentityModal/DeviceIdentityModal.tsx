@@ -58,12 +58,13 @@ export const DeviceIdentityModal: React.FC = () => {
     } catch (error) { state.addToast(errorMessage(error), 'error') }
     finally { await fetchIdentity(); setBusy(false) }
   }
-  return <Dialog label="Device identity" onClose={() => state.setPrivacyCloakModalOpen(false)} scrimClass={styles.scrim} modalClass={styles.modal}>
+  return <Dialog label="This device and adapter" onClose={() => state.setPrivacyCloakModalOpen(false)} scrimClass={styles.scrim} modalClass={styles.modal}>
     <div className={styles.header}>
-      <div className={styles.titleGroup}><ShieldIcon size={16} /><span className={styles.title}>Device identity</span></div>
-      <button className={styles.closeBtn} aria-label="Close device identity" onClick={() => state.setPrivacyCloakModalOpen(false)}><CloseIcon size={14} /></button>
+      <div className={styles.titleGroup}><ShieldIcon size={16} /><span className={styles.title}>This device and adapter</span></div>
+      <button className={styles.closeBtn} aria-label="Close device and adapter" onClick={() => state.setPrivacyCloakModalOpen(false)}><CloseIcon size={14} /></button>
     </div>
     <div className={styles.body}>
+      <p className={styles.sectionSub}>These values belong to this computer and its active network adapter. They do not describe the selected network or router.</p>
       {loading && <p role="status">Reading device identity…</p>}
       {error && <p className="nm-error" role="alert">{error}</p>}
       <div className={styles.identityCard}>

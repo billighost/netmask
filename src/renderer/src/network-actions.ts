@@ -1,5 +1,6 @@
 import { useStore } from './store'
 import { visibleNetworks, nextSelection, errorMessage, connectionKey, reconcileNetworks, sameFields } from './network-state'
+import type { Network } from './types'
 
 let refreshPromise: Promise<void> | null = null
 
@@ -26,6 +27,28 @@ export async function refreshNetworks(afterMutation = false): Promise<void> {
     useStore.setState(state => ({ connection: null, connectionError: errorMessage(error), networks: state.networks.map(network => ({ ...network, live: false })) }))
     throw error
   } finally { refreshPromise = null; useStore.getState().setRefreshing(false) }
+}
+
+function confirmedNetwork(guid: string, expectedName: string): Network {
+  const state = useStore.getState()
+  const network = state.networks.find(item => item.guid === guid)
+  const connectionMatches = state.connection?.networkGuid !== guid || state.connection.name === expectedName
+  if (!network || network.name !== expectedName || !connectionMatches) {
+    throw new Error('The operating system reported success, but the refreshed local label did not change. Nothing was reported as saved.')
+  }
+  return network
+}
+
+export async function saveNetworkDisplayName(guid: string, newName: string, currentName: string): Promise<Network> {
+  await window.nm.rename(guid, newName, currentName)
+  await refreshNetworks(true)
+  return confirmedNetwork(guid, newName)
+}
+
+export async function restoreNetworkDisplayName(guid: string, originalName: string, currentName: string): Promise<Network> {
+  await window.nm.restore(guid, currentName)
+  await refreshNetworks(true)
+  return confirmedNetwork(guid, originalName)
 }
 
 export async function reconnectSelected(): Promise<void> {

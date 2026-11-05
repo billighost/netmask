@@ -1,6 +1,6 @@
 [package]
 name = "netmask"
-version = "2.3.2"
+version = "2.3.3"
 description = "Cross-platform local network display name manager"
 authors = ["Bello Bilal <bb2010ng@gmail.com>"]
 license = "MIT"

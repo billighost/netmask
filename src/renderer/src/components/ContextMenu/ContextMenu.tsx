@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { shallow } from 'zustand/shallow'
 import { useStore } from '../../store'
 import { CopyIcon, RestoreIcon, InfoIcon, ShieldIcon, QrCodeIcon } from '../../icons'
-import { copyText, refreshNetworks, toggleStreamer } from '../../network-actions'
+import { copyText, restoreNetworkDisplayName, toggleStreamer } from '../../network-actions'
 import { errorMessage, maskBssid } from '../../network-state'
 import styles from './ContextMenu.module.css'
 
@@ -41,7 +41,6 @@ export const ContextMenu: React.FC = () => {
     ...(net.type === 'wifi' && profile && capabilities?.wifiSharing !== false ? [{
       label: 'Share Wi-Fi', icon: <QrCodeIcon size={13} />, action: () => state.setWifiShareModalProfile(profile)
     }] : []),
-    { label: 'Device identity', icon: <ShieldIcon size={13} />, action: () => state.setPrivacyCloakModalOpen(true) },
     { label: 'Network details', icon: <InfoIcon size={13} />, action: () => state.setDetailsModalGuid(net.guid) },
     ...(current && capabilities?.networkRename !== false && net.canRename !== false ? [{
       label: streamerStatus.isCloaked ? 'Restore display name' : 'Mask display name',
@@ -57,9 +56,8 @@ export const ContextMenu: React.FC = () => {
     ...(net.renamed && net.canRename !== false ? [{
       label: 'Restore original name', icon: <RestoreIcon size={13} />, action: async () => {
         try {
-          await window.nm.restore(net.guid, net.name)
-          await refreshNetworks(true)
-          state.addToast('Original display name restored', 'success')
+          await restoreNetworkDisplayName(net.guid, net.originalName, net.name)
+          state.addToast('Original local label restored', 'success')
         } catch (error) { state.addToast(errorMessage(error), 'error') }
       }
     }] : [])
