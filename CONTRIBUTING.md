@@ -7,7 +7,7 @@ NetMask is a Tauri 2 desktop app with a Rust host and a React / TypeScript inter
 Install Node.js 22.12+, Rust 1.90+, and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS. Windows requires the Visual Studio C++ toolchain and WebView2. Linux builds need WebKitGTK 4.1, an AppIndicator development package, librsvg, and patchelf.
 
 ```sh
-git clone https://github.com/<your-user>/netmask.git
+git clone https://github.com/billighost/netmask.git
 cd netmask
 npm ci
 npm run dev

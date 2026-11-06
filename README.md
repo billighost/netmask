@@ -56,9 +56,9 @@ Windows edits Network List labels, macOS edits network service labels, and Linux
 
 </details>
 
-## Measured Tauri memory
+## Historical v2.3.2 Tauri memory measurement
 
-On the recorded Windows 11 production build, median private resident memory across NetMask and its isolated WebView2 descendants was **135.8 MiB visible** and **119.6 MiB hidden in the tray**. These are 15-sample medians after 30- and 60-second settling periods, without explicit memory trimming. Hardware, ranges, other memory metrics, method, limitations, and the raw samples are in [Performance measurement](BENCHMARKS.md).
+These figures were measured from a **v2.3.2 release candidate**, not the current v2.6.0 release. On that recorded Windows 11 production build, median private resident memory across NetMask and its isolated WebView2 descendants was **135.8 MiB visible** and **119.6 MiB hidden in the tray**. These are 15-sample medians after 30- and 60-second settling periods, without explicit memory trimming. Hardware, ranges, other memory metrics, method, limitations, and the raw samples are in [Performance measurement](BENCHMARKS.md).
 
 ## Build it
 

@@ -5,7 +5,8 @@ import fieldnotesPaper from '../../docs/assets/fieldnotes-paper.png'
 type Page = 'home' | 'story' | 'downloads' | 'project' | 'motion'
 type Stats = { downloads: number | null; stars: number | null; forks: number | null; releases: number | null }
 
-const release = '2.4.1'
+const release = '2.6.0'
+const siteUrl = 'https://getnetmask.vercel.app'
 const releaseBase = `https://github.com/billighost/netmask/releases/download/v${release}`
 const links = {
   windows: `${releaseBase}/NetMask_${release}_x64-setup.exe`,
@@ -58,7 +59,7 @@ function Header({ page }: { page: Page }) {
     <a className="brand" href="/"><img src={logo} alt=""/><span>NetMask<small>DESKTOP COMPANION</small></span></a>
     <button className="menu-button" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-label="Toggle navigation"><i/><i/></button>
     <nav className={open ? 'open' : ''} aria-label="Main navigation">{nav.map(([id, href, label]) => <a key={id} className={page === id ? 'active' : ''} href={href}>{label}</a>)}</nav>
-    <a className="edition-stamp" href="/downloads/">EDITION<br/>2.4.1</a>
+    <a className="edition-stamp" href="/downloads/">EDITION<br/>{release}</a>
   </header>
 }
 
@@ -155,7 +156,7 @@ function Legend({ icon, title, children }: { icon: string; title: string; childr
 }
 
 function DownloadInvitation() {
-  return <section className="download-invitation" data-reveal><p>SUPPLY DESK · OFFICIAL RELEASE</p><h2>Pack the right edition.</h2><span>v2.4.1</span><a href="/downloads/">Choose your platform →</a></section>
+  return <section className="download-invitation" data-reveal><p>SUPPLY DESK · OFFICIAL RELEASE</p><h2>Pack the right edition.</h2><span>v{release}</span><a href="/downloads/">Choose your platform →</a></section>
 }
 
 function StoryPage() {
@@ -180,14 +181,14 @@ type Platform = 'windows' | 'macos' | 'linux'
 function DownloadsPage() {
   const detected = useMemo<Platform>(() => /Mac|iPhone|iPad/.test(navigator.userAgent) ? 'macos' : /Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent) ? 'linux' : 'windows', [])
   const [platform, setPlatform] = useState<Platform>(detected)
-  return <PageShell page="downloads"><PageHero number="SUPPLY DESK / RELEASE 2.4.1" title={<>Take NetMask<br/><em>with you.</em></>} copy="Official desktop packages for Windows, macOS, and Linux—delivered directly from the GitHub release." art={<SupplyCrate/>}/><section className="download-desk"><div className="platform-tabs" role="tablist">{(['windows','macos','linux'] as Platform[]).map(item => <button key={item} className={platform === item ? 'active' : ''} onClick={() => setPlatform(item)}>{item}</button>)}</div><div className="package-sheet">{platform === 'windows' && <Package title="Windows 10 / 11 · x64" code="PACK 01 / WIN.X64" description="The setup file is recommended for most people. The MSI installs the same app and is useful for managed deployment." primary={[links.windows, 'Download setup .exe']} secondary={[links.msi, 'MSI package']}/>} {platform === 'macos' && <Package title="macOS 12+" code="PACK 02 / MAC.UNIVERSAL" description="Choose the build matching your Mac. Open the DMG, then drag NetMask into Applications." primary={[links.macArm, 'Apple silicon DMG']} secondary={[links.macIntel, 'Intel DMG']}/>} {platform === 'linux' && <Package title="Linux · x64 · NetworkManager" code="PACK 03 / LINUX.X64" description="Choose a Debian package for Debian, Ubuntu, Mint and related systems, or a portable AppImage." primary={[links.deb, 'Debian / Ubuntu .deb']} secondary={[links.appImage, 'Portable AppImage']}/>}</div>
+  return <PageShell page="downloads"><PageHero number={`SUPPLY DESK / RELEASE ${release}`} title={<>Take NetMask<br/><em>with you.</em></>} copy="Official desktop packages for Windows, macOS, and Linux—delivered directly from the GitHub release." art={<SupplyCrate/>}/><section className="download-desk"><div className="platform-tabs" role="tablist">{(['windows','macos','linux'] as Platform[]).map(item => <button key={item} className={platform === item ? 'active' : ''} onClick={() => setPlatform(item)}>{item}</button>)}</div><div className="package-sheet">{platform === 'windows' && <Package title="Windows 10 / 11 · x64" code="PACK 01 / WIN.X64" description="The setup file is recommended for most people. The MSI installs the same app and is useful for managed deployment." primary={[links.windows, 'Download setup .exe']} secondary={[links.msi, 'MSI package']}/>} {platform === 'macos' && <Package title="macOS 12+" code="PACK 02 / MAC.UNIVERSAL" description="Choose the build matching your Mac. Open the DMG, then drag NetMask into Applications." primary={[links.macArm, 'Apple silicon DMG']} secondary={[links.macIntel, 'Intel DMG']}/>} {platform === 'linux' && <Package title="Linux · x64 · NetworkManager" code="PACK 03 / LINUX.X64" description="Choose a Debian package for Debian, Ubuntu, Mint and related systems, or a portable AppImage." primary={[links.deb, 'Debian / Ubuntu .deb']} secondary={[links.appImage, 'Portable AppImage']}/>}</div>
       <div className="verification-row"><span>VERIFY THE PACKAGE</span><a href={links.checksums}>SHA-256 checksums ↗</a><a href={links.release}>Release notes ↗</a><a href="https://github.com/billighost/netmask/blob/main/SECURITY.md">Installation & privacy ↗</a></div></section>
       <section className="install-map"><header data-reveal><p className="pencil">A short route from package to first value</p><h2>Arrive in four steps.</h2></header><ol><li data-reveal><span>01</span><div><h3>Choose the native package.</h3><p>Match your operating system and processor. Downloads come from the official GitHub release.</p></div></li><li data-reveal><span>02</span><div><h3>Inspect the source and checksum.</h3><p>Checksums detect changed or incomplete files. The project does not currently claim Windows publisher signing or macOS notarization.</p></div></li><li data-reveal><span>03</span><div><h3>Name, check, or prepare.</h3><p>The first-run guide offers three routes: name a network, check the connection, or prepare for sharing.</p></div></li><li data-reveal><span>04</span><div><h3>Keep restoration nearby.</h3><p>Original labels are recorded before changes. Uninstall recovery and manual restore paths are documented.</p></div></li></ol></section>
       <section className="system-notes"><h2>Platform field notes.</h2><details open><summary>Windows</summary><p>Edits supported Network List labels and saved Wi-Fi profile labels. Some changes require administrator approval.</p></details><details><summary>macOS</summary><p>Edits the network service label through system tools. It does not remove and recreate the Wi-Fi network.</p></details><details><summary>Linux</summary><p>Edits NetworkManager connection names and uses stable UUIDs for reconnects. NetworkManager is required.</p></details></section>
     </PageShell>
 }
 
-function SupplyCrate() { return <div className="supply-crate"><img src={logo} alt=""/><strong>NETMASK</strong><span>DESKTOP FIELD KIT</span><b>v2.4.1</b></div> }
+function SupplyCrate() { return <div className="supply-crate"><img src={logo} alt=""/><strong>NETMASK</strong><span>DESKTOP FIELD KIT</span><b>v{release}</b></div> }
 function Package({ title, code, description, primary, secondary }: { title: string; code: string; description: string; primary: [string,string]; secondary: [string,string] }) { return <article className="package" data-reveal><div className="pack-icon">NM</div><div><span>{code}</span><h2>{title}</h2><p>{description}</p><a className="primary-download" href={primary[0]}>{primary[1]} ↓</a><a className="secondary-download" href={secondary[0]}>{secondary[1]}</a></div></article> }
 
 function ProjectPage({ stats }: { stats: Stats }) {
@@ -263,8 +264,25 @@ export default function App() {
   const stats = useGithubStats()
   usePageEffects(page)
   useEffect(() => {
-    const titles: Record<Page, string> = { home: 'NetMask — Your networks. Your names.', story: 'The field story — NetMask', downloads: 'Download NetMask v2.4.1', project: 'The project — NetMask', motion: 'Motion study — NetMask' }
-    document.title = titles[page]
+    const seo: Record<Page, { title: string; description: string; path: string }> = {
+      home: { title: 'NetMask — Name, understand, and privately share your networks', description: 'NetMask is a free, open-source desktop app for familiar local network names, readable connection checks, privacy-aware screen sharing, and safe restoration.', path: '/' },
+      story: { title: 'How NetMask works — Name, read, mask, and restore', description: 'See how NetMask gives networks familiar local names, explains connection health, masks supported details for sharing, and preserves a route back.', path: '/story/' },
+      downloads: { title: `Download NetMask v${release} for Windows, macOS, and Linux`, description: `Download NetMask v${release}, the free open-source desktop network companion for Windows, macOS, and Linux. Official packages and SHA-256 checksums.`, path: '/downloads/' },
+      project: { title: 'About the NetMask open-source project', description: 'Meet the creator, explore the Tauri, Rust, React, and TypeScript architecture, and learn the principles behind the open-source NetMask desktop app.', path: '/project/' },
+      motion: { title: 'NetMask motion study', description: 'A private motion and interaction study for the NetMask website.', path: '/motion-preview/' }
+    }
+    const current = seo[page]
+    const canonical = `${siteUrl}${current.path}`
+    document.title = current.title
+    const setMeta = (selector: string, value: string) => document.querySelector<HTMLMetaElement>(selector)?.setAttribute('content', value)
+    setMeta('meta[name="description"]', current.description)
+    setMeta('meta[property="og:title"]', current.title)
+    setMeta('meta[property="og:description"]', current.description)
+    setMeta('meta[property="og:url"]', canonical)
+    setMeta('meta[name="twitter:title"]', current.title)
+    setMeta('meta[name="twitter:description"]', current.description)
+    document.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.setAttribute('href', canonical)
+    setMeta('meta[name="robots"]', page === 'motion' ? 'noindex, nofollow' : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1')
     const onPopState = () => setPage(routePage())
     const onClick = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return

@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /motion-preview/
+
+Sitemap: https://getnetmask.vercel.app/sitemap.xml
