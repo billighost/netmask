@@ -1,0 +1,8 @@
+{
+  "id": "field-atlas",
+  "number": 2,
+  "name": "The Field Atlas",
+  "selectedOn": "2026-11-05",
+  "implementation": "React and Vite",
+  "reason": "Selected by the project owner. It extends NetMask's Fieldnotes identity into a tactile cartographic story system."
+}

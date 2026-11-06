@@ -1,0 +1,24 @@
+body{overflow-x:hidden}
+/* The opening header belongs to the composition; after scrolling it becomes a useful fixed surface. */
+.site-header{position:fixed;background:transparent;border-bottom-color:transparent;transition:background .25s ease,border-color .25s ease,box-shadow .25s ease,backdrop-filter .25s ease}
+.site-header.scrolled,.site-header.menu-open{background:#eee6d2e8;border-bottom-color:#264b3b33;box-shadow:0 10px 30px #264b3b20;backdrop-filter:blur(14px) saturate(115%)}
+
+/* Translucent cellulose tape keeps the real app plate feeling pinned into the atlas. */
+.app-plate figure{position:relative}
+.app-plate figure:before,.app-plate figure:after{content:'';position:absolute;z-index:4;width:145px;height:42px;background:linear-gradient(90deg,#d9bf7770,#f1daa58c 50%,#d9bf7766);border-left:1px solid #a88b4f30;border-right:1px solid #a88b4f30;box-shadow:0 2px 3px #264b3b15;pointer-events:none;mix-blend-mode:multiply}
+.app-plate figure:before{left:-45px;top:-16px;transform:rotate(-13deg)}
+.app-plate figure:after{right:-42px;bottom:25px;transform:rotate(9deg)}
+
+@media(max-width:720px){
+  .site-header{gap:14px}
+  .edition-stamp{display:none}
+  .menu-button{display:block!important;margin-left:auto;flex:0 0 40px}
+  .home-hero{grid-template-columns:minmax(0,1fr)}
+  .home-hero>*{min-width:0}
+  .atlas-cover{width:100%;min-width:0;padding:45px 22px;transform:none;box-shadow:9px 10px 0 #264b3b18}
+  .atlas-cover h1{font-size:46px}
+  .atlas-cover>p{overflow-wrap:anywhere}
+  .app-plate figure:before,.app-plate figure:after{width:95px;height:31px}
+  .app-plate figure:before{left:-22px;top:-12px}
+  .app-plate figure:after{right:-20px;bottom:18px}
+}
