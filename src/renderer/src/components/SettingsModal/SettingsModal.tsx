@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import { useStore } from '../../store'
-import { SunIcon, MoonIcon, NetMaskLogoIcon, CloseIcon, RestoreIcon, LockIcon, ShieldIcon, BoltIcon, KeyboardIcon, GithubIcon, MailIcon, DownloadIcon, RefreshIcon, DnsIcon, RadioIcon } from '../../icons'
+import { SunIcon, MoonIcon, NetMaskLogoIcon, CloseIcon, RestoreIcon, LockIcon, ShieldIcon, BoltIcon, KeyboardIcon, GithubIcon, MailIcon, DownloadIcon, RefreshIcon, DnsIcon, RadioIcon, SparkleIcon } from '../../icons'
 import { Dialog } from '../Dialog/Dialog'
 import { Toggle } from '../Controls/Toggle'
 import { Select } from '../Controls/Select'
@@ -138,6 +138,10 @@ export const SettingsModal: React.FC = () => {
     } catch (error) { state.addToast(errorMessage(error, 'The diagnostic report could not be created'), 'error') }
     finally { setDataBusy(false) }
   }
+  const startTutorial = () => {
+    state.setSettingsOpen(false)
+    requestAnimationFrame(() => state.setOnboardingOpen(true))
+  }
   const toolButtons = [
     { label: 'Keyboard controls', icon: <KeyboardIcon size={14} />, action: () => state.setShortcutsModalOpen(true), disabled: false },
     { label: 'This device and adapter', icon: <ShieldIcon size={14} />, action: () => state.setPrivacyCloakModalOpen(true), disabled: false },
@@ -237,7 +241,10 @@ export const SettingsModal: React.FC = () => {
         </section>
         <button type="button" className={styles.textButton} onClick={() => void openWebPage('https://github.com/billighost/netmask/blob/main/LICENSE')}>Read the MIT license ↗</button>
       </>}
-      <footer className={styles.footer}><button type="button" className={styles.button + ' ' + styles.primary} onClick={() => state.setSettingsOpen(false)}>Done</button></footer>
+      <footer className={styles.footer}>
+        <button type="button" className={styles.button} onClick={startTutorial}><SparkleIcon size={13} />Start quick tour</button>
+        <button type="button" className={styles.button + ' ' + styles.primary} onClick={() => state.setSettingsOpen(false)}>Done</button>
+      </footer>
     </div>
   </Dialog>
 }

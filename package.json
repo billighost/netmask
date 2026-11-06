@@ -1,6 +1,6 @@
 {
   "name": "netmask",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "Cross-platform local network display name manager for Windows, macOS, and Linux",
   "author": {
     "name": "Bello Bilal",
