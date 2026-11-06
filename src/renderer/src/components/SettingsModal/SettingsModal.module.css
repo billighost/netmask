@@ -58,7 +58,7 @@
 .progressBox progress::-webkit-progress-bar { background: var(--accent-dim); }
 .progressBox progress::-webkit-progress-value { background: var(--accent); }
 .progressBox progress::-moz-progress-bar { background: var(--accent); }
-.footer { display: flex; justify-content: flex-end; padding-top: 14px; margin-top: 21px; border-top: 1px solid var(--border); }
+.footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding-top: 14px; margin-top: 21px; border-top: 1px solid var(--border); }
 @media (max-width: 360px) { .header, .body { padding: 16px; } .authorCard { padding: 15px; } .brandCard { gap: 12px; } }
 
 

@@ -57,6 +57,6 @@ export const FirstRunGuide: React.FC = () => {
       <span className={styles.icon}>{action.icon}</span><span className={styles.actionCopy}><strong>{action.title}</strong><small>{action.description}</small></span><span className={styles.arrow} aria-hidden="true">→</span>
     </button>)}</div>
     <div className={styles.note}>{platformNote}</div>
-    <div className={styles.footer}><button type="button" disabled={finishing} onClick={() => void complete()}>{finishing ? 'Saving…' : 'Explore on my own'}</button><span>You can find these actions again from the main window.</span></div>
+    <div className={styles.footer}><button type="button" disabled={finishing} onClick={() => void complete()}>{finishing ? 'Saving…' : 'Explore on my own'}</button><span>You can replay this quick tour anytime from Settings.</span></div>
   </Dialog>
 }
