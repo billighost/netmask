@@ -13,12 +13,12 @@ Official packages are published at [billighost/netmask/releases](https://github.
 Compare your download's SHA-256 with the manifest from the same release:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath .\NetMask_2.3.0_x64-setup.exe
+Get-FileHash -Algorithm SHA256 -LiteralPath .\NetMask_2.6.0_x64-setup.exe
 ```
 
 ```sh
-sha256sum NetMask_2.3.0_amd64.deb       # Linux
-shasum -a 256 NetMask_2.3.0_aarch64.dmg # macOS
+sha256sum NetMask_2.6.0_amd64.deb       # Linux
+shasum -a 256 NetMask_2.6.0_aarch64.dmg # macOS
 ```
 
 Checksums detect changed or incomplete files; they do not replace publisher code signing. This project does not currently claim verified Windows publisher signing or macOS notarization. SmartScreen or Gatekeeper may warn about an unrecognized download. Verify the source and file before making your own installation decision; do not disable system protections globally.
