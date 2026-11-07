@@ -9,7 +9,7 @@ flowchart LR
   Bridge --> Commands[Async native commands]
   Commands --> Core[Native core engines]
   Core --> OS[Windows / macOS / Linux integrations]
-  Core --> Data[Per-user JSON and recovery records]
+  Core --> Data[Per-user JSON, recovery records, and bounded SQLite history]
   Workers[Visibility-aware workers] --> Core
   Workers --> Events[Tauri events]
   Events --> Actions
@@ -17,9 +17,31 @@ flowchart LR
 
 ## Desktop host and native core
 
-`src-tauri/src/lib.rs` owns the main window, branded tray, single-instance lock, worker stop flag, window-size persistence, and orderly shutdown. Its command handlers live in `commands.rs`. Slow handlers use `tauri::async_runtime::spawn_blocking` so subprocesses, downloads, locks, and diagnostics do not block the window thread.
+`src-tauri/src/lib.rs` owns the main window, branded tray, single-instance lock, worker stop flag, window-size persistence, companion runtime, and orderly shutdown. Closing to the tray persists the supported window state, hides the existing window, emits hidden visibility, and leaves the renderer intact. A later tray or activation request shows and focuses that same window, then delivers any pending intent. The creation path remains as a defensive fallback when no main webview exists; it is not the normal close-to-tray path. Native opted-in monitoring does not depend on the window being visible.
 
-The workspace's `netmask-core` crate points to `src-tauri/src/core.rs`. It contains the platform adapters, settings, rename/recovery operations, DNS, transfer measurements, ping, portal detection, QR sharing, identity controls, roaming, streamer automation, and updater. Separating it from the webview permits actual native-engine tests without launching a desktop or changing a real network.
+On Windows, closing to the tray schedules three bounded working-set trim passes for the NetMask host and descendant WebView2 processes. Each pass rechecks the native hidden-to-tray state, and reopening cancels the remaining passes. macOS and Linux hide the window without this Windows API. Working-set trimming is an operating-system memory-management request, not proof of a fixed memory result.
+
+The older command handlers live in `commands.rs`; journal, usage, digest, prompt, alert, preset, Going live, and evidence handlers live in `companion_commands.rs`. Slow handlers use `tauri::async_runtime::spawn_blocking` so subprocesses, downloads, locks, SQLite work, and diagnostics do not block the window thread.
+
+The workspace's `netmask-core` crate points to `src-tauri/src/core.rs`. It contains the platform adapters, settings, rename/recovery operations, DNS, transfer measurements, ping, portal detection, QR sharing, identity controls, roaming, streamer automation, updater, observation database, monitoring continuity, robust analysis, and evidence construction. Separating it from the webview permits actual native-engine tests without launching a desktop or changing a real network.
+
+## Connection journal and observed usage
+
+`observations.rs` owns `observations.sqlite3`, a schema-versioned WAL database in the per-user data directory. It stores a network catalog, nullable samples, explicit gaps, observed usage totals and counter checkpoints, per-network limits, retained user-run DNS comparison evidence, calm-alert state, and a dismissible alert inbox. A newer unknown schema is preserved and rejected instead of being overwritten.
+
+Stable network, interface, and access-point identifiers are device-local SHA-256 fingerprints keyed by a random `observation-key.json`. Display labels remain readable for the journal. Deleting all monitoring data removes the database, SQLite sidecars, and observation key; it leaves settings, presets, label recovery, and sharing recovery untouched.
+
+`monitor.rs` records a measured, partial, disconnected, or missing sample without synthesizing absent values. Pause opens a persisted gap that can close after restart. History uses 15-second opportunities. Usage advances only when boot identity, network fingerprint, interface fingerprint, monotonic counters, and maximum gap all remain continuous. A restart, counter reset, adapter change, network switch, or long gap records a new baseline and no guessed bytes. Usage is grouped by saved network and monthly cycle, with persistent limits and separate reset/adapter-change counts.
+
+Retention runs at a bounded cadence and applies both age and row caps. The user-facing choices are 7, 30, and 90 days; internal validation and tests also defend wider engine bounds. SQLite WAL is checkpointed after pruning.
+
+## Analysis, alerts, and provider evidence
+
+`analysis.rs` provides percentiles, median/MAD baselines, weekly findings, DNS-suggestion gates, and alert state machines. A weekly conclusion requires at least 100 measured samples, 25% of expected 15-second opportunities, two observed days, and six hours between first and last measured samples. A DNS suggestion can appear only after a user-run comparison stored for that network shows both at least 10 ms and at least 20% improvement.
+
+Access-point alerts require three consecutive observations and a 24-hour cooldown. Behavior alerts require at least 100 baseline samples, three consecutive high samples above the robust threshold, three recovery samples to unlatch, and a six-hour cooldown. Disabled categories neither mutate their state nor emit alerts. The copy describes a confirmed change and does not infer an attack.
+
+`evidence.rs` constructs a measured-only provider dataset. It reports explicit gaps and limitations, redacts network and access-point identifiers by default, and has no credential field. `companion_commands.rs` limits the selected period to the same 24-hour, 7-day, or 30-day journal range, computes latency and jitter thresholds from the selected network's retained samples, and derives events with an identifier-safe `redactedDetail`. `evidence-report.ts` renders the returned dataset as standalone Fieldnotes HTML or Markdown and previews the exact artifact before download. Sharing mode prevents including network identifiers.
 
 ## Network identity and changes
 
@@ -47,6 +69,8 @@ An absolute `NETMASK_DATA_DIR` override is available for isolated diagnostics. T
 
 `settings.rs` bounds JSON size, validates preferences and imports, merges new defaults into old preferences, serializes mutations with OS file locks, and replaces complete files atomically. On Unix it sets private directory/file permissions. Parse failures preserve the original file and surface an error rather than treating corrupt recovery data as an empty backup.
 
+Connection history, observed usage, context prompts, and all alert categories default off for existing and new preferences. History and usage have independent enable controls; the shared pause control stops new history samples and usage attribution without deleting either dataset. The migration preserves the older streamer-detection choice: a former suggest mode maps to the new prompt setting, while absent companion keys remain off. History retention defaults to 30 days and has no sampling effect until history is enabled.
+
 Windows migration merges missing recovery records from the former `%LOCALAPPDATA%\NetMask` install directory and the Electron-era ProgramData location. Newer records and preferences win; migration does not delete or overwrite either legacy source. `names.json` stores original labels and `streamer.json` stores a recoverable masking session. These files are JSON, not encrypted storage.
 
 ## Fieldnotes interface and events
@@ -63,23 +87,29 @@ Fieldnotes tokens define paper, green, and terracotta colors, serif display name
 
 The shared `Dialog` portals into the document body, makes the underlying app inert and hidden from assistive technology, traps focus, handles Escape, and restores focus when closed. Nested dialogs apply the same protection to the underlying dialog. The app and every dialog use a bounded scroll area so controls remain reachable at the 320 × 200 minimum window size.
 
-New profiles open a one-time first-run guide with three explicit routes: name a network, check the current connection, or prepare for sharing. Existing settings files are migrated as already onboarded. The guide does not request permissions by itself; it closes only after the completion setting is saved, then hands focus to the selected action.
+New profiles open a one-time first-run guide with four explicit routes: start the local journal, use Going live, name a network, or explore. Starting the journal is the deliberate action that enables monitoring. Existing settings files are migrated as already onboarded. The guide does not request permissions by itself; it closes only after the completion setting is saved, then hands focus to the selected action.
 
 Sharing mode is app-wide. The renderer treats either confirmed masking or an in-progress toggle as private, clears search and reveal state immediately, and redacts names, original labels, stable IDs, adapter/device identity, hardware addresses, notifications, report identifiers, and context-menu copy actions. Wi-Fi QR data is not requested while sharing; the user must explicitly exit first. The native streamer engine persists the previous local label before changing the supported OS label and retains recovery data whenever the result is uncertain. Manual sessions can carry a persisted, bounded wall-clock expiry; expired records remain recoverable after long shutdowns and restoration requests OS permission when required. Custom broadcast detection accepts validated executable basenames only.
 
-`connection-report.ts` produces both a standalone Fieldnotes HTML document and Markdown from the same point-in-time snapshot. Reports show measurements, findings, and plain next steps; identifiers are excluded by default and cannot be enabled during sharing mode. The modal previews the exact generated document before a local browser download, does not rebuild its iframe for later live telemetry, and never receives Wi-Fi passwords.
+`connection-report.ts` retains the point-in-time diagnostic report. The history-backed provider report is separate: `evidence-report.ts` produces standalone Fieldnotes HTML and Markdown from the measured evidence dataset described above. Both preview the exact generated document before a local browser download, keep identifiers excluded by default, and never receive Wi-Fi passwords.
+
+`companion.rs` persists the last overview/journal view, journal tab, history range, selected network, network presets, and one bounded preset-undo record. The pending undo record survives tray hiding and full application restarts. Presets can carry an optional local label, ask/automatic apply mode, Paper/Dark/inherit theme, and partial/full/inherit access-point display preference. Preview identifies visible changes and permission needs. Automatic mode applies only safe choices; label mutations continue through the existing locked recovery operation.
+
+Going live performs one fresh gateway/internet/jitter measurement set, checks captive-portal state, and turns on sharing mode. Each check returns ready, caution, not-ready, or unavailable evidence. The overall result never upgrades unavailable evidence into readiness and explains that one fresh check cannot guarantee a whole call.
 
 ## Background work and measurement
 
-Transfer samples run once per second while the window is visible. Counter resets, missing samples, and interface changes reset the baseline. Windows reads adapter counters through native APIs; Linux reads `/proc/net/dev`; macOS reads interface counters from `netstat`. Measured transfer rate is distinct from negotiated link rate and the explicit download speed test.
+Visible transfer samples run once per second. Counter resets, missing samples, and interface changes reset that display baseline. Windows reads adapter counters through native APIs; Linux reads `/proc/net/dev`; macOS reads interface counters from `netstat`. Measured transfer rate is distinct from negotiated link rate, observed per-network usage, and the explicit download speed test.
 
-Visible ping telemetry runs every two seconds. Captive-portal checks run about every 30 seconds while visible and emit state changes. Streamer status ticks once per second, with process scans every five seconds, including in the tray. Cooldown uses elapsed time. Manual masking persists independently of broadcast-process detection. Failed automatic operations do not open administrator prompts or claim protection succeeded.
+Visible ping telemetry runs every two seconds. Captive-portal checks run about every 30 seconds while visible and emit state changes. Streamer status ticks once per second, with process scans every five seconds only when prompt or automatic detection is enabled, including in the tray. Cooldown uses elapsed time. Manual masking persists independently of broadcast-process detection. Failed automatic operations do not open administrator prompts or claim protection succeeded.
+
+The native companion scheduler chooses intervals from feature state and window visibility. Visible context and latency checks run every two seconds and counters every second. While the window and intact renderer are hidden, opted-in context uses five seconds, history latency uses fifteen seconds, and observed-usage counters use ten seconds; without those features, context falls back to a quiet sixty-second check. History rows are recorded every fifteen seconds. Disabling a feature removes its corresponding background work.
 
 Process scans are skipped when automatic masking is disabled. A rejected masking activation clears its session record only after confirming that the previous label remains intact; uncertain or changed state keeps recovery data. Damaged preferences disable automatic masking and silent elevation in the fallback state. Portal status is reprobed and emitted for a new connection even when its captive/non-captive state matches the previous connection.
 
 Transfer rates aggregate physical adapters. Missing counters emit an unavailable sample so the renderer clears the last reading. DNS benchmarking measures the effective automatic resolver only when automatic configuration is active; manual/custom DNS is shown separately. Results carry the configuration target, and apply checks that it still matches before changing DNS.
 
-The window hides to the tray rather than being destroyed. There is no claimed fixed Tauri RAM footprint or GPU-disable mode. See [BENCHMARKS.md](../BENCHMARKS.md) for measurement limits.
+The main webview stays intact while hidden in the tray. Windows adds bounded working-set trim requests; other platforms rely on their normal hidden-window memory management. This design does not itself establish a fixed RAM, CPU, disk, or battery result. See [BENCHMARKS.md](../BENCHMARKS.md) for the production measurement method and currently recorded evidence.
 
 The tray intentionally remains small: Show NetMask, a checked sharing-mode action, Run connection check, and Quit. A tray check opens the existing report modal and starts the optional download sample rather than introducing a second diagnostic path. Sharing status updates both the checked item and tooltip.
 

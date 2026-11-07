@@ -1,10 +1,10 @@
 use crate::types::*;
 use crate::{
-    dns, operations, ping, platform, portal, privacy, qr, roaming, settings, speed, streamer,
-    updater,
+    CompanionRuntime, dns, observations, operations, ping, platform, portal, privacy, qr, roaming,
+    settings, speed, streamer, updater,
 };
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, WebviewWindow};
+use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
 async fn blocking<T: Send + 'static>(
     task: impl FnOnce() -> Result<T, String> + Send + 'static,
@@ -46,7 +46,7 @@ pub async fn nm_elevate(app: AppHandle) -> Result<(), String> {
         return Ok(());
     }
     blocking(platform::elevate).await?;
-    app.exit(0);
+    crate::exit_app(&app);
     Ok(())
 }
 
@@ -94,8 +94,40 @@ pub async fn nm_set_netbios_silencer(enable_silence: bool) -> Result<bool, Strin
 }
 
 #[tauri::command]
-pub async fn nm_benchmark_dns() -> Result<Vec<DnsResolverResult>, String> {
-    blocking(dns::benchmark_dns).await
+pub async fn nm_benchmark_dns(
+    runtime: State<'_, CompanionRuntime>,
+) -> Result<Vec<DnsResolverResult>, String> {
+    let database = runtime.database().ok();
+    let operation = runtime.operation_lock();
+    blocking(move || {
+        let results = dns::benchmark_dns()?;
+        if let (Some(database), Ok(Some(context))) = (database, platform::active_network_context())
+        {
+            let current = results.iter().find(|result| result.is_current);
+            let candidate = results
+                .iter()
+                .find(|result| result.is_fastest == Some(true) && result.latency_ms.is_some());
+            if let Some(candidate) = candidate {
+                let _guard = operation.lock().unwrap_or_else(|error| error.into_inner());
+                let _ = database.record_dns_evidence(&observations::DnsEvidence {
+                    timestamp_ms: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis()
+                        .min(i64::MAX as u128) as i64,
+                    network_key: context.network_id,
+                    current_name: current
+                        .map(|result| result.name.clone())
+                        .unwrap_or_else(|| "Current DNS".into()),
+                    current_latency_ms: current.and_then(|result| result.latency_ms),
+                    candidate_name: candidate.name.clone(),
+                    candidate_latency_ms: candidate.latency_ms.unwrap_or_default(),
+                });
+            }
+        }
+        Ok(results)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -179,11 +211,14 @@ pub async fn nm_get_details(guid: String) -> Result<NetworkDetails, String> {
 
 #[tauri::command]
 pub async fn nm_rename(
+    app: AppHandle,
     guid: String,
     new_name: String,
     current_name: Option<String>,
 ) -> Result<(), String> {
-    blocking(move || operations::rename(&guid, &new_name, current_name.as_deref(), true)).await
+    blocking(move || operations::rename(&guid, &new_name, current_name.as_deref(), true)).await?;
+    let _ = app.emit("nm:network-changed", ());
+    Ok(())
 }
 
 #[tauri::command]
@@ -197,22 +232,33 @@ pub async fn nm_get_name_conflict(
 
 #[tauri::command]
 pub async fn nm_repair_name_conflict(
+    app: AppHandle,
     guid: String,
     new_name: String,
     current_name: Option<String>,
 ) -> Result<(), String> {
     blocking(move || operations::repair_name_conflict(&guid, &new_name, current_name.as_deref()))
-        .await
+        .await?;
+    let _ = app.emit("nm:network-changed", ());
+    Ok(())
 }
 
 #[tauri::command]
-pub async fn nm_restore(guid: String, current_name: Option<String>) -> Result<(), String> {
-    blocking(move || operations::restore(&guid, current_name.as_deref())).await
+pub async fn nm_restore(
+    app: AppHandle,
+    guid: String,
+    current_name: Option<String>,
+) -> Result<(), String> {
+    blocking(move || operations::restore(&guid, current_name.as_deref())).await?;
+    let _ = app.emit("nm:network-changed", ());
+    Ok(())
 }
 
 #[tauri::command]
-pub async fn nm_restore_all() -> Result<(), String> {
-    blocking(operations::restore_all).await
+pub async fn nm_restore_all(app: AppHandle) -> Result<(), String> {
+    blocking(operations::restore_all).await?;
+    let _ = app.emit("nm:network-changed", ());
+    Ok(())
 }
 
 #[tauri::command]
@@ -244,8 +290,52 @@ pub async fn nm_get_settings() -> Result<AppSettings, String> {
 }
 
 #[tauri::command]
-pub async fn nm_set_setting(key: String, value: serde_json::Value) -> Result<(), String> {
-    blocking(move || settings::set_setting(&key, value)).await
+pub async fn nm_set_setting(
+    runtime: State<'_, CompanionRuntime>,
+    key: String,
+    value: serde_json::Value,
+) -> Result<(), String> {
+    let database = runtime.database().ok();
+    let operation = runtime.operation_lock();
+    let previous = settings::get_settings();
+    let result = blocking(move || {
+        settings::set_setting(&key, value)?;
+        let current = settings::get_settings_checked()?;
+        if let Some(database) = database {
+            let _guard = operation.lock().unwrap_or_else(|error| error.into_inner());
+            let was_recording = previous.monitoring_enabled && !previous.monitoring_paused;
+            let is_recording = current.monitoring_enabled && !current.monitoring_paused;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+                .min(i64::MAX as u128) as i64;
+            if was_recording && !is_recording {
+                let reason = if current.monitoring_paused {
+                    "recording paused"
+                } else {
+                    "recording disabled"
+                };
+                database.begin_gap(now, reason)?;
+            } else if !was_recording && is_recording {
+                database.close_open_gaps(now, None)?;
+            }
+            if key == "historyRetentionDays" {
+                database.apply_retention(
+                    now,
+                    observations::RetentionPolicy {
+                        days: current.history_retention_days as u32,
+                        sample_row_cap: 500_000,
+                        usage_cycle_cap: 5_000,
+                    },
+                )?;
+            }
+        }
+        Ok(())
+    })
+    .await;
+    runtime.set_monitor_error(result.as_ref().err().cloned());
+    result
 }
 
 #[tauri::command]
@@ -274,13 +364,12 @@ pub fn nm_is_maximized(window: WebviewWindow) -> Result<bool, String> {
 
 #[tauri::command]
 pub fn nm_close(window: WebviewWindow) -> Result<(), String> {
-    if settings::get_settings().minimize_to_tray {
-        window.hide().map_err(|error| error.to_string())?;
-        let _ = window.emit("nm:visibility", false);
-        Ok(())
-    } else {
-        window.close().map_err(|error| error.to_string())
-    }
+    window.close().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn nm_renderer_ready(app: AppHandle) -> Option<String> {
+    crate::renderer_ready(&app)
 }
 
 #[tauri::command]
@@ -408,7 +497,7 @@ pub async fn nm_download_update(
 pub async fn nm_install_update(app: AppHandle, file_path: Option<String>) -> Result<(), String> {
     let close = blocking(move || updater::install_update(file_path.as_deref())).await?;
     if close {
-        app.exit(0);
+        crate::exit_app(&app);
     }
     Ok(())
 }

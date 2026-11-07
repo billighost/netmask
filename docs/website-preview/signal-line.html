@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="NetMask — your networks, your names.">
+  <meta name="description" content="NetMask — know your connection and control what you show.">
   <title>NetMask — The Signal Line</title>
   <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="specimens.css"><link rel="stylesheet" href="responsive.css">
 </head>
@@ -12,7 +12,7 @@
   <header class="site-nav signal-nav">
     <a class="site-brand" href="index.html"><img src="../branding/logos/orbit/mark.svg" alt=""><span>NETMASK</span></a>
     <nav aria-label="Main navigation"><a href="#journey">The journey</a><a href="#inside">Inside</a><a href="#downloads">Downloads</a></nav>
-    <a class="nav-download" href="#downloads">Get v2.4.1 ↓</a>
+    <a class="nav-download" href="#downloads">Get v2.7.0 ↓</a>
   </header>
 
   <main>
@@ -20,25 +20,25 @@
       <div class="signal-sun" aria-hidden="true"></div>
       <div class="signal-grid" aria-hidden="true"></div>
       <div class="hero-copy" data-reveal>
-        <p class="line-label">PLATFORM 01 · A SMALL DESKTOP COMPANION</p>
-        <h1>Your networks.<br><em>Your names.</em></h1>
-        <p>Turn an unfamiliar local network label into something you recognise. Read the connection. Step private details out of view. Keep the original route home.</p>
+        <p class="line-label">PLATFORM 01 · A LOCAL CONNECTION COMPANION</p>
+        <h1>Know your connection.<br><em>Control what you show.</em></h1>
+        <p>Keep a bounded local record of drops, latency, jitter and observed data use. Prepare for calls, export measured evidence, and keep every local name change reversible.</p>
         <div class="hero-actions">
           <a class="signal-button primary" href="#downloads">Download NetMask</a>
           <a class="signal-button" href="https://github.com/billighost/netmask">Explore the source ↗</a>
         </div>
       </div>
       <div class="departure-board" data-reveal>
-        <div><small>FROM</small><strong>HOMEFIBER_5G</strong></div>
+      <div><small>YESTERDAY · 15:42</small><strong>LATENCY SPIKE</strong></div>
         <svg viewBox="0 0 210 60" aria-hidden="true"><path d="M8 30H196"/><path d="m174 9 22 21-22 21"/></svg>
-        <div><small>ARRIVING AS</small><strong>STUDIO</strong></div>
-        <span class="ticket-stamp">LOCAL LABEL<br>ORIGINAL SAVED</span>
+      <div><small>ON SAVED NETWORK</small><strong>STUDIO</strong></div>
+      <span class="ticket-stamp">MEASURED LOCALLY<br>MISSING STAYS MISSING</span>
       </div>
       <a class="scroll-ticket" href="#journey"><span>SCROLL TO DEPART</span><i>↓</i></a>
     </section>
 
     <section class="signal-manifest" aria-label="Product principles">
-      <p><span>01</span> Familiar, not technical</p><p><span>02</span> Readable, not noisy</p><p><span>03</span> Private when needed</p><p><span>04</span> Reversible by design</p>
+      <p><span>01</span> Local, bounded history</p><p><span>02</span> Measured, not guessed</p><p><span>03</span> Opt-in and reversible</p><p><span>04</span> Calm enough to keep open</p>
     </section>
 
     <section class="train-journey" id="journey">
@@ -65,28 +65,28 @@
     <section class="signal-story" id="inside">
       <article class="story-stop rename-stop" data-reveal>
         <div class="stop-index"><span>STOP 01</span><i></i></div>
-        <div class="stop-copy"><p class="eyebrow">MAKE IT FAMILIAR</p><h2>A name you can live with.</h2><p>Choose a saved network and give its local label a name that belongs in your world. NetMask records the original before anything changes, so “Studio” never erases the way back.</p></div>
-        <div class="name-machine" aria-label="Rename demonstration"><span>HomeFiber_5G</span><i>becomes</i><strong>Studio</strong><small>ORIGINAL SECURELY RECORDED</small></div>
+        <div class="stop-copy"><p class="eyebrow">REMEMBER WHAT HAPPENED</p><h2>A timeline with honest gaps.</h2><p>Review drops, latency spikes, jitter and network switches by time and saved network. Paused or unavailable periods remain visibly missing instead of being filled in.</p></div>
+        <div class="name-machine" aria-label="Connection history example"><span>15:42 · 24 ms</span><i>then</i><strong>186 ms</strong><small>LATENCY SPIKE · STUDIO · MEASURED</small></div>
       </article>
 
       <article class="story-stop measure-stop" data-reveal>
         <div class="stop-index"><span>STOP 02</span><i></i></div>
-        <div class="stop-copy"><p class="eyebrow">READ THE CONNECTION</p><h2>Numbers with somewhere to go.</h2><p>See transfer activity, router response, internet response and the Wi-Fi detail your system can provide. Plain explanations stay beside the readings—not hidden in a manual.</p></div>
+        <div class="stop-copy"><p class="eyebrow">COUNT WHAT THIS COMPUTER SEES</p><h2>Usage tied to the right network.</h2><p>Track observed upload and download totals per saved network across restarts, adapter changes and network switches. Set a personal limit and get one clear warning near it and another after it passes.</p></div>
         <div class="signal-gauges">
-          <div><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="48"/><circle class="gauge-value" cx="60" cy="60" r="48"/></svg><strong>18<small>ms</small></strong><span>ROUTER RESPONSE</span></div>
-          <div><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="48"/><circle class="gauge-value second" cx="60" cy="60" r="48"/></svg><strong>42<small>ms</small></strong><span>INTERNET RESPONSE</span></div>
+          <div><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="48"/><circle class="gauge-value" cx="60" cy="60" r="48"/></svg><strong>18.4<small>GB</small></strong><span>OBSERVED THIS CYCLE</span></div>
+          <div><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="48"/><circle class="gauge-value second" cx="60" cy="60" r="48"/></svg><strong>25<small>GB</small></strong><span>YOUR LIMIT</span></div>
         </div>
       </article>
 
       <article class="story-stop privacy-stop" data-reveal>
         <div class="stop-index"><span>STOP 03</span><i></i></div>
-        <div class="stop-copy"><p class="eyebrow">PREPARE FOR SHARING</p><h2>Let the details leave the carriage.</h2><p>Before a call or recording, sharing mode masks supported names and identifiers inside NetMask. It helps keep the app display clean; it does not make the connection anonymous or protect other apps.</p></div>
+        <div class="stop-copy"><p class="eyebrow">GOING LIVE</p><h2>Check first. Share deliberately.</h2><p>One action checks the router, internet target and sign-in state, then turns on sharing mode. Supported call or broadcast apps can prompt first; NetMask never enables it without your choice.</p></div>
         <div class="privacy-window"><div class="window-title"><i></i><i></i><i></i><span>SHARING MODE · ON</span></div><p>NETWORK</p><strong>••••••••</strong><p>DEVICE IDENTITY</p><strong>HIDDEN FOR SHARING</strong><div class="curtain left"></div><div class="curtain right"></div></div>
       </article>
 
       <article class="story-stop app-stop" data-reveal>
         <div class="stop-index"><span>STOP 04</span><i></i></div>
-        <div class="stop-copy"><p class="eyebrow">THE ACTUAL APP</p><h2>Small enough to stay close.</h2><p>Paper and Dark themes, useful tools without dashboard sprawl, and a window that keeps working down to 320 × 200. Built with Tauri, Rust, React and TypeScript.</p></div>
+        <div class="stop-copy"><p class="eyebrow">DIGEST AND EVIDENCE</p><h2>Plain findings, not confident guesses.</h2><p>The weekly digest says when coverage is too thin. When evidence is sufficient, it can point to a measured pattern or DNS comparison. Provider reports redact identifiers by default and never include Wi-Fi passwords.</p></div>
         <figure class="app-ticket"><img src="../assets/fieldnotes-paper.png" alt="NetMask Fieldnotes interface showing the Studio network and connection readings"><figcaption>Fictional networks and sample measurements shown.</figcaption></figure>
       </article>
     </section>
@@ -103,20 +103,20 @@
       </div>
     </section>
 
-    <section class="signal-stats" aria-label="Project statistics">
-      <div><span data-stat="downloads">—</span><small>GITHUB DOWNLOADS</small></div><div><span data-stat="stars">—</span><small>STARS</small></div><div><span data-stat="releases">—</span><small>RELEASES</small></div><div><span>3</span><small>DESKTOP PLATFORMS</small></div>
-      <p data-stats-status>Live counts from GitHub</p>
+    <section class="signal-stats" aria-label="Local-first principles">
+      <div><span>7/30/90</span><small>DAY RETENTION</small></div><div><span>0</span><small>TELEMETRY SERVICES</small></div><div><span>1</span><small>LOCAL DEVICE</small></div><div><span>3</span><small>DESKTOP PLATFORMS</small></div>
+      <p>History can be paused or deleted completely. Monitoring starts only when the user enables it.</p>
     </section>
 
     <section class="download-station" id="downloads">
-      <div class="download-heading" data-reveal><p class="line-label">TERMINUS · VERSION 2.4.1</p><h2>Take the right carriage.</h2><p>Official packages travel directly from the GitHub release. Choose your platform, then verify the checksum if you wish.</p></div>
+      <div class="download-heading" data-reveal><p class="line-label">TERMINUS · VERSION 2.7.0</p><h2>Take the right carriage.</h2><p>Official packages travel directly from the GitHub release. Choose your platform, then verify the checksum if you wish.</p></div>
       <div class="platform-tabs" role="tablist" aria-label="Choose platform"><button data-platform-tab="windows" role="tab">Windows</button><button data-platform-tab="macos" role="tab">macOS</button><button data-platform-tab="linux" role="tab">Linux</button></div>
       <div class="download-panels">
-        <article data-platform-panel="windows"><span class="platform-code">WIN / X64</span><h3>Windows 10 / 11</h3><p>The setup file is recommended for most people. MSI is available for managed deployment.</p><a href="https://github.com/billighost/netmask/releases/download/v2.4.1/NetMask_2.4.1_x64-setup.exe">Download setup .exe ↓</a><a class="secondary-download" href="https://github.com/billighost/netmask/releases/download/v2.4.1/NetMask_2.4.1_x64_en-US.msi">Get the MSI</a></article>
-        <article data-platform-panel="macos"><span class="platform-code">MAC / 12+</span><h3>macOS</h3><p>Choose the build matching your Mac, then drag NetMask into Applications.</p><a href="https://github.com/billighost/netmask/releases/download/v2.4.1/NetMask_2.4.1_aarch64.dmg">Apple silicon DMG ↓</a><a class="secondary-download" href="https://github.com/billighost/netmask/releases/download/v2.4.1/NetMask_2.4.1_x64.dmg">Intel DMG</a></article>
-        <article data-platform-panel="linux"><span class="platform-code">LINUX / X64</span><h3>Linux + NetworkManager</h3><p>Install the Debian package or keep an AppImage you can carry with you.</p><a href="https://github.com/billighost/netmask/releases/download/v2.4.1/NetMask_2.4.1_amd64.deb">Download .deb ↓</a><a class="secondary-download" href="https://github.com/billighost/netmask/releases/download/v2.4.1/NetMask_2.4.1_amd64.AppImage">Get the AppImage</a></article>
+        <article data-platform-panel="windows"><span class="platform-code">WIN / X64</span><h3>Windows 10 / 11</h3><p>The setup file is recommended for most people. MSI is available for managed deployment.</p><a href="https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_x64-setup.exe">Download setup .exe ↓</a><a class="secondary-download" href="https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_x64_en-US.msi">Get the MSI</a></article>
+        <article data-platform-panel="macos"><span class="platform-code">MAC / 12+</span><h3>macOS</h3><p>Choose the build matching your Mac, then drag NetMask into Applications.</p><a href="https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_aarch64.dmg">Apple silicon DMG ↓</a><a class="secondary-download" href="https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_x64.dmg">Intel DMG</a></article>
+        <article data-platform-panel="linux"><span class="platform-code">LINUX / X64</span><h3>Linux + NetworkManager</h3><p>Install the Debian package or keep an AppImage you can carry with you.</p><a href="https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_amd64.deb">Download .deb ↓</a><a class="secondary-download" href="https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_amd64.AppImage">Get the AppImage</a></article>
       </div>
-      <div class="download-links"><a href="https://github.com/billighost/netmask/releases/tag/v2.4.1">Release notes ↗</a><a href="https://github.com/billighost/netmask/releases/download/v2.4.1/checksums.txt">SHA-256 checksums ↗</a><a href="../../SECURITY.md">Installation notes ↗</a></div>
+      <div class="download-links"><a href="https://github.com/billighost/netmask/releases/tag/v2.7.0">Release notes ↗</a><a href="https://github.com/billighost/netmask/releases/download/v2.7.0/checksums.txt">SHA-256 checksums ↗</a><a href="../../SECURITY.md">Installation notes ↗</a></div>
     </section>
   </main>
 

@@ -1,5 +1,7 @@
 use crate::types::AppSettings;
+use base64::Engine;
 use serde::{Serialize, de::DeserializeOwned};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
@@ -185,6 +187,102 @@ pub fn instance_lock(wait_for_handoff: bool) -> Result<Option<File>, String> {
     }
 }
 
+/// Ask the already-running tray process to recreate and show its renderer.
+/// The request contains only a timestamp and is kept inside the private data directory.
+pub fn request_instance_activation() -> Result<(), String> {
+    storage().with_lock("activation", || {
+        storage().write(
+            "activation.json",
+            &serde_json::json!({ "requestedAt": unix_now_millis() }),
+        )
+    })
+}
+
+pub fn take_instance_activation() -> Result<bool, String> {
+    storage().with_lock("activation", || {
+        let path = storage().path("activation.json")?;
+        if !path.exists() {
+            return Ok(false);
+        }
+        // Parse before deleting so a damaged request is preserved for diagnosis.
+        let _: serde_json::Value = storage()
+            .read("activation.json")?
+            .ok_or("The activation request disappeared before it could be read")?;
+        fs::remove_file(&path)
+            .map_err(|error| format!("Cannot clear activation request: {error}"))?;
+        Ok(true)
+    })
+}
+
+fn unix_now_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(i64::MAX as u128) as i64
+}
+
+#[derive(Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ObservationKey {
+    version: u8,
+    key: String,
+}
+
+fn observation_key() -> Result<Vec<u8>, String> {
+    storage().with_lock("observation-key", || {
+        if let Some(saved) = storage().read::<ObservationKey>("observation-key.json")? {
+            if saved.version != 1 {
+                return Err("The local observation key uses an unsupported version".into());
+            }
+            let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .decode(saved.key)
+                .map_err(|_| "The local observation key is damaged")?;
+            if bytes.len() != 32 {
+                return Err("The local observation key has an invalid size".into());
+            }
+            return Ok(bytes);
+        }
+        let mut bytes = vec![0u8; 32];
+        getrandom::fill(&mut bytes)
+            .map_err(|error| format!("Cannot create the local observation key: {error}"))?;
+        storage().write(
+            "observation-key.json",
+            &ObservationKey {
+                version: 1,
+                key: base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&bytes),
+            },
+        )?;
+        Ok(bytes)
+    })
+}
+
+pub fn fingerprint_local(scope: &str, value: &str) -> Result<String, String> {
+    if scope.is_empty() || scope.len() > 64 || value.is_empty() || value.len() > 2048 {
+        return Err("Cannot fingerprint an invalid local identifier".into());
+    }
+    let mut hash = Sha256::new();
+    hash.update(observation_key()?);
+    hash.update([0]);
+    hash.update(scope.as_bytes());
+    hash.update([0]);
+    hash.update(value.as_bytes());
+    Ok(format!("{:x}", hash.finalize()))
+}
+
+pub fn delete_monitoring_identity() -> Result<(), String> {
+    storage().with_lock("observation-key", || {
+        let path = storage().path("observation-key.json")?;
+        match fs::remove_file(path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(format!(
+                "Cannot delete the local monitoring identity: {error}"
+            )),
+        }
+    })
+}
+
 #[cfg(any(windows, test))]
 fn migrate_storages(destination: &JsonStorage, sources: &[JsonStorage]) -> Result<(), String> {
     destination.ensure()?;
@@ -294,10 +392,20 @@ pub fn default_settings() -> AppSettings {
         theme: "light".into(),
         show_ethernet: true,
         ultra_low_memory: false,
-        auto_cloak_streamer: true,
+        auto_cloak_streamer: false,
+        streamer_detection_mode: "off".into(),
         streamer_mask_name: "Private network".into(),
         custom_broadcast_apps: Vec::new(),
+        suppressed_broadcast_apps: Vec::new(),
         sharing_timer_minutes: 30,
+        monitoring_enabled: false,
+        monitoring_paused: false,
+        history_retention_days: 30,
+        usage_tracking_enabled: false,
+        context_prompts_enabled: false,
+        network_change_alerts: false,
+        behavior_change_alerts: false,
+        usage_limit_alerts: false,
         bssid_cloaking: true,
         bssid_mask_mode: "partial".into(),
         silent_elevation: true,
@@ -327,6 +435,15 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
     if !matches!(settings.bssid_mask_mode.as_str(), "full" | "partial") {
         return Err("BSSID mask must be full or partial".into());
     }
+    if !matches!(
+        settings.streamer_detection_mode.as_str(),
+        "off" | "suggest" | "automatic"
+    ) {
+        return Err("Sharing-app detection must be off, suggest, or automatic".into());
+    }
+    if !matches!(settings.history_retention_days, 7 | 30 | 90) {
+        return Err("History retention must be 7, 30, or 90 days".into());
+    }
     validate_display_name(&settings.streamer_mask_name)?;
     if !matches!(settings.sharing_timer_minutes, 15 | 30 | 60) {
         return Err("Sharing timer must be 15, 30, or 60 minutes".into());
@@ -341,6 +458,16 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
         })
     {
         return Err("Custom sharing apps must be executable names without paths".into());
+    }
+    if settings.suppressed_broadcast_apps.len() > 40
+        || settings.suppressed_broadcast_apps.iter().any(|name| {
+            let trimmed = name.trim();
+            trimmed.is_empty()
+                || trimmed.chars().count() > 80
+                || trimmed.chars().any(char::is_control)
+        })
+    {
+        return Err("Ignored sharing apps contain an invalid app name".into());
     }
     if settings.shortcuts.len() > 64
         || settings
@@ -364,11 +491,25 @@ pub fn load_settings(store: &JsonStorage) -> Result<AppSettings, String> {
         None => default_settings(),
         Some(value) => {
             let had_onboarding_state = value.get("onboardingCompleted").is_some();
+            let had_detection_mode = value.get("streamerDetectionMode").is_some();
+            let legacy_automatic = value
+                .get("autoCloakStreamer")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
             let mut settings: AppSettings = serde_json::from_value(value)
                 .map_err(|error| format!("Settings could not be read: {error}"))?;
             if !had_onboarding_state {
                 settings.onboarding_completed = true;
             }
+            if !had_detection_mode {
+                settings.streamer_detection_mode = if legacy_automatic {
+                    "automatic".into()
+                } else {
+                    "off".into()
+                };
+            }
+            settings.context_prompts_enabled = settings.streamer_detection_mode == "suggest";
+            settings.auto_cloak_streamer = settings.streamer_detection_mode == "automatic";
             settings
         }
     };
@@ -420,9 +561,19 @@ pub fn update_settings_value(
             | "showEthernet"
             | "ultraLowMemory"
             | "autoCloakStreamer"
+            | "streamerDetectionMode"
             | "streamerMaskName"
             | "customBroadcastApps"
+            | "suppressedBroadcastApps"
             | "sharingTimerMinutes"
+            | "monitoringEnabled"
+            | "monitoringPaused"
+            | "historyRetentionDays"
+            | "usageTrackingEnabled"
+            | "contextPromptsEnabled"
+            | "networkChangeAlerts"
+            | "behaviorChangeAlerts"
+            | "usageLimitAlerts"
             | "bssidCloaking"
             | "bssidMaskMode"
             | "silentElevation"
@@ -432,9 +583,61 @@ pub fn update_settings_value(
         return Err(format!("Unknown setting: {key}"));
     }
     let mut json = serde_json::to_value(current).map_err(|e| e.to_string())?;
-    json.as_object_mut()
-        .ok_or("Settings must be an object")?
-        .insert(key.into(), value);
+    let object = json.as_object_mut().ok_or("Settings must be an object")?;
+    object.insert(key.into(), value.clone());
+    if key == "streamerDetectionMode" {
+        object.insert(
+            "autoCloakStreamer".into(),
+            serde_json::Value::Bool(value.as_str() == Some("automatic")),
+        );
+        object.insert(
+            "contextPromptsEnabled".into(),
+            serde_json::Value::Bool(value.as_str() == Some("suggest")),
+        );
+    } else if key == "autoCloakStreamer" {
+        object.insert(
+            "streamerDetectionMode".into(),
+            serde_json::Value::String(if value.as_bool() == Some(true) {
+                "automatic".into()
+            } else if object
+                .get("contextPromptsEnabled")
+                .and_then(serde_json::Value::as_bool)
+                == Some(true)
+            {
+                "suggest".into()
+            } else {
+                "off".into()
+            }),
+        );
+        if value.as_bool() == Some(true) {
+            object.insert(
+                "contextPromptsEnabled".into(),
+                serde_json::Value::Bool(false),
+            );
+        }
+    } else if key == "contextPromptsEnabled" {
+        let suggest = value.as_bool() == Some(true);
+        let automatic = object
+            .get("autoCloakStreamer")
+            .and_then(serde_json::Value::as_bool)
+            == Some(true);
+        object.insert(
+            "streamerDetectionMode".into(),
+            serde_json::Value::String(
+                if suggest {
+                    "suggest"
+                } else if automatic {
+                    "automatic"
+                } else {
+                    "off"
+                }
+                .into(),
+            ),
+        );
+        if suggest {
+            object.insert("autoCloakStreamer".into(), serde_json::Value::Bool(false));
+        }
+    }
     let updated: AppSettings =
         serde_json::from_value(json).map_err(|e| format!("Invalid setting: {e}"))?;
     validate_settings(&updated)?;
@@ -448,6 +651,27 @@ pub fn set_setting(key: &str, value: serde_json::Value) -> Result<(), String> {
         let updated = update_settings_value(&current, key, value)?;
         if key == "ultraLowMemory" && updated.ultra_low_memory {
             return Err("GPU disabling is unavailable in this desktop runtime".into());
+        }
+        if current.launch_on_startup != updated.launch_on_startup {
+            crate::platform::set_launch_on_startup(updated.launch_on_startup)?;
+        }
+        if let Err(error) = storage().write("settings.json", &updated) {
+            if current.launch_on_startup != updated.launch_on_startup {
+                let _ = crate::platform::set_launch_on_startup(current.launch_on_startup);
+            }
+            return Err(error);
+        }
+        *SETTINGS_CACHE.lock().unwrap_or_else(|e| e.into_inner()) = Some(updated);
+        Ok(())
+    })
+}
+
+pub fn set_settings_values(values: &[(&str, serde_json::Value)]) -> Result<(), String> {
+    storage().with_lock("settings", || {
+        let current = load_settings(storage())?;
+        let mut updated = current.clone();
+        for (key, value) in values {
+            updated = update_settings_value(&updated, key, value.clone())?;
         }
         if current.launch_on_startup != updated.launch_on_startup {
             crate::platform::set_launch_on_startup(updated.launch_on_startup)?;

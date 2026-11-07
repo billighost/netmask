@@ -15,4 +15,4 @@ All candidates describe the same implemented app. Screenshots come from the buil
 
 The previews use GitHub-compatible Markdown and HTML. The gallery approximates GitHub's light and dark rendering; GitHub determines its own fonts and spacing. Downloaded Markdown has paths prepared for the repository's root `README.md`. The source candidates use paths that also render correctly from this directory.
 
-The selected Showcase layout accompanies **v2.3.4** and links directly to its native packages. The other historical concepts remain comparison references. Viewing another direction in the gallery does not change the selected repository README.
+The selected Showcase layout accompanies **v2.7.0** and presents NetMask as a local-first connection companion. The other layouts remain clearly labelled comparison references. Every candidate uses the same privacy, evidence, platform-limit, and observed-data wording as the implemented app. Viewing another direction in the gallery does not change the selected repository README.

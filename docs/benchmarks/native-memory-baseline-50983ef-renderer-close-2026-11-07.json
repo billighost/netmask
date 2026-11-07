@@ -1,0 +1,2180 @@
+{
+    "binarySource":  "baseline 50983ef, corrected renderer close-to-tray harness",
+    "version":  "2.7.0",
+    "completedAt":  "2026-11-07T03:28:27.8505185+00:00",
+    "worktreeDirty":  true,
+    "activity":  {
+                     "start":  {
+                                   "at":  "2026-11-07T03:26:44.1488751+00:00",
+                                   "cpuSeconds":  8.015625,
+                                   "writeOperations":  7946,
+                                   "writeBytes":  7003880
+                               },
+                     "durationSeconds":  60,
+                     "databaseBytesBefore":  0,
+                     "databaseBytesAfter":  0,
+                     "writeBytes":  3338493,
+                     "cpuSeconds":  0,
+                     "end":  {
+                                 "at":  "2026-11-07T03:27:44.2994566+00:00",
+                                 "cpuSeconds":  8.34375,
+                                 "writeOperations":  12740,
+                                 "writeBytes":  10342373
+                             },
+                     "writeOperations":  4794
+                 },
+    "startedAt":  "2026-11-07T03:24:44.8229389+00:00",
+    "binarySha256":  "e9e282e4bcd1bdc7382792759c5481e83a597aa17cddb0b0a392e14a1109950b",
+    "phases":  [
+                   {
+                       "webviewSummary":  {
+                                              "privateWorkingSetBytes":  {
+                                                                             "median":  142067712,
+                                                                             "min":  137981952,
+                                                                             "max":  146837504
+                                                                         },
+                                              "workingSetBytes":  {
+                                                                      "median":  377159680,
+                                                                      "min":  373084160,
+                                                                      "max":  381198336
+                                                                  },
+                                              "privateCommitBytes":  {
+                                                                         "median":  188602368,
+                                                                         "min":  184426496,
+                                                                         "max":  194367488
+                                                                     }
+                                          },
+                       "name":  "visible",
+                       "hostSummary":  {
+                                           "privateWorkingSetBytes":  {
+                                                                          "median":  5525504,
+                                                                          "min":  5308416,
+                                                                          "max":  5652480
+                                                                      },
+                                           "workingSetBytes":  {
+                                                                   "median":  41574400,
+                                                                   "min":  41357312,
+                                                                   "max":  41701376
+                                                               },
+                                           "privateCommitBytes":  {
+                                                                      "median":  7258112,
+                                                                      "min":  6979584,
+                                                                      "max":  7417856
+                                                                  }
+                                       },
+                       "samples":  [
+                                       {
+                                           "at":  "2026-11-07T03:25:17.9439507+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5505024,
+                                                                 "workingSetBytes":  41553920,
+                                                                 "privateCommitBytes":  7245824
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30601216,
+                                                                 "workingSetBytes":  109469696,
+                                                                 "privateCommitBytes":  38342656
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1433600,
+                                                                 "workingSetBytes":  8339456,
+                                                                 "privateCommitBytes":  2285568
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  41000960,
+                                                                 "workingSetBytes":  79581184,
+                                                                 "privateCommitBytes":  57634816
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  7127040,
+                                                                 "workingSetBytes":  38387712,
+                                                                 "privateCommitBytes":  12267520
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2744320,
+                                                                 "workingSetBytes":  18399232,
+                                                                 "privateCommitBytes":  7532544
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  62947328,
+                                                                 "workingSetBytes":  118906880,
+                                                                 "privateCommitBytes":  74924032
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  151359488,
+                                           "workingSetBytes":  414638080,
+                                           "privateCommitBytes":  200232960
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:25:19.1135286+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5525504,
+                                                                 "workingSetBytes":  41574400,
+                                                                 "privateCommitBytes":  7270400
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30728192,
+                                                                 "workingSetBytes":  109854720,
+                                                                 "privateCommitBytes":  38486016
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1888256,
+                                                                 "workingSetBytes":  15646720,
+                                                                 "privateCommitBytes":  3137536
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  41058304,
+                                                                 "workingSetBytes":  79659008,
+                                                                 "privateCommitBytes":  57724928
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  7127040,
+                                                                 "workingSetBytes":  38379520,
+                                                                 "privateCommitBytes":  12267520
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2744320,
+                                                                 "workingSetBytes":  18399232,
+                                                                 "privateCommitBytes":  7532544
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  63164416,
+                                                                 "workingSetBytes":  119123968,
+                                                                 "privateCommitBytes":  75030528
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  152236032,
+                                           "workingSetBytes":  422637568,
+                                           "privateCommitBytes":  201449472
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:25:20.2389723+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5525504,
+                                                                 "workingSetBytes":  41574400,
+                                                                 "privateCommitBytes":  7270400
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30732288,
+                                                                 "workingSetBytes":  109858816,
+                                                                 "privateCommitBytes":  38490112
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1888256,
+                                                                 "workingSetBytes":  15646720,
+                                                                 "privateCommitBytes":  3137536
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  41066496,
+                                                                 "workingSetBytes":  79667200,
+                                                                 "privateCommitBytes":  57729024
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  7127040,
+                                                                 "workingSetBytes":  38379520,
+                                                                 "privateCommitBytes":  12267520
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2744320,
+                                                                 "workingSetBytes":  18399232,
+                                                                 "privateCommitBytes":  7532544
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  63279104,
+                                                                 "workingSetBytes":  119246848,
+                                                                 "privateCommitBytes":  75210752
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  152363008,
+                                           "workingSetBytes":  422772736,
+                                           "privateCommitBytes":  201637888
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:25:21.4566648+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5541888,
+                                                                 "workingSetBytes":  41590784,
+                                                                 "privateCommitBytes":  7315456
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30732288,
+                                                                 "workingSetBytes":  109858816,
+                                                                 "privateCommitBytes":  38490112
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1888256,
+                                                                 "workingSetBytes":  15646720,
+                                                                 "privateCommitBytes":  3137536
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  41185280,
+                                                                 "workingSetBytes":  79794176,
+                                                                 "privateCommitBytes":  57729024
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  7127040,
+                                                                 "workingSetBytes":  38395904,
+                                                                 "privateCommitBytes":  12267520
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2744320,
+                                                                 "workingSetBytes":  18399232,
+                                                                 "privateCommitBytes":  7532544
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  58052608,
+                                                                 "workingSetBytes":  114876416,
+                                                                 "privateCommitBytes":  68796416
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  147271680,
+                                           "workingSetBytes":  418562048,
+                                           "privateCommitBytes":  195268608
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:25:22.5958525+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5513216,
+                                                                 "workingSetBytes":  41562112,
+                                                                 "privateCommitBytes":  7225344
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30732288,
+                                                                 "workingSetBytes":  109858816,
+                                                                 "privateCommitBytes":  38490112
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1888256,
+                                                                 "workingSetBytes":  15646720,
+                                                                 "privateCommitBytes":  3137536
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  41193472,
+                                                                 "workingSetBytes":  79769600,
+                                                                 "privateCommitBytes":  57696256
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  7106560,
+                                                                 "workingSetBytes":  38416384,
+                                                                 "privateCommitBytes":  12230656
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2744320,
+                                                                 "workingSetBytes":  18399232,
+                                                                 "privateCommitBytes":  7532544
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  58376192,
+                                                                 "workingSetBytes":  115257344,
+                                                                 "privateCommitBytes":  69521408
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  147554304,
+                                           "workingSetBytes":  418910208,
+                                           "privateCommitBytes":  195833856
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:25:23.7021482+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5652480,
+                                                                 "workingSetBytes":  41701376,
+                                                                 "privateCommitBytes":  7417856
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30732288,
+                                                                 "workingSetBytes":  109858816,
+                                                                 "privateCommitBytes":  38490112
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1888256,
+                                                                 "workingSetBytes":  15646720,
+                                                                 "privateCommitBytes":  3137536
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  41193472,
+                                                                 "workingSetBytes":  79773696,
+                                                                 "privateCommitBytes":  57696256
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  7106560,
+                                                                 "workingSetBytes":  38506496,
+                                                                 "privateCommitBytes":  12230656
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2744320,
+                                                                 "workingSetBytes":  18399232,
+                                                                 "privateCommitBytes":  7532544
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  58429440,
+                                                                 "workingSetBytes":  115314688,
+                                                                 "privateCommitBytes":  69545984
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  147746816,
+                                           "workingSetBytes":  419201024,
+                                           "privateCommitBytes":  196050944
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:25:24.8349869+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5308416,
+                                                                 "workingSetBytes":  41357312,
+                                                                 "privateCommitBytes":  6979584
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30707712,
+                                                                 "workingSetBytes":  109862912,
+                                                                 "privateCommitBytes":  38449152
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1888256,
+                                                                 "workingSetBytes":  15646720,
+                                                                 "privateCommitBytes":  3137536
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  41193472,
+                                                                 "workingSetBytes":  79802368,
+                                                                 "privateCommitBytes":  57696256
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  7106560,
+                                                                 "workingSetBytes":  38506496,
+                                                                 "privateCommitBytes":  12230656
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2744320,
+                                                                 "workingSetBytes":  18399232,
+                                                                 "privateCommitBytes":  7532544
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  58458112,
+                                                                 "workingSetBytes":  115343360,
+                                                                 "privateCommitBytes":  69550080
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  147406848,
+                                           "workingSetBytes":  418918400,
+                                           "privateCommitBytes":  195575808
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:25:25.9388173+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5427200,
+                                                                 "workingSetBytes":  41476096,
+                                                                 "privateCommitBytes":  7081984
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30711808,
+                                                                 "workingSetBytes":  109867008,
+                                                                 "privateCommitBytes":  38453248
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1888256,
+                                                                 "workingSetBytes":  15646720,
+                                                                 "privateCommitBytes":  3137536
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  37023744,
+                                                                 "workingSetBytes":  75636736,
+                                                                 "privateCommitBytes":  53522432
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  7106560,
+                                                                 "workingSetBytes":  38506496,
+                                                                 "privateCommitBytes":  12230656
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2744320,
+                                                                 "workingSetBytes":  18399232,
+                                                                 "privateCommitBytes":  7532544
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  58507264,
+                                                                 "workingSetBytes":  115404800,
+                                                                 "privateCommitBytes":  69550080
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  143409152,
+                                           "workingSetBytes":  414937088,
+                                           "privateCommitBytes":  191508480
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:25:27.0913064+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5529600,
+                                                                 "workingSetBytes":  41578496,
+                                                                 "privateCommitBytes":  7233536
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30711808,
+                                                                 "workingSetBytes":  109867008,
+                                                                 "privateCommitBytes":  38453248
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1888256,
+                                                                 "workingSetBytes":  15646720,
+                                                                 "privateCommitBytes":  3137536
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  37023744,
+                                                                 "workingSetBytes":  75636736,
+                                                                 "privateCommitBytes":  53522432
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  7106560,
+                                                                 "workingSetBytes":  38506496,
+                                                                 "privateCommitBytes":  12230656
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2744320,
+                                                                 "workingSetBytes":  18399232,
+                                                                 "privateCommitBytes":  7532544
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  58572800,
+                                                                 "workingSetBytes":  115474432,
+                                                                 "privateCommitBytes":  69550080
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  143577088,
+                                           "workingSetBytes":  415109120,
+                                           "privateCommitBytes":  191660032
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:25:28.2617786+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5550080,
+                                                                 "workingSetBytes":  41598976,
+                                                                 "privateCommitBytes":  7270400
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30711808,
+                                                                 "workingSetBytes":  109867008,
+                                                                 "privateCommitBytes":  38453248
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1888256,
+                                                                 "workingSetBytes":  15646720,
+                                                                 "privateCommitBytes":  3137536
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  37023744,
+                                                                 "workingSetBytes":  75636736,
+                                                                 "privateCommitBytes":  53522432
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  7106560,
+                                                                 "workingSetBytes":  38506496,
+                                                                 "privateCommitBytes":  12230656
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2744320,
+                                                                 "workingSetBytes":  18399232,
+                                                                 "privateCommitBytes":  7532544
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  58626048,
+                                                                 "workingSetBytes":  115527680,
+                                                                 "privateCommitBytes":  69554176
+                                                             },
+                                                             {
+                                                                 "id":  17364,
+                                                                 "parent":  14432,
+                                                                 "role":  "command",
+                                                                 "privateWorkingSetBytes":  86564864,
+                                                                 "workingSetBytes":  133095424,
+                                                                 "privateCommitBytes":  120725504
+                                                             },
+                                                             {
+                                                                 "id":  1264,
+                                                                 "parent":  17364,
+                                                                 "role":  "command",
+                                                                 "privateWorkingSetBytes":  2289664,
+                                                                 "workingSetBytes":  8564736,
+                                                                 "privateCommitBytes":  2756608
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  232505344,
+                                           "workingSetBytes":  556843008,
+                                           "privateCommitBytes":  315183104
+                                       }
+                                   ],
+                       "summary":  {
+                                       "privateWorkingSetBytes":  {
+                                                                      "median":  147650560,
+                                                                      "min":  143409152,
+                                                                      "max":  232505344
+                                                                  },
+                                       "workingSetBytes":  {
+                                                               "median":  418914304,
+                                                               "min":  414638080,
+                                                               "max":  556843008
+                                                           },
+                                       "privateCommitBytes":  {
+                                                                  "median":  195942400,
+                                                                  "min":  191508480,
+                                                                  "max":  315183104
+                                                              }
+                                   },
+                       "settlingSeconds":  30
+                   },
+                   {
+                       "webviewSummary":  {
+                                              "privateWorkingSetBytes":  {
+                                                                             "median":  123066368,
+                                                                             "min":  123031552,
+                                                                             "max":  124964864
+                                                                         },
+                                              "workingSetBytes":  {
+                                                                      "median":  362426368,
+                                                                      "min":  360972288,
+                                                                      "max":  362848256
+                                                                  },
+                                              "privateCommitBytes":  {
+                                                                         "median":  168646656,
+                                                                         "min":  168611840,
+                                                                         "max":  170655744
+                                                                     }
+                                          },
+                       "name":  "hidden-in-tray",
+                       "hostSummary":  {
+                                           "privateWorkingSetBytes":  {
+                                                                          "median":  5537792,
+                                                                          "min":  5537792,
+                                                                          "max":  5537792
+                                                                      },
+                                           "workingSetBytes":  {
+                                                                   "median":  41586688,
+                                                                   "min":  41586688,
+                                                                   "max":  41586688
+                                                               },
+                                           "privateCommitBytes":  {
+                                                                      "median":  7213056,
+                                                                      "min":  7213056,
+                                                                      "max":  7213056
+                                                                  }
+                                       },
+                       "samples":  [
+                                       {
+                                           "at":  "2026-11-07T03:26:32.8837865+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5537792,
+                                                                 "workingSetBytes":  41586688,
+                                                                 "privateCommitBytes":  7213056
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  29700096,
+                                                                 "workingSetBytes":  114241536,
+                                                                 "privateCommitBytes":  37568512
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1699840,
+                                                                 "workingSetBytes":  10596352,
+                                                                 "privateCommitBytes":  2887680
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  27574272,
+                                                                 "workingSetBytes":  66387968,
+                                                                 "privateCommitBytes":  43610112
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6565888,
+                                                                 "workingSetBytes":  38486016,
+                                                                 "privateCommitBytes":  11620352
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  56643584,
+                                                                 "workingSetBytes":  114352128,
+                                                                 "privateCommitBytes":  67411968
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  130412544,
+                                           "workingSetBytes":  404324352,
+                                           "privateCommitBytes":  177778688
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:26:33.9915070+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5537792,
+                                                                 "workingSetBytes":  41586688,
+                                                                 "privateCommitBytes":  7213056
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  29700096,
+                                                                 "workingSetBytes":  114262016,
+                                                                 "privateCommitBytes":  37568512
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1699840,
+                                                                 "workingSetBytes":  10596352,
+                                                                 "privateCommitBytes":  2887680
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  27574272,
+                                                                 "workingSetBytes":  66387968,
+                                                                 "privateCommitBytes":  43610112
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6565888,
+                                                                 "workingSetBytes":  38486016,
+                                                                 "privateCommitBytes":  11620352
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  56643584,
+                                                                 "workingSetBytes":  114352128,
+                                                                 "privateCommitBytes":  67411968
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  130412544,
+                                           "workingSetBytes":  404344832,
+                                           "privateCommitBytes":  177778688
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:26:35.1080755+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5537792,
+                                                                 "workingSetBytes":  41586688,
+                                                                 "privateCommitBytes":  7213056
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  29700096,
+                                                                 "workingSetBytes":  114262016,
+                                                                 "privateCommitBytes":  37568512
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1699840,
+                                                                 "workingSetBytes":  10596352,
+                                                                 "privateCommitBytes":  2887680
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  27574272,
+                                                                 "workingSetBytes":  66387968,
+                                                                 "privateCommitBytes":  43610112
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6565888,
+                                                                 "workingSetBytes":  38486016,
+                                                                 "privateCommitBytes":  11620352
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  56643584,
+                                                                 "workingSetBytes":  114352128,
+                                                                 "privateCommitBytes":  67411968
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  130412544,
+                                           "workingSetBytes":  404344832,
+                                           "privateCommitBytes":  177778688
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:26:36.2240061+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5537792,
+                                                                 "workingSetBytes":  41586688,
+                                                                 "privateCommitBytes":  7213056
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  29786112,
+                                                                 "workingSetBytes":  114348032,
+                                                                 "privateCommitBytes":  37654528
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1699840,
+                                                                 "workingSetBytes":  10596352,
+                                                                 "privateCommitBytes":  2887680
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  27574272,
+                                                                 "workingSetBytes":  66387968,
+                                                                 "privateCommitBytes":  43610112
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6569984,
+                                                                 "workingSetBytes":  38490112,
+                                                                 "privateCommitBytes":  11624448
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  56643584,
+                                                                 "workingSetBytes":  114352128,
+                                                                 "privateCommitBytes":  67411968
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  130502656,
+                                           "workingSetBytes":  404434944,
+                                           "privateCommitBytes":  177868800
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:26:37.3392142+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5537792,
+                                                                 "workingSetBytes":  41586688,
+                                                                 "privateCommitBytes":  7213056
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  29806592,
+                                                                 "workingSetBytes":  114397184,
+                                                                 "privateCommitBytes":  37699584
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1699840,
+                                                                 "workingSetBytes":  10596352,
+                                                                 "privateCommitBytes":  2887680
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  27574272,
+                                                                 "workingSetBytes":  66387968,
+                                                                 "privateCommitBytes":  43610112
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6578176,
+                                                                 "workingSetBytes":  38526976,
+                                                                 "privateCommitBytes":  11632640
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  54681600,
+                                                                 "workingSetBytes":  112390144,
+                                                                 "privateCommitBytes":  65314816
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  128569344,
+                                           "workingSetBytes":  402558976,
+                                           "privateCommitBytes":  175824896
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:26:38.4537129+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5537792,
+                                                                 "workingSetBytes":  41586688,
+                                                                 "privateCommitBytes":  7213056
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  29806592,
+                                                                 "workingSetBytes":  114585600,
+                                                                 "privateCommitBytes":  37699584
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1699840,
+                                                                 "workingSetBytes":  10596352,
+                                                                 "privateCommitBytes":  2887680
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  27574272,
+                                                                 "workingSetBytes":  66387968,
+                                                                 "privateCommitBytes":  43610112
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6578176,
+                                                                 "workingSetBytes":  38723584,
+                                                                 "privateCommitBytes":  11632640
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  54681600,
+                                                                 "workingSetBytes":  112390144,
+                                                                 "privateCommitBytes":  65314816
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  128569344,
+                                           "workingSetBytes":  402944000,
+                                           "privateCommitBytes":  175824896
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:26:39.5700721+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5537792,
+                                                                 "workingSetBytes":  41586688,
+                                                                 "privateCommitBytes":  7213056
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  29806592,
+                                                                 "workingSetBytes":  114774016,
+                                                                 "privateCommitBytes":  37699584
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1699840,
+                                                                 "workingSetBytes":  10596352,
+                                                                 "privateCommitBytes":  2887680
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  27574272,
+                                                                 "workingSetBytes":  66387968,
+                                                                 "privateCommitBytes":  43610112
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6578176,
+                                                                 "workingSetBytes":  38912000,
+                                                                 "privateCommitBytes":  11632640
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  54681600,
+                                                                 "workingSetBytes":  112390144,
+                                                                 "privateCommitBytes":  65314816
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  128569344,
+                                           "workingSetBytes":  403320832,
+                                           "privateCommitBytes":  175824896
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:26:40.6853750+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5537792,
+                                                                 "workingSetBytes":  41586688,
+                                                                 "privateCommitBytes":  7213056
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  29876224,
+                                                                 "workingSetBytes":  115089408,
+                                                                 "privateCommitBytes":  37769216
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1699840,
+                                                                 "workingSetBytes":  10596352,
+                                                                 "privateCommitBytes":  2887680
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  27574272,
+                                                                 "workingSetBytes":  66387968,
+                                                                 "privateCommitBytes":  43610112
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6578176,
+                                                                 "workingSetBytes":  39145472,
+                                                                 "privateCommitBytes":  11632640
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  54681600,
+                                                                 "workingSetBytes":  112390144,
+                                                                 "privateCommitBytes":  65314816
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  128638976,
+                                           "workingSetBytes":  403869696,
+                                           "privateCommitBytes":  175894528
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:26:41.8033678+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5537792,
+                                                                 "workingSetBytes":  41586688,
+                                                                 "privateCommitBytes":  7213056
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  29806592,
+                                                                 "workingSetBytes":  115052544,
+                                                                 "privateCommitBytes":  37699584
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1699840,
+                                                                 "workingSetBytes":  10596352,
+                                                                 "privateCommitBytes":  2887680
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  27574272,
+                                                                 "workingSetBytes":  66387968,
+                                                                 "privateCommitBytes":  43610112
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6578176,
+                                                                 "workingSetBytes":  39178240,
+                                                                 "privateCommitBytes":  11632640
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  54681600,
+                                                                 "workingSetBytes":  112390144,
+                                                                 "privateCommitBytes":  65314816
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  128569344,
+                                           "workingSetBytes":  403865600,
+                                           "privateCommitBytes":  175824896
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:26:42.9237442+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5537792,
+                                                                 "workingSetBytes":  41586688,
+                                                                 "privateCommitBytes":  7213056
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  29806592,
+                                                                 "workingSetBytes":  115200000,
+                                                                 "privateCommitBytes":  37699584
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1699840,
+                                                                 "workingSetBytes":  10596352,
+                                                                 "privateCommitBytes":  2887680
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  27574272,
+                                                                 "workingSetBytes":  66387968,
+                                                                 "privateCommitBytes":  43610112
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6578176,
+                                                                 "workingSetBytes":  39321600,
+                                                                 "privateCommitBytes":  11632640
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  54681600,
+                                                                 "workingSetBytes":  112390144,
+                                                                 "privateCommitBytes":  65314816
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  128569344,
+                                           "workingSetBytes":  404156416,
+                                           "privateCommitBytes":  175824896
+                                       }
+                                   ],
+                       "summary":  {
+                                       "privateWorkingSetBytes":  {
+                                                                      "median":  128604160,
+                                                                      "min":  128569344,
+                                                                      "max":  130502656
+                                                                  },
+                                       "workingSetBytes":  {
+                                                               "median":  404013056,
+                                                               "min":  402558976,
+                                                               "max":  404434944
+                                                           },
+                                       "privateCommitBytes":  {
+                                                                  "median":  175859712,
+                                                                  "min":  175824896,
+                                                                  "max":  177868800
+                                                              }
+                                   },
+                       "settlingSeconds":  60
+                   },
+                   {
+                       "webviewSummary":  {
+                                              "privateWorkingSetBytes":  {
+                                                                             "median":  131481600,
+                                                                             "min":  129589248,
+                                                                             "max":  133623808
+                                                                         },
+                                              "workingSetBytes":  {
+                                                                      "median":  371369984,
+                                                                      "min":  369475584,
+                                                                      "max":  373510144
+                                                                  },
+                                              "privateCommitBytes":  {
+                                                                         "median":  177745920,
+                                                                         "min":  175632384,
+                                                                         "max":  179789824
+                                                                     }
+                                          },
+                       "name":  "restored",
+                       "hostSummary":  {
+                                           "privateWorkingSetBytes":  {
+                                                                          "median":  5576704,
+                                                                          "min":  5517312,
+                                                                          "max":  5640192
+                                                                      },
+                                           "workingSetBytes":  {
+                                                                   "median":  41629696,
+                                                                   "min":  41570304,
+                                                                   "max":  41693184
+                                                               },
+                                           "privateCommitBytes":  {
+                                                                      "median":  7180288,
+                                                                      "min":  7143424,
+                                                                      "max":  7270400
+                                                                  }
+                                       },
+                       "restoreLatencyMs":  185.87460000000002,
+                       "samples":  [
+                                       {
+                                           "at":  "2026-11-07T03:28:14.6995660+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5517312,
+                                                                 "workingSetBytes":  41570304,
+                                                                 "privateCommitBytes":  7143424
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30298112,
+                                                                 "workingSetBytes":  116457472,
+                                                                 "privateCommitBytes":  38178816
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1646592,
+                                                                 "workingSetBytes":  10547200,
+                                                                 "privateCommitBytes":  2781184
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  36491264,
+                                                                 "workingSetBytes":  75509760,
+                                                                 "privateCommitBytes":  52940800
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6508544,
+                                                                 "workingSetBytes":  38481920,
+                                                                 "privateCommitBytes":  11497472
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  55025664,
+                                                                 "workingSetBytes":  112869376,
+                                                                 "privateCommitBytes":  66007040
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  138178560,
+                                           "workingSetBytes":  414109696,
+                                           "privateCommitBytes":  186015744
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:28:15.8133947+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5525504,
+                                                                 "workingSetBytes":  41578496,
+                                                                 "privateCommitBytes":  7155712
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30298112,
+                                                                 "workingSetBytes":  116457472,
+                                                                 "privateCommitBytes":  38178816
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1646592,
+                                                                 "workingSetBytes":  10547200,
+                                                                 "privateCommitBytes":  2781184
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  36491264,
+                                                                 "workingSetBytes":  75509760,
+                                                                 "privateCommitBytes":  52940800
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6508544,
+                                                                 "workingSetBytes":  38481920,
+                                                                 "privateCommitBytes":  11497472
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  55402496,
+                                                                 "workingSetBytes":  113246208,
+                                                                 "privateCommitBytes":  66527232
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  138563584,
+                                           "workingSetBytes":  414494720,
+                                           "privateCommitBytes":  186548224
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:28:16.9252573+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5537792,
+                                                                 "workingSetBytes":  41590784,
+                                                                 "privateCommitBytes":  7196672
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30298112,
+                                                                 "workingSetBytes":  116457472,
+                                                                 "privateCommitBytes":  38178816
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1646592,
+                                                                 "workingSetBytes":  10547200,
+                                                                 "privateCommitBytes":  2781184
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  36491264,
+                                                                 "workingSetBytes":  75509760,
+                                                                 "privateCommitBytes":  52940800
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6508544,
+                                                                 "workingSetBytes":  38481920,
+                                                                 "privateCommitBytes":  11497472
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  55549952,
+                                                                 "workingSetBytes":  113393664,
+                                                                 "privateCommitBytes":  66572288
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  138723328,
+                                           "workingSetBytes":  414654464,
+                                           "privateCommitBytes":  186634240
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:28:18.0303278+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5525504,
+                                                                 "workingSetBytes":  41578496,
+                                                                 "privateCommitBytes":  7155712
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30298112,
+                                                                 "workingSetBytes":  116457472,
+                                                                 "privateCommitBytes":  38178816
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1646592,
+                                                                 "workingSetBytes":  10547200,
+                                                                 "privateCommitBytes":  2781184
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  36491264,
+                                                                 "workingSetBytes":  75509760,
+                                                                 "privateCommitBytes":  52940800
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6508544,
+                                                                 "workingSetBytes":  38481920,
+                                                                 "privateCommitBytes":  11497472
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  55840768,
+                                                                 "workingSetBytes":  113684480,
+                                                                 "privateCommitBytes":  66854912
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  139001856,
+                                           "workingSetBytes":  414932992,
+                                           "privateCommitBytes":  186875904
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:28:19.1406409+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5525504,
+                                                                 "workingSetBytes":  41578496,
+                                                                 "privateCommitBytes":  7155712
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30298112,
+                                                                 "workingSetBytes":  116457472,
+                                                                 "privateCommitBytes":  38178816
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1646592,
+                                                                 "workingSetBytes":  10547200,
+                                                                 "privateCommitBytes":  2781184
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  36491264,
+                                                                 "workingSetBytes":  75513856,
+                                                                 "privateCommitBytes":  52940800
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6508544,
+                                                                 "workingSetBytes":  38481920,
+                                                                 "privateCommitBytes":  11497472
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  55988224,
+                                                                 "workingSetBytes":  113836032,
+                                                                 "privateCommitBytes":  66924544
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  139149312,
+                                           "workingSetBytes":  415088640,
+                                           "privateCommitBytes":  186945536
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:28:20.2887210+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5640192,
+                                                                 "workingSetBytes":  41693184,
+                                                                 "privateCommitBytes":  7270400
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30298112,
+                                                                 "workingSetBytes":  116457472,
+                                                                 "privateCommitBytes":  38178816
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1646592,
+                                                                 "workingSetBytes":  10547200,
+                                                                 "privateCommitBytes":  2781184
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  32296960,
+                                                                 "workingSetBytes":  71319552,
+                                                                 "privateCommitBytes":  48713728
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6508544,
+                                                                 "workingSetBytes":  38481920,
+                                                                 "privateCommitBytes":  11497472
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  56147968,
+                                                                 "workingSetBytes":  113995776,
+                                                                 "privateCommitBytes":  66994176
+                                                             },
+                                                             {
+                                                                 "id":  18640,
+                                                                 "parent":  14432,
+                                                                 "role":  "command",
+                                                                 "privateWorkingSetBytes":  74776576,
+                                                                 "workingSetBytes":  117620736,
+                                                                 "privateCommitBytes":  107421696
+                                                             },
+                                                             {
+                                                                 "id":  3720,
+                                                                 "parent":  18640,
+                                                                 "role":  "command",
+                                                                 "privateWorkingSetBytes":  2297856,
+                                                                 "workingSetBytes":  8564736,
+                                                                 "privateCommitBytes":  2752512
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  212303872,
+                                           "workingSetBytes":  537354240,
+                                           "privateCommitBytes":  293076992
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:28:21.3949994+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5632000,
+                                                                 "workingSetBytes":  41684992,
+                                                                 "privateCommitBytes":  7225344
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30298112,
+                                                                 "workingSetBytes":  116457472,
+                                                                 "privateCommitBytes":  38178816
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1646592,
+                                                                 "workingSetBytes":  10547200,
+                                                                 "privateCommitBytes":  2781184
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  32296960,
+                                                                 "workingSetBytes":  71319552,
+                                                                 "privateCommitBytes":  48713728
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6508544,
+                                                                 "workingSetBytes":  38481920,
+                                                                 "privateCommitBytes":  11497472
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  56307712,
+                                                                 "workingSetBytes":  114155520,
+                                                                 "privateCommitBytes":  67198976
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  135380992,
+                                           "workingSetBytes":  411320320,
+                                           "privateCommitBytes":  183062528
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:28:22.5079313+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5615616,
+                                                                 "workingSetBytes":  41668608,
+                                                                 "privateCommitBytes":  7180288
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30298112,
+                                                                 "workingSetBytes":  116457472,
+                                                                 "privateCommitBytes":  38178816
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1646592,
+                                                                 "workingSetBytes":  10547200,
+                                                                 "privateCommitBytes":  2781184
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  32296960,
+                                                                 "workingSetBytes":  71319552,
+                                                                 "privateCommitBytes":  48713728
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6508544,
+                                                                 "workingSetBytes":  38481920,
+                                                                 "privateCommitBytes":  11497472
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  56619008,
+                                                                 "workingSetBytes":  114475008,
+                                                                 "privateCommitBytes":  67604480
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  135675904,
+                                           "workingSetBytes":  411623424,
+                                           "privateCommitBytes":  183422976
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:28:23.6188540+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5632000,
+                                                                 "workingSetBytes":  41684992,
+                                                                 "privateCommitBytes":  7225344
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30298112,
+                                                                 "workingSetBytes":  116457472,
+                                                                 "privateCommitBytes":  38178816
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1646592,
+                                                                 "workingSetBytes":  10547200,
+                                                                 "privateCommitBytes":  2781184
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  32301056,
+                                                                 "workingSetBytes":  71323648,
+                                                                 "privateCommitBytes":  48717824
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6508544,
+                                                                 "workingSetBytes":  38481920,
+                                                                 "privateCommitBytes":  11497472
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  56856576,
+                                                                 "workingSetBytes":  114716672,
+                                                                 "privateCommitBytes":  67977216
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  135933952,
+                                           "workingSetBytes":  411885568,
+                                           "privateCommitBytes":  183844864
+                                       },
+                                       {
+                                           "at":  "2026-11-07T03:28:24.7346926+00:00",
+                                           "processes":  [
+                                                             {
+                                                                 "id":  14432,
+                                                                 "parent":  9356,
+                                                                 "role":  "host",
+                                                                 "privateWorkingSetBytes":  5615616,
+                                                                 "workingSetBytes":  41668608,
+                                                                 "privateCommitBytes":  7180288
+                                                             },
+                                                             {
+                                                                 "id":  22028,
+                                                                 "parent":  14432,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  30298112,
+                                                                 "workingSetBytes":  116457472,
+                                                                 "privateCommitBytes":  38178816
+                                                             },
+                                                             {
+                                                                 "id":  19948,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  1646592,
+                                                                 "workingSetBytes":  10547200,
+                                                                 "privateCommitBytes":  2781184
+                                                             },
+                                                             {
+                                                                 "id":  16132,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  32301056,
+                                                                 "workingSetBytes":  71323648,
+                                                                 "privateCommitBytes":  48717824
+                                                             },
+                                                             {
+                                                                 "id":  20904,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  6508544,
+                                                                 "workingSetBytes":  38481920,
+                                                                 "privateCommitBytes":  11497472
+                                                             },
+                                                             {
+                                                                 "id":  12436,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  2691072,
+                                                                 "workingSetBytes":  18673664,
+                                                                 "privateCommitBytes":  7467008
+                                                             },
+                                                             {
+                                                                 "id":  21476,
+                                                                 "parent":  22028,
+                                                                 "role":  "webview",
+                                                                 "privateWorkingSetBytes":  56827904,
+                                                                 "workingSetBytes":  114688000,
+                                                                 "privateCommitBytes":  67706880
+                                                             }
+                                                         ],
+                                           "privateWorkingSetBytes":  135888896,
+                                           "workingSetBytes":  411840512,
+                                           "privateCommitBytes":  183529472
+                                       }
+                                   ],
+                       "summary":  {
+                                       "privateWorkingSetBytes":  {
+                                                                      "median":  138371072,
+                                                                      "min":  135380992,
+                                                                      "max":  212303872
+                                                                  },
+                                       "workingSetBytes":  {
+                                                               "median":  414302208,
+                                                               "min":  411320320,
+                                                               "max":  537354240
+                                                           },
+                                       "privateCommitBytes":  {
+                                                                  "median":  186281984,
+                                                                  "min":  183062528,
+                                                                  "max":  293076992
+                                                              }
+                                   },
+                       "settlingSeconds":  30
+                   }
+               ],
+    "binaryVersion":  "2.6.0",
+    "sourceCommit":  "50983ef240815880dd8847d5b4026fcdc33afeb1",
+    "method":  {
+                   "restoreTransition":  "second-instance activation handoff",
+                   "units":  "bytes; displayed MiB = bytes / 1048576",
+                   "settings":  "Isolated NetMask settings and WebView2 data, Paper theme, automatic OS mutations disabled; temporary loopback WebView2 debugging enabled only by the harness",
+                   "privateCommit":  "GetProcessMemoryInfo PrivateUsage; committed private bytes, including nonresident pages",
+                   "monitoringMode":  "off",
+                   "intervalSeconds":  1,
+                   "workload":  "Actual local saved networks; no speed test, update download, DNS change, rename, reconnect, registry change, or credential access",
+                   "workingSet":  "GetProcessMemoryInfo WorkingSetSize; shared pages may be counted more than once",
+                   "privateWorkingSet":  "QueryWorkingSet resident pages with the Shared bit unset, summed across the host and descendants",
+                   "samplesPerPhase":  10,
+                   "activitySeconds":  60,
+                   "trayTransition":  "NetMask renderer close-to-tray action; invoked through a temporary loopback-only WebView2 debugging port; built-in tray memory policy active"
+               },
+    "platform":  {
+                     "build":  "22000",
+                     "cpu":  "Intel(R) Core(TM) i5-7200U CPU @ 2.50GHz",
+                     "ramBytes":  8459075584,
+                     "powerStatus":  "2",
+                     "webview2":  "156.0.4314.58",
+                     "os":  "Microsoft Windows 11 Pro"
+                 },
+    "isolatedDataDirectory":  "C:\\Users\\bb201\\AppData\\Local\\Temp\\netmask-memory-cfbdd3db654940bba9b070b5296e655e",
+    "webViewLoaderSha256":  "86545b66cdb0603bc26b626fb9ad610cb6e71f28d468f5ea66df23b03dda96d5"
+}

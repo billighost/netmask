@@ -4,7 +4,9 @@ import type {
   Network, Connection, NetworkDetails, StreamerStatus, SpeedSample, SpeedTestResult,
   UpdateInfo, DownloadProgress, UpdateStatus, AppSettings, ElevationStatus,
   DeviceIdentity, DnsResolverResult, RoamingSettings, PingTelemetry, WifiQrData,
-  CaptivePortalStatus, PlatformCapabilities, NetworkSnapshot, DiagnosticReport, RecoveryAudit, NameConflict
+  CaptivePortalStatus, PlatformCapabilities, NetworkSnapshot, DiagnosticReport, RecoveryAudit, NameConflict,
+  UiSession, HistoryRange, HistorySeries, UsageReport, WeeklyDigest, ContextPrompt, NetworkAlert,
+  NetworkPreset, PresetPreview, PresetApplication, GoingLiveResult, EvidenceReportData
 } from './types'
 
 function createListener<T>(eventName: string) {
@@ -64,6 +66,37 @@ export const tauriApi = {
   onCaptivePortalStatus: createListener<CaptivePortalStatus>('nm:captive-portal-status'),
   onNetworkChanged: createListener<void>('nm:network-changed'),
 
+  getUiSession: (): Promise<UiSession> => invoke('nm_get_ui_session'),
+  saveUiSession: (session: UiSession): Promise<void> => invoke('nm_save_ui_session', { session }),
+
+  getConnectionHistory: (range: HistoryRange, networkGuid?: string): Promise<HistorySeries> =>
+    invoke('nm_get_connection_history', { range, networkGuid }),
+  getNetworkUsage: (): Promise<UsageReport> => invoke('nm_get_network_usage'),
+  setNetworkUsageLimit: (networkGuid: string, limitBytes: number | null): Promise<void> =>
+    invoke('nm_set_network_usage_limit', { networkGuid, limitBytes }),
+  getWeeklyDigest: (): Promise<WeeklyDigest> => invoke('nm_get_weekly_digest'),
+  deleteMonitoringData: (): Promise<void> => invoke('nm_delete_monitoring_data'),
+
+  getContextPrompt: (): Promise<ContextPrompt | null> => invoke('nm_get_context_prompt'),
+  respondContextPrompt: (promptId: string, response: 'accept' | 'dismiss' | 'disable'): Promise<void> =>
+    invoke('nm_respond_context_prompt', { promptId, response }),
+  getNetworkAlert: (): Promise<NetworkAlert | null> => invoke('nm_get_network_alert'),
+  dismissNetworkAlert: (alertId: string): Promise<void> => invoke('nm_dismiss_network_alert', { alertId }),
+  onContextPrompt: createListener<ContextPrompt>('nm:context-prompt'),
+  onNetworkAlert: createListener<NetworkAlert>('nm:network-alert'),
+
+  getNetworkPreset: (networkGuid: string): Promise<NetworkPreset> => invoke('nm_get_network_preset', { networkGuid }),
+  getPendingPresetUndo: (): Promise<PresetApplication | null> => invoke('nm_get_pending_preset_undo'),
+  previewNetworkPreset: (preset: NetworkPreset): Promise<PresetPreview> => invoke('nm_preview_network_preset', { preset }),
+  saveNetworkPreset: (preset: NetworkPreset): Promise<void> => invoke('nm_save_network_preset', { preset }),
+  applyNetworkPreset: (networkGuid: string): Promise<PresetApplication> => invoke('nm_apply_network_preset', { networkGuid }),
+  undoNetworkPreset: (undoToken: string): Promise<void> => invoke('nm_undo_network_preset', { undoToken }),
+  onPresetApplied: createListener<PresetApplication>('nm:preset-applied'),
+
+  runGoingLive: (): Promise<GoingLiveResult> => invoke('nm_run_going_live'),
+  getEvidenceReport: (range: HistoryRange, networkGuid?: string): Promise<EvidenceReportData> =>
+    invoke('nm_get_evidence_report', { range, networkGuid }),
+
   getNetworks: (): Promise<Network[]> => invoke('nm_get_networks'),
   getNetworkSnapshot: (): Promise<NetworkSnapshot> => invoke('nm_get_network_snapshot'),
   getConnection: (): Promise<Connection | null> => invoke('nm_get_connection'),
@@ -106,6 +139,8 @@ export const tauriApi = {
   onMaximizeChange: createListener<boolean>('nm:maximize-change'),
   onVisibility: createListener<boolean>('nm:visibility'),
   onTrayConnectionCheck: createListener<void>('nm:tray-connection-check'),
+  rendererReady: (): Promise<'connection-check' | 'going-live' | null> => invoke('nm_renderer_ready'),
+  onUiIntent: createListener<'connection-check' | 'going-live'>('nm:ui-intent'),
   onSpeed: createListener<SpeedSample>('nm:speed'),
 
   getVersion: (): Promise<string> => invoke('nm_get_version'),

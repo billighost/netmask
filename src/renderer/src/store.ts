@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { Network, Connection, AppSettings, Toast, SpeedSample, ToastType, StreamerStatus, DownloadProgress } from './types'
+import type { Network, Connection, AppSettings, Toast, SpeedSample, ToastType, StreamerStatus, DownloadProgress,
+  CompanionView, JournalTab, HistoryRange, UiSession, ContextPrompt, NetworkAlert } from './types'
 import { errorMessage, visibleNetworks, nextSelection } from './network-state'
 import { createSettingsQueue } from './settings-queue'
 import { shortcutEquals } from './keyboard-shortcuts'
@@ -7,6 +8,7 @@ import { shortcutEquals } from './keyboard-shortcuts'
 // Single persistent Float32Array(60) ring buffer for ultra-low GC pressure
 const speedRingBuffer = new Float32Array(60)
 let bssidPeekTimer: ReturnType<typeof setTimeout> | null = null
+let uiSessionTimer: ReturnType<typeof setTimeout> | null = null
 
 export function getSpeedRingBuffer(): Float32Array {
   return speedRingBuffer
@@ -44,6 +46,9 @@ interface Store {
   streamerBusy: boolean
   speedTesting: boolean
   selectedGuid: string | null
+  activeView: CompanionView
+  journalTab: JournalTab
+  historyRange: HistoryRange
   settings: AppSettings
   toasts: Toast[]
   speed: SpeedSample
@@ -79,12 +84,23 @@ interface Store {
   dnsModalOpen: boolean
   privacyCloakModalOpen: boolean
   roamingModalOpen: boolean
+  goingLiveOpen: boolean
+  presetModalGuid: string | null
+  evidenceReportOpen: boolean
+  contextPrompt: ContextPrompt | null
+  networkAlert: NetworkAlert | null
+  presetUndo: { token: string; summary: string } | null
 
   // Actions
   setNetworks: (nets: Network[]) => void
   setNetworkSearch: (search: string) => void
   setConnection: (conn: Connection | null) => void
   selectNetwork: (guid: string | null) => void
+  setActiveView: (view: CompanionView) => void
+  setJournalTab: (tab: JournalTab) => void
+  setHistoryRange: (range: HistoryRange) => void
+  initializeUiSession: (session: UiSession) => void
+  saveUiSession: (mainScrollTop?: number) => void
   setSettings: (s: AppSettings) => void
   updateSetting: <K extends keyof AppSettings>(key: K, val: AppSettings[K]) => Promise<boolean>
   updateShortcut: (id: string, key: string) => Promise<boolean>
@@ -117,6 +133,12 @@ interface Store {
   setDnsModalOpen: (open: boolean) => void
   setPrivacyCloakModalOpen: (open: boolean) => void
   setRoamingModalOpen: (open: boolean) => void
+  setGoingLiveOpen: (open: boolean) => void
+  setPresetModalGuid: (guid: string | null) => void
+  setEvidenceReportOpen: (open: boolean) => void
+  setContextPrompt: (prompt: ContextPrompt | null) => void
+  setNetworkAlert: (alert: NetworkAlert | null) => void
+  setPresetUndo: (undo: { token: string; summary: string } | null) => void
 }
 
 let toastSeq = 0
@@ -129,13 +151,21 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: 'light',
   showEthernet: true,
   ultraLowMemory: false,
-  autoCloakStreamer: true,
+  autoCloakStreamer: false,
   streamerMaskName: 'Private network',
   customBroadcastApps: [],
   sharingTimerMinutes: 30,
   bssidCloaking: true,
   bssidMaskMode: 'partial',
   silentElevation: true,
+  monitoringEnabled: false,
+  monitoringPaused: false,
+  historyRetentionDays: 30,
+  usageTrackingEnabled: false,
+  contextPromptsEnabled: false,
+  networkChangeAlerts: false,
+  behaviorChangeAlerts: false,
+  usageLimitAlerts: false,
   shortcuts: { ...DEFAULT_SHORTCUTS }
 }
 
@@ -151,6 +181,9 @@ export const useStore = create<Store>((set, get) => ({
   streamerBusy: false,
   speedTesting: false,
   selectedGuid: null,
+  activeView: 'overview',
+  journalTab: 'history',
+  historyRange: '24h',
   settings: DEFAULT_SETTINGS,
   toasts: [],
   speed: { downMBps: 0, upMBps: 0, downKbps: 0, upKbps: 0 },
@@ -184,11 +217,25 @@ export const useStore = create<Store>((set, get) => ({
   dnsModalOpen: false,
   privacyCloakModalOpen: false,
   roamingModalOpen: false,
+  goingLiveOpen: false,
+  presetModalGuid: null,
+  evidenceReportOpen: false,
+  contextPrompt: null,
+  networkAlert: null,
+  presetUndo: null,
 
   setNetworks: (nets) => set({ networks: nets }),
   setNetworkSearch: (networkSearch) => set(state => ({ networkSearch, selectedGuid: nextSelection(visibleNetworks(state.networks, state.settings, networkSearch, state.streamerStatus.isCloaked), state.selectedGuid) })),
   setConnection: (conn) => set({ connection: conn }),
-  selectNetwork: (guid) => set({ selectedGuid: guid }),
+  selectNetwork: (guid) => { set({ selectedGuid: guid }); scheduleUiSession() },
+  setActiveView: (activeView) => { set({ activeView }); scheduleUiSession() },
+  setJournalTab: (journalTab) => { set({ journalTab }); scheduleUiSession() },
+  setHistoryRange: (historyRange) => { set({ historyRange }); scheduleUiSession() },
+  initializeUiSession: (session) => set({
+    activeView: session.activeView || 'overview', journalTab: session.journalTab || 'history',
+    historyRange: session.historyRange || '24h', selectedGuid: session.selectedGuid
+  }),
+  saveUiSession: (mainScrollTop = 0) => persistUiSession(mainScrollTop),
   setSettings: (s) => set({ settings: settingWrites.initialize({
     ...DEFAULT_SETTINGS, ...s, shortcuts: { ...DEFAULT_SHORTCUTS, ...(s?.shortcuts || {}) }
   }) }),
@@ -287,6 +334,12 @@ export const useStore = create<Store>((set, get) => ({
   setDnsModalOpen: (open) => set(state => ({ dnsModalOpen: open, contextMenu: open ? null : state.contextMenu })),
   setPrivacyCloakModalOpen: (open) => set(state => ({ privacyCloakModalOpen: open, contextMenu: open ? null : state.contextMenu })),
   setRoamingModalOpen: (open) => set(state => ({ roamingModalOpen: open, contextMenu: open ? null : state.contextMenu })),
+  setGoingLiveOpen: (open) => set(state => ({ goingLiveOpen: open, contextMenu: open ? null : state.contextMenu })),
+  setPresetModalGuid: (guid) => set(state => ({ presetModalGuid: guid, contextMenu: guid ? null : state.contextMenu })),
+  setEvidenceReportOpen: (open) => set(state => ({ evidenceReportOpen: open, contextMenu: open ? null : state.contextMenu })),
+  setContextPrompt: (contextPrompt) => set({ contextPrompt }),
+  setNetworkAlert: (networkAlert) => set({ networkAlert }),
+  setPresetUndo: (presetUndo) => set({ presetUndo }),
 
   peekBssid: () => {
     if (bssidPeekTimer) clearTimeout(bssidPeekTimer)
@@ -309,5 +362,21 @@ const settingWrites = createSettingsQueue(DEFAULT_SETTINGS,
   },
   error => useStore.getState().addToast(errorMessage(error, 'The setting could not be saved'), 'error')
 )
+
+function currentUiSession(mainScrollTop = typeof document === 'undefined' ? 0 : document.getElementById('main-content')?.scrollTop ?? 0): UiSession {
+  const state = useStore.getState()
+  return { activeView: state.activeView, journalTab: state.journalTab, historyRange: state.historyRange,
+    selectedGuid: state.selectedGuid, mainScrollTop }
+}
+
+function persistUiSession(mainScrollTop?: number): void {
+  if (typeof window === 'undefined' || typeof window.nm?.saveUiSession !== 'function') return
+  void window.nm.saveUiSession(currentUiSession(mainScrollTop)).catch(() => {})
+}
+
+function scheduleUiSession(): void {
+  if (uiSessionTimer) clearTimeout(uiSessionTimer)
+  uiSessionTimer = setTimeout(() => { uiSessionTimer = null; persistUiSession() }, 250)
+}
 
 

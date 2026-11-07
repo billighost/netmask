@@ -24,7 +24,11 @@ export const TitleBar: React.FC = () => {
     try { setIsMax(await window.nm.maximize()) }
     catch (error) { useStore.getState().addToast(errorMessage(error), 'error') }
   }
-  const handleClose = () => window.nm.close().catch(error => useStore.getState().addToast(errorMessage(error), 'error'))
+  const handleClose = async () => {
+    const state = useStore.getState()
+    state.saveUiSession(document.getElementById('main-content')?.scrollTop || 0)
+    try { await window.nm.close() } catch (error) { state.addToast(errorMessage(error), 'error') }
+  }
 
   return (
     <div className={styles.bar} id="title-bar">
@@ -70,7 +74,7 @@ export const TitleBar: React.FC = () => {
           className={`${styles.ctrlBtn} ${styles.closeBtn}`}
           aria-label={closeToTray ? 'Close to tray' : 'Quit NetMask'}
           onMouseDown={e => e.stopPropagation()}
-          onClick={handleClose}
+          onClick={() => void handleClose()}
         >
           <WindowCloseIcon size={12} />
         </button>

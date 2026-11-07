@@ -12,6 +12,18 @@ use std::time::Duration;
 static CONNECTION_KEY: Mutex<Option<Option<String>>> = Mutex::new(None);
 static CONNECTION_GENERATION: AtomicU64 = AtomicU64::new(0);
 
+#[derive(Debug, Clone)]
+pub struct ActiveNetworkContext {
+    pub network_id: String,
+    pub display_label: String,
+    pub network_type: String,
+    pub interface_id: String,
+    pub interface_name: Option<String>,
+    pub counter_interface_id: Option<String>,
+    pub access_point_fingerprint: Option<String>,
+    pub signal_dbm: Option<i32>,
+}
+
 pub fn connection_generation() -> u64 {
     CONNECTION_GENERATION.load(Ordering::SeqCst)
 }
@@ -227,6 +239,81 @@ pub fn current_connection_signature() -> Result<Option<String>, String> {
         .to_string()
     }))
 }
+
+pub fn active_network_context() -> Result<Option<ActiveNetworkContext>, String> {
+    #[cfg(target_os = "linux")]
+    {
+        linux::active_network_context()
+    }
+    #[cfg(target_os = "macos")]
+    {
+        macos::active_network_context()
+    }
+    #[cfg(windows)]
+    {
+        let snapshot = get_network_snapshot(&settings::read_backup()?)?;
+        let Some(network) = snapshot.networks.iter().find(|network| network.live) else {
+            return Ok(None);
+        };
+        let connection = snapshot
+            .connection
+            .as_ref()
+            .filter(|connection| connection.network_guid.as_deref() == Some(network.guid.as_str()));
+        let adapter = connection
+            .and_then(|connection| connection.interface_guid.clone())
+            .or_else(|| {
+                nlm::profiles().ok()?.into_iter().find_map(|row| {
+                    (row.live && row.guid.eq_ignore_ascii_case(&network.guid))
+                        .then(|| row.adapters.into_iter().next())
+                        .flatten()
+                })
+            });
+        let Some(adapter) = adapter else {
+            return Ok(None);
+        };
+        Ok(Some(ActiveNetworkContext {
+            network_id: settings::fingerprint_local("network", &network.guid)?,
+            display_label: network.name.clone(),
+            network_type: network.network_type.clone(),
+            interface_id: settings::fingerprint_local("interface", &adapter)?,
+            interface_name: connection.and_then(|value| value.interface_name.clone()),
+            counter_interface_id: Some(adapter),
+            access_point_fingerprint: connection
+                .and_then(|value| value.bssid.as_deref())
+                .map(|value| settings::fingerprint_local("access-point", value))
+                .transpose()?,
+            signal_dbm: connection.and_then(|value| value.signal_dbm),
+        }))
+    }
+}
+
+pub fn boot_identity() -> String {
+    #[cfg(target_os = "linux")]
+    {
+        return std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
+            .map(|value| value.trim().to_owned())
+            .unwrap_or_else(|_| "linux-unknown".into());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return system::run("sysctl", &["-n", "kern.boottime"])
+            .map(|value| format!("macos:{}", value.trim()))
+            .unwrap_or_else(|_| "macos-unknown".into());
+    }
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetTickCount64() -> u64;
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        let boot_minute = now.saturating_sub(unsafe { GetTickCount64() }) / 60_000;
+        format!("windows-{boot_minute}")
+    }
+}
 pub fn get_network_snapshot(backup: &HashMap<String, String>) -> Result<NetworkSnapshot, String> {
     let (mut connection, connection_error) = match raw_connection() {
         Ok(connection) => (connection, None),
@@ -240,18 +327,7 @@ pub fn get_network_snapshot(backup: &HashMap<String, String>) -> Result<NetworkS
     let mut networks = macos::get_networks(backup, connection.as_ref())?;
     networks.sort_by_cached_key(|network| (!network.live, network.name.to_lowercase()));
     if let Some(current) = connection.as_mut() {
-        if let Some(network) = networks.iter().find(|network| {
-            network.live
-                && network.network_type == "wifi"
-                && (network
-                    .profile
-                    .as_ref()
-                    .is_some_and(|p| p == &current.profile)
-                    || network.original_name == current.ssid)
-        }) {
-            current.name = network.name.clone();
-            current.network_guid = Some(network.guid.clone());
-        }
+        apply_active_display_network(&networks, current);
     }
     observe_connection(connection.as_ref());
     Ok(NetworkSnapshot {
@@ -259,6 +335,43 @@ pub fn get_network_snapshot(backup: &HashMap<String, String>) -> Result<NetworkS
         connection,
         connection_error,
     })
+}
+
+fn apply_active_display_network(networks: &[Network], current: &mut Connection) {
+    if let Some(network) = active_display_network(networks, current) {
+        current.name = network.name.clone();
+        current.network_guid = Some(network.guid.clone());
+        if let Some(profile) = &network.profile {
+            // Windows keeps the pre-rename WLAN profile name in the live
+            // connection attributes until reconnect. The saved profile is
+            // already renamed and uniquely tied to this live row, so use its
+            // current name locally without disrupting the connection.
+            current.profile = profile.clone();
+        }
+    }
+}
+
+fn active_display_network<'a>(
+    networks: &'a [Network],
+    current: &Connection,
+) -> Option<&'a Network> {
+    let mut live_wifi = networks
+        .iter()
+        .filter(|network| network.live && network.network_type == "wifi");
+    let first = live_wifi.next()?;
+    let second = live_wifi.next();
+    networks
+        .iter()
+        .find(|network| {
+            network.live
+                && network.network_type == "wifi"
+                && (network
+                    .profile
+                    .as_ref()
+                    .is_some_and(|profile| profile == &current.profile)
+                    || network.original_name == current.ssid)
+        })
+        .or_else(|| second.is_none().then_some(first))
 }
 pub fn get_current_connection() -> Result<Option<Connection>, String> {
     let snapshot = get_network_snapshot(&settings::read_backup()?)?;
@@ -618,6 +731,70 @@ pub fn set_launch_on_startup(enabled: bool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_connection(profile: &str, ssid: &str) -> Connection {
+        Connection {
+            ssid: ssid.into(),
+            profile: profile.into(),
+            signal: 75,
+            signal_dbm: None,
+            snr: None,
+            channel: None,
+            frequency: None,
+            band: "Wi-Fi".into(),
+            generation: None,
+            radio_type: None,
+            bssid: None,
+            name: profile.into(),
+            rx_rate_mbps: None,
+            tx_rate_mbps: None,
+            network_guid: None,
+            interface_name: None,
+            interface_guid: None,
+            auth: None,
+        }
+    }
+
+    fn test_network(guid: &str, name: &str, profile: &str, live: bool) -> Network {
+        Network {
+            guid: guid.into(),
+            name: name.into(),
+            original_name: "Original local label".into(),
+            renamed: true,
+            name_sync_pending: false,
+            live,
+            network_type: "wifi".into(),
+            profile: Some(profile.into()),
+            can_rename: true,
+        }
+    }
+
+    #[test]
+    fn unique_live_wifi_overlays_a_stale_windows_profile_after_rename() {
+        let networks = vec![
+            test_network("saved", "Call studio", "Call studio", true),
+            test_network("other", "Other network", "Other network", false),
+        ];
+        let mut connection = test_connection("Old profile name", "Router SSID");
+        apply_active_display_network(&networks, &mut connection);
+        assert_eq!(connection.name, "Call studio");
+        assert_eq!(connection.profile, "Call studio");
+        assert_eq!(connection.network_guid.as_deref(), Some("saved"));
+    }
+
+    #[test]
+    fn ambiguous_live_wifi_does_not_guess_after_a_profile_rename() {
+        let networks = vec![
+            test_network("one", "First", "First", true),
+            test_network("two", "Second", "Second", true),
+        ];
+        let mut connection = test_connection("Old profile name", "Router SSID");
+        apply_active_display_network(&networks, &mut connection);
+        assert_eq!(connection.name, "Old profile name");
+        assert_eq!(connection.profile, "Old profile name");
+        assert!(connection.network_guid.is_none());
+    }
+
     #[test]
     fn radio_bands_do_not_confuse_overlapping_6ghz_channels() {
         assert_eq!(get_channel_frequency(37, "6 GHz"), "6.135 GHz (Ch 37)");

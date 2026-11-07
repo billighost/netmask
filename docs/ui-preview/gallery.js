@@ -1,9 +1,9 @@
 (() => {
   const studies = {
-    fieldnotes: { name: 'Fieldnotes', number: '01', description: 'A utility with the warmth of a well-made notebook. Green ink, paper surfaces, generous typography, and fine rules instead of a wall of cards.', layout: 'Connection → profiles → name editor', signature: 'Serif network names. Quiet green actions.', width: 440 },
-    switchboard: { name: 'Switchboard', number: '02', description: 'A compact instrument panel that earns its detail. A dark blue shell, a readable live meter, a direct name editor, and orderly numbered profiles.', layout: 'Live meter → name editor → profile table', signature: 'A working instrument. Mint readouts. Square controls.', width: 440 },
-    tide: { name: 'Tide', number: '03', description: 'A bright everyday utility with a clear blue connection surface. Friendly spacing and a simple path from picking a network to naming it.', layout: 'Blue connection summary → profiles → editor', signature: 'Cobalt accents. Soft edges. Familiar controls.', width: 440 },
-    mono: { name: 'Mono', number: '04', description: 'A sharper, more typographic direction. Big network names, orange annotations, and a compact editor paired with an uncluttered profile index.', layout: 'Connection → editor → profile index', signature: 'Strong type. Fine black rules. A rail in wider windows.', width: 520 }
+    fieldnotes: { name: 'Fieldnotes', number: '01', description: 'The selected local connection companion: warm paper, green ink, measured findings, honest gaps, and calm deliberate actions.', layout: 'Connection → journal → context actions → saved networks', signature: 'Serif findings. Quiet green actions. Honest missing states.', width: 440 },
+    switchboard: { name: 'Switchboard', number: '02', description: 'A reference instrument panel for history, usage, Going live and evidence, with a dark shell and orderly numbered controls.', layout: 'Live state → journal tools → saved networks', signature: 'Mint readouts. Square controls. Reference only.', width: 440 },
+    tide: { name: 'Tide', number: '03', description: 'A reference bright utility with a clear blue connection surface and friendly paths into history, readiness and saved-network context.', layout: 'Connection summary → journal → network context', signature: 'Cobalt accents. Soft edges. Reference only.', width: 440 },
+    mono: { name: 'Mono', number: '04', description: 'A reference typographic direction where measured history, deliberate actions, and saved networks share an uncluttered index.', layout: 'Connection → deliberate actions → network index', signature: 'Strong type. Fine black rules. Reference only.', width: 520 }
   }
   const device = document.getElementById('device')
   const frame = document.getElementById('app-preview')

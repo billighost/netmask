@@ -5,6 +5,7 @@
 .layout > div { min-width: 0; flex-shrink: 0; }
 .footnote { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-top: 22px; color: var(--text-muted); font-size: 9px; }
 .footnote button { font-size: 9px; color: var(--text-muted); text-decoration: underline; text-underline-offset: 3px; }
+.loading { padding: 24px 0; color: var(--text-secondary); font-size: 11px; }
 @media (min-width: 800px) { .main { padding: 30px; } .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "connection profiles" "editor privacy" "tools tools"; align-items: start; gap: 28px 36px; } .connection { grid-area: connection; } .profiles { grid-area: profiles; } .editor { grid-area: editor; } .privacy { grid-area: privacy; } .tools { grid-area: tools; } }
 @media (max-width: 360px) { .main { padding: 18px 14px; } .layout { gap: 20px; } }
 @media (max-height: 320px) { .main { padding-top: 15px; } }

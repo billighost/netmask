@@ -1,7 +1,7 @@
 const { chromium } = require('playwright')
 
 const target = process.argv[2] || 'http://127.0.0.1:4174/og-card.html'
-const output = process.argv[3] || 'website/public/og/netmask-v2.6.0.png'
+const output = process.argv[3] || 'website/public/og/netmask-v2.7.0.png'
 
 ;(async () => {
   const browser = await chromium.launch({ headless: true })

@@ -1,15 +1,15 @@
 import React, { useEffect, useRef } from 'react'
 import { shallow } from 'zustand/shallow'
 import { useStore } from '../../store'
-import { CopyIcon, RestoreIcon, InfoIcon, ShieldIcon, QrCodeIcon } from '../../icons'
+import { CopyIcon, RestoreIcon, InfoIcon, ShieldIcon, QrCodeIcon, SparkleIcon } from '../../icons'
 import { copyText, restoreNetworkDisplayName, toggleStreamer } from '../../network-actions'
 import { displayNetworkName, errorMessage, maskBssid, sharingModeActive } from '../../network-state'
 import styles from './ContextMenu.module.css'
 
 export const ContextMenu: React.FC = () => {
-  const { contextMenu, networks, connection, settings, bssidPeek, streamerStatus, capabilities } = useStore(state => ({
+  const { contextMenu, networks, connection, settings, bssidPeek, streamerStatus, streamerBusy, capabilities } = useStore(state => ({
     contextMenu: state.contextMenu, networks: state.networks, connection: state.connection, settings: state.settings,
-    bssidPeek: state.bssidPeek, streamerStatus: state.streamerStatus, capabilities: state.capabilities
+    bssidPeek: state.bssidPeek, streamerStatus: state.streamerStatus, streamerBusy: state.streamerBusy, capabilities: state.capabilities
   }), shallow)
   const ref = useRef<HTMLDivElement>(null)
   const hide = () => useStore.getState().setContextMenu(null)
@@ -34,7 +34,7 @@ export const ContextMenu: React.FC = () => {
   const net = networks.find(network => network.guid === contextMenu.guid)
   if (!net) return null
   const netIndex = Math.max(0, networks.findIndex(network => network.guid === net.guid))
-  const privateNames = sharingModeActive(streamerStatus, useStore.getState().streamerBusy)
+  const privateNames = sharingModeActive(streamerStatus, streamerBusy)
   const displayName = displayNetworkName(net, netIndex, privateNames, settings.streamerMaskName)
   const state = useStore.getState()
   const current = connection?.networkGuid === net.guid ? connection : null
@@ -45,6 +45,7 @@ export const ContextMenu: React.FC = () => {
       label: 'Share Wi-Fi', icon: <QrCodeIcon size={13} />, action: () => state.setWifiShareModalProfile(profile)
     }] : []),
     { label: 'Network details', icon: <InfoIcon size={13} />, action: () => state.setDetailsModalGuid(net.guid) },
+    ...(!privateNames ? [{ label: 'Network preset', icon: <SparkleIcon size={13} />, action: () => state.setPresetModalGuid(net.guid) }] : []),
     ...(current && capabilities?.networkRename !== false && net.canRename !== false ? [{
       label: streamerStatus.isCloaked ? 'Restore display name' : 'Mask display name',
       icon: <ShieldIcon size={13} />, action: toggleStreamer

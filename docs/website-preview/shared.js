@@ -24,46 +24,12 @@
     root.style.setProperty('--progress', max > 0 ? Math.min(1, scrollY / max) : 0)
   }
 
-  const formatCount = value => {
-    if (!Number.isFinite(value)) return '—'
-    if (value < 10000) return new Intl.NumberFormat().format(value)
-    return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value)
-  }
-
-  const loadGithubStats = async () => {
-    const status = document.querySelectorAll('[data-stats-status]')
-    try {
-      const headers = { Accept: 'application/vnd.github+json' }
-      const [repoResponse, releaseResponse] = await Promise.all([
-        fetch('https://api.github.com/repos/billighost/netmask', { headers }),
-        fetch('https://api.github.com/repos/billighost/netmask/releases?per_page=100', { headers })
-      ])
-      if (!repoResponse.ok || !releaseResponse.ok) throw new Error('GitHub response unavailable')
-      const [repo, releases] = await Promise.all([repoResponse.json(), releaseResponse.json()])
-      const stats = {
-        stars: repo.stargazers_count,
-        forks: repo.forks_count,
-        releases: releases.length,
-        downloads: releases.reduce((total, release) => total + release.assets.reduce((sum, asset) => sum + asset.download_count, 0), 0)
-      }
-      Object.entries(stats).forEach(([name, value]) => {
-        document.querySelectorAll(`[data-stat="${name}"]`).forEach(node => {
-          node.textContent = formatCount(value)
-          node.title = new Intl.NumberFormat().format(value)
-        })
-      })
-      status.forEach(node => { node.textContent = 'Live public counts from GitHub' })
-    } catch {
-      status.forEach(node => { node.innerHTML = '<a href="https://github.com/billighost/netmask">Live counts unavailable · view GitHub ↗</a>' })
-    }
-  }
-
   const setupPlatforms = () => {
     const tabs = [...document.querySelectorAll('[data-platform-tab]')]
     const panels = [...document.querySelectorAll('[data-platform-panel]')]
     if (!tabs.length) return
     const ua = navigator.userAgent.toLowerCase()
-    const detected = /mac|iphone|ipad/.test(ua) ? 'macos' : /linux|x11/.test(ua) && !/android/.test(ua) ? 'linux' : 'windows'
+    const detected = /android/.test(ua) ? null : /mac|iphone|ipad/.test(ua) ? 'macos' : /linux|x11/.test(ua) ? 'linux' : 'windows'
     const select = platform => {
       tabs.forEach(tab => {
         const active = tab.dataset.platformTab === platform
@@ -85,10 +51,10 @@
     const copy = document.querySelector('[data-journey-copy]')
     const count = document.querySelector('[data-journey-count]')
     const chapters = [
-      ['A flat label enters.', 'At first, it is only a name on a screen—technical, distant, easy to ignore.'],
-      ['The object gains depth.', 'NetMask reveals what the label means, where it lives, and which actions are actually local.'],
-      ['It finds the rails.', 'A familiar name, readable measurements and careful privacy controls form one connected route.'],
-      ['The original stays home.', 'The journey ends with a label you recognise and a restoration path that never disappeared.']
+      ['A sample enters.', 'NetMask records a measured moment on the active saved network, or marks the moment missing when it cannot measure.'],
+      ['The pattern gains context.', 'Drops, latency, jitter, switches and observed data use stay tied to a network and time.'],
+      ['The right action appears.', 'Going live, presets, digests and calm alerts remain opt-in, explained and reversible.'],
+      ['Evidence leaves carefully.', 'Provider reports include measurements only, redact identifiers by default and never contain Wi-Fi passwords.']
     ]
     let lastChapter = -1
     const update = () => {
@@ -126,5 +92,4 @@
   updateProgress()
   setupPlatforms()
   setupTrainJourney()
-  loadGithubStats()
 })()

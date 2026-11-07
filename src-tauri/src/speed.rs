@@ -108,6 +108,77 @@ fn read_counters() -> Result<Counters, String> {
     })
 }
 
+#[cfg(windows)]
+pub fn read_interface_counters(
+    interface_id: Option<&str>,
+    interface_name: Option<&str>,
+) -> Result<Option<Counters>, String> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        FreeMibTable, GetIfTable2, MIB_IF_TABLE2,
+    };
+    let mut pointer: *mut MIB_IF_TABLE2 = std::ptr::null_mut();
+    let code = unsafe { GetIfTable2(&mut pointer) };
+    if code != 0 || pointer.is_null() {
+        return Err(format!("Windows network counters are unavailable ({code})"));
+    }
+    struct Table(*mut MIB_IF_TABLE2);
+    impl Drop for Table {
+        fn drop(&mut self) {
+            unsafe { FreeMibTable(self.0.cast()) }
+        }
+    }
+    let table = Table(pointer);
+    let count = unsafe { (*table.0).NumEntries as usize };
+    if count > 10000 {
+        return Err("Windows returned too many interfaces".into());
+    }
+    let normalize = |value: &str| value.trim_matches(['{', '}']).to_ascii_lowercase();
+    let expected_id = interface_id.map(normalize);
+    let expected_name = interface_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let rows = unsafe { std::slice::from_raw_parts((*table.0).Table.as_ptr(), count) };
+    for row in rows.iter().filter(|row| matches!(row.Type, 6 | 71)) {
+        let guid = format!(
+            "{:08x}-{:04x}-{:04x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+            row.InterfaceGuid.data1,
+            row.InterfaceGuid.data2,
+            row.InterfaceGuid.data3,
+            row.InterfaceGuid.data4[0],
+            row.InterfaceGuid.data4[1],
+            row.InterfaceGuid.data4[2],
+            row.InterfaceGuid.data4[3],
+            row.InterfaceGuid.data4[4],
+            row.InterfaceGuid.data4[5],
+            row.InterfaceGuid.data4[6],
+            row.InterfaceGuid.data4[7]
+        );
+        let wide = |value: &[u16]| {
+            let end = value
+                .iter()
+                .position(|item| *item == 0)
+                .unwrap_or(value.len());
+            String::from_utf16_lossy(&value[..end])
+        };
+        let alias = wide(&row.Alias);
+        let description = wide(&row.Description);
+        let id_match = expected_id
+            .as_ref()
+            .is_some_and(|expected| *expected == guid);
+        let name_match = expected_name.is_some_and(|expected| {
+            alias.eq_ignore_ascii_case(expected) || description.eq_ignore_ascii_case(expected)
+        });
+        if id_match || name_match {
+            return Ok(Some(Counters {
+                identity: format!("windows:{guid}:{}", row.InterfaceIndex),
+                received: row.InOctets,
+                sent: row.OutOctets,
+            }));
+        }
+    }
+    Ok(None)
+}
+
 pub fn parse_linux_counters(
     output: &str,
     include: impl Fn(&str) -> bool,
@@ -157,6 +228,23 @@ fn read_counters() -> Result<Counters, String> {
             .join("device")
             .exists()
     })
+}
+
+#[cfg(target_os = "linux")]
+pub fn read_interface_counters(
+    _interface_id: Option<&str>,
+    interface_name: Option<&str>,
+) -> Result<Option<Counters>, String> {
+    let Some(name) = interface_name
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    else {
+        return Ok(None);
+    };
+    let output = std::fs::read_to_string("/proc/net/dev")
+        .map_err(|error| format!("Network counters are unavailable: {error}"))?;
+    let counters = parse_linux_counters(&output, |candidate| candidate == name)?;
+    Ok((!counters.identity.is_empty()).then_some(counters))
 }
 
 pub fn parse_macos_counters(output: &str) -> Result<Counters, String> {
@@ -209,9 +297,65 @@ pub fn parse_macos_counters(output: &str) -> Result<Counters, String> {
     })
 }
 
+pub fn parse_macos_interface_counters(
+    output: &str,
+    interface: &str,
+) -> Result<Option<Counters>, String> {
+    let mut lines = output.lines();
+    let header: Vec<&str> = lines
+        .next()
+        .ok_or("Network counters are unavailable")?
+        .split_whitespace()
+        .collect();
+    let receive = header
+        .iter()
+        .position(|value| *value == "Ibytes")
+        .ok_or("Receive counters are unavailable")?;
+    let transmit = header
+        .iter()
+        .position(|value| *value == "Obytes")
+        .ok_or("Send counters are unavailable")?;
+    for line in lines {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        if fields.len() <= receive.max(transmit) || fields[0].trim_end_matches('*') != interface {
+            continue;
+        }
+        if !fields
+            .get(2)
+            .is_some_and(|value| value.starts_with("<Link#"))
+        {
+            continue;
+        }
+        return Ok(Some(Counters {
+            identity: format!("macos:{interface}"),
+            received: fields[receive]
+                .parse()
+                .map_err(|_| "Invalid receive counter")?,
+            sent: fields[transmit]
+                .parse()
+                .map_err(|_| "Invalid send counter")?,
+        }));
+    }
+    Ok(None)
+}
+
 #[cfg(target_os = "macos")]
 fn read_counters() -> Result<Counters, String> {
     parse_macos_counters(&crate::system::run("netstat", &["-ibn"])?)
+}
+
+#[cfg(target_os = "macos")]
+pub fn read_interface_counters(
+    _interface_id: Option<&str>,
+    interface_name: Option<&str>,
+) -> Result<Option<Counters>, String> {
+    let Some(interface) = interface_name
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    else {
+        return Ok(None);
+    };
+    parse_macos_interface_counters(&crate::system::run("netstat", &["-ibn"])?, interface)
 }
 
 pub fn get_speed_sample() -> Result<SpeedSample, String> {

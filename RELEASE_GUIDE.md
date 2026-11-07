@@ -14,7 +14,9 @@ npm run version:set -- X.Y.Z
 
 The helper updates `package.json`, `package-lock.json`, `src-tauri/tauri.conf.json`, both Rust package manifests, and the two workspace package versions in `Cargo.lock`.
 
-Update the latest version and release-page download links in `README.md`. Write `docs/releases/vX.Y.Z.md` with concrete changes, intended architectures, direct downloads, and remaining platform limitations. Publication removes download rows for unavailable platforms and reports the actual installer availability. Preserve the maintainer attribution and license.
+Start from `docs/releases/UNRELEASED.md`, then copy it to `docs/releases/vX.Y.Z.md` after the version is chosen. Update the latest version and release-page download links in `README.md`, the production website entry pages, manifest metadata, and the selected README preview. Notes must distinguish implemented behavior, measured performance, intended architectures, and remaining platform limitations. Publication removes download rows for unavailable platforms and reports actual installer availability. Preserve the maintainer attribution and license.
+
+For a companion release, reconcile `SECURITY.md`, `BENCHMARKS.md`, `docs/ARCHITECTURE.md`, `docs/AUDIT.md`, and `docs/PRODUCT_STRATEGY.md` with the exact code. Do not reuse an old benchmark number as a new result. Any tray-memory, CPU, disk, battery, startup, or package-size claim requires a named metric, production build, raw output, exact commit, and limitations.
 
 The title bar, settings, tray, and updater read the Rust package version at runtime. Do not hardcode the release version into UI components.
 
@@ -27,9 +29,11 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run site:typecheck
+npm run site:build
 ```
 
-For interface changes, also run `npm run test:ui` after the frontend build. The browser fixture checks the implemented app and design studies at small and large sizes without changing a real network. It uses installed Edge on Windows or Playwright Chromium; `npx playwright install chromium` installs the latter when needed. CI runs this check and uploads screenshots.
+For interface changes, also run `npm run test:ui` after the frontend build. The browser fixture checks the implemented app and design studies at small and large sizes without changing a real network. It uses installed Edge on Windows or Playwright Chromium; `npx playwright install chromium` installs the latter when needed. CI runs this check and uploads screenshots. For website changes, run `npm run site:preview -- --host 127.0.0.1 --port 4174` and, in another terminal, `node scripts/verify-site.cjs`.
 
 Then verify the native workspace:
 
@@ -44,6 +48,10 @@ Fix failures before committing or pushing. The hook scanner detects unsafe hook 
 A missing system linker, webview development package, or platform runtime is an environment limitation, not a passing check. Document it and obtain successful workspace checks and tests on the corresponding CI runner before merging. Native tests cover both the core and desktop host; three subprocess fixtures are intentionally ignored in direct enumeration and invoked by a deadline test. OS permission prompts, Wi-Fi reconnects, DNS mutations, and driver settings need a separate manual check on real hardware.
 
 For native changes, also build the host installers with `npm run dist:win`, `npm run dist:mac`, or `npm run dist:linux` where the relevant build toolchain is installed. The macOS command retries only the known transient case where Tauri identifies its temporary DMG device but `hdiutil` reports that exact device as busy during ejection; unrelated failures still stop immediately. Each published platform must pass its tests and installer compilation. A confirmed GitHub runner-allocation failure may leave that platform unavailable while verified platforms release.
+
+Companion changes additionally require fixture coverage for disabled-by-default migration, pause/resume gaps across restart, retention and row caps, complete monitoring deletion including SQLite sidecars, counter resets, boot/interface/network switches, corrupted or newer observation schemas, insufficient digest evidence, DNS suggestion gates, alert confirmation/cooldowns, preset preview/apply/undo, Going live unavailable checks, provider-report redaction, and tray destruction/restoration of UI state.
+
+Before claiming a tray-memory improvement, build and measure both the reviewed pre-change commit and release candidate on the same Windows host with `npm run benchmark:memory`. Confirm that opted-in native history and usage continue while the webview is hidden, that the same renderer state returns, and that the Windows-only bounded trim passes do not interrupt reopening. Append the real medians, ranges, hashes, and raw report links to `BENCHMARKS.md`; if the environment cannot provide the comparison, omit the claim and record the missing verification.
 
 ## 3. Create and push the release branch
 
@@ -143,6 +151,8 @@ node scripts/github-release.cjs release vX.Y.Z
 ```
 
 Check that the release is published, targets the merged tag, includes every package declared available and `checksums.txt`, and contains accurate generated notes. For new releases, compare `availability.json` with the actual packages and verify the direct download URLs in the published notes. The README leads to this availability-aware release page. The native updater selects the current platform's package and requires GitHub's SHA-256 asset digest before offering an in-app verified download; a missing package is not offered.
+
+Also open the installed app once on every published platform and verify that monitoring is initially off, unsupported controls explain why, the observation database opens safely at startup without recording samples until monitoring or observed usage is enabled, tray close/open preserves the supported session state, and deleting monitoring data leaves presets and label recovery intact. Use fictional or isolated fixtures for report exports; never attach a real provider report, saved label, or credential to a public release issue.
 
 The workflow derives the published notes from `docs/releases/vX.Y.Z.md` and removes unavailable download rows. If notes need correcting, preserve the generated availability statement and use a corrected notes file:
 
