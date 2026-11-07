@@ -1,5 +1,5 @@
-use crate::system;
 use crate::types::{Connection, Network};
+use crate::{settings, system};
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -195,6 +195,86 @@ pub fn get_connection() -> Result<Option<Connection>, String> {
         }));
     }
     Ok(None)
+}
+
+pub fn active_network_context() -> Result<Option<super::ActiveNetworkContext>, String> {
+    let output = system::run(
+        "nmcli",
+        &[
+            "-t",
+            "-f",
+            "UUID,NAME,TYPE,DEVICE",
+            "connection",
+            "show",
+            "--active",
+        ],
+    )?;
+    let selected = output
+        .lines()
+        .filter_map(|line| {
+            let fields = split_fields(line);
+            (fields.len() >= 4
+                && fields[3] != "--"
+                && matches!(
+                    fields[2].as_str(),
+                    "802-11-wireless" | "wifi" | "802-3-ethernet" | "ethernet"
+                ))
+            .then_some(fields)
+        })
+        .min_by_key(|fields| !matches!(fields[2].as_str(), "802-11-wireless" | "wifi"));
+    let Some(fields) = selected else {
+        return Ok(None);
+    };
+    let interface = fields[3].clone();
+    let is_wifi = matches!(fields[2].as_str(), "802-11-wireless" | "wifi");
+    let (bssid, signal_dbm) = if is_wifi {
+        let scan = system::run(
+            "nmcli",
+            &[
+                "-t",
+                "-f",
+                "IN-USE,BSSID,SIGNAL",
+                "device",
+                "wifi",
+                "list",
+                "ifname",
+                &interface,
+                "--rescan",
+                "no",
+            ],
+        )
+        .unwrap_or_default();
+        let row = scan
+            .lines()
+            .map(split_fields)
+            .find(|row| row.len() >= 3 && row[0] == "*");
+        let bssid = row
+            .as_ref()
+            .and_then(|row| row.get(1))
+            .filter(|value| !value.is_empty())
+            .cloned();
+        // NetworkManager exposes quality rather than dBm here; keep the field unavailable
+        // instead of converting it into an invented radio measurement.
+        (bssid, None)
+    } else {
+        (None, None)
+    };
+    let interface_material = std::fs::read_to_string(format!("/sys/class/net/{interface}/address"))
+        .map(|address| format!("{interface}:{}", address.trim()))
+        .unwrap_or_else(|_| interface.clone());
+    Ok(Some(super::ActiveNetworkContext {
+        network_id: settings::fingerprint_local("network", &fields[0])?,
+        display_label: fields[1].clone(),
+        network_type: if is_wifi { "wifi" } else { "ethernet" }.into(),
+        interface_id: settings::fingerprint_local("interface", &interface_material)?,
+        interface_name: Some(interface),
+        counter_interface_id: None,
+        access_point_fingerprint: bssid
+            .as_deref()
+            .map(|value| settings::fingerprint_local("access-point", value))
+            .transpose()?,
+        signal_dbm,
+    }))
 }
 
 pub fn rename(

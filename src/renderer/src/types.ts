@@ -87,7 +87,175 @@ export type AppSettings = {
   bssidCloaking: boolean
   bssidMaskMode: 'full' | 'partial'
   silentElevation: boolean
+  monitoringEnabled: boolean
+  monitoringPaused: boolean
+  historyRetentionDays: 7 | 30 | 90
+  usageTrackingEnabled: boolean
+  contextPromptsEnabled: boolean
+  networkChangeAlerts: boolean
+  behaviorChangeAlerts: boolean
+  usageLimitAlerts: boolean
   shortcuts: Record<string, string>
+}
+
+export type CompanionView = 'overview' | 'journal'
+export type JournalTab = 'history' | 'usage' | 'week'
+export type HistoryRange = '24h' | '7d' | '30d'
+
+export type UiSession = {
+  activeView: CompanionView
+  journalTab: JournalTab
+  historyRange: HistoryRange
+  selectedGuid: string | null
+  mainScrollTop: number
+}
+
+export type MissingSampleReason = 'paused' | 'not-running' | 'unavailable' | 'permission' | 'unknown'
+
+export type HistoryBucket = {
+  startMs: number
+  endMs: number
+  sampleCount: number
+  expectedSampleCount: number
+  missingReason?: MissingSampleReason
+  gatewayMedianMs?: number
+  internetMedianMs?: number
+  internetP95Ms?: number
+  jitterMedianMs?: number
+  jitterMaxMs?: number
+  dropCount: number
+}
+
+export type ConnectionEvent = {
+  id: string
+  atMs: number
+  kind: 'drop' | 'latency-spike' | 'jitter-spike' | 'network-switch' | 'access-point-change' | 'monitoring-paused' | 'monitoring-resumed'
+  title: string
+  detail: string
+  redactedDetail?: string
+  networkGuid?: string
+}
+
+export type HistorySeries = {
+  fromMs: number
+  toMs: number
+  networkGuid: string | null
+  coveragePercent: number
+  sampleCount: number
+  buckets: HistoryBucket[]
+  events: ConnectionEvent[]
+}
+
+export type NetworkUsageSummary = {
+  networkGuid: string
+  displayName: string
+  fromMs: number
+  toMs: number
+  downloadedBytes: number
+  uploadedBytes: number
+  totalBytes: number
+  limitBytes: number | null
+  limitPercent: number | null
+  counterResets: number
+  adapterChanges: number
+}
+
+export type UsageReport = {
+  fromMs: number
+  toMs: number
+  networks: NetworkUsageSummary[]
+  unavailableReason?: string
+}
+
+export type DigestFinding = {
+  id: string
+  title: string
+  detail: string
+  evidence: string
+  suggestion?: string
+}
+
+export type WeeklyDigest = {
+  fromMs: number
+  toMs: number
+  enoughData: boolean
+  coveragePercent: number
+  summary: string
+  insufficientReason?: string
+  findings: DigestFinding[]
+}
+
+export type ContextPrompt = {
+  id: string
+  kind: 'broadcast-app' | 'preset-ready'
+  title: string
+  detail: string
+  appName?: string
+  networkGuid?: string
+}
+
+export type NetworkAlert = {
+  id: string
+  kind: 'access-point-change' | 'behavior-change' | 'usage-near-limit' | 'usage-over-limit'
+  title: string
+  detail: string
+  detectedAtMs: number
+  networkGuid?: string
+}
+
+export type NetworkPreset = {
+  networkGuid: string
+  enabled: boolean
+  applyMode: 'ask' | 'automatic'
+  label: string | null
+  theme: 'inherit' | 'light' | 'dark'
+  bssidVisibility: 'inherit' | 'partial' | 'full'
+}
+
+export type PresetPreview = {
+  networkGuid: string
+  changes: { label: string; before: string; after: string; requiresPermission: boolean }[]
+  canApplyAutomatically: boolean
+  automaticLimitReason?: string
+}
+
+export type PresetApplication = {
+  applied: boolean
+  summary: string
+  undoToken?: string
+}
+
+export type GoingLiveCheck = {
+  id: string
+  label: string
+  status: 'ready' | 'caution' | 'not-ready' | 'unavailable'
+  value: string
+  detail: string
+}
+
+export type GoingLiveResult = {
+  status: 'ready' | 'caution' | 'not-ready' | 'unavailable'
+  summary: string
+  checkedAtMs: number
+  sharingStatus: StreamerStatus
+  checks: GoingLiveCheck[]
+}
+
+export type EvidenceReportData = {
+  fromMs: number
+  toMs: number
+  generatedAtMs: number
+  timezone: string
+  coveragePercent: number
+  sampleCount: number
+  missingSampleCount: number
+  dropCount: number
+  latencySpikeCount: number
+  jitterSpikeCount: number
+  networkCount: number
+  networkLabel?: string
+  events: ConnectionEvent[]
+  notes: string[]
 }
 
 export type ElevationStatus = {

@@ -6,7 +6,7 @@ export const Tooltip: React.FC<{ label: string; children: React.ReactElement }> 
   const anchor = useRef<HTMLSpanElement>(null)
   const [open, setOpen] = useState(false)
   return <span ref={anchor} className="nm-tooltip-wrap" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}
-    onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}>
+    onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onClickCapture={() => setOpen(false)}>
     {React.cloneElement(children, { 'aria-describedby': open ? id : undefined })}
     {open && <Popover anchor={anchor} id={id} role="tooltip" width={180} className="nm-tooltip" onClose={() => setOpen(false)}>{label}</Popover>}
   </span>

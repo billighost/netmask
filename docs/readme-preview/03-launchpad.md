@@ -1,41 +1,44 @@
-<p><picture><source media="(prefers-color-scheme: dark)" srcset="../../src/renderer/public/branding/mark-light.svg"><img src="../../resources/netmask-icon.svg" width="44" alt="NetMask Orbit logo"></picture></p>
+<p><picture><source media="(prefers-color-scheme: dark)" srcset="../../src/renderer/public/branding/mark-light.svg"><img src="../../resources/netmask-icon.svg" width="44" alt="NetMask Orbit mark"></picture></p>
 
 # NetMask
 
-**Local network names. Clear connection details. Windows, macOS, and Linux.**
+**Know your connection. Control what you show.**
 
-Rename saved networks on your computer, keep their original names, and use a private display name when sharing your screen.
+Local connection history, observed data use, Going live checks, reversible network presets, evidence-aware weekly findings, provider reports, calm alerts, and recoverable local labels for Windows, macOS, and Linux.
 
-## Download v2.3.0
+## Download v2.7.0
 
 | Your computer | Get the app | Install |
 | --- | --- | --- |
-| **Windows 10 / 11 · x64** | [Installer](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_x64-setup.exe) · [MSI](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_x64_en-US.msi) | Run the installer. |
-| **Mac · Apple silicon · macOS 12+** | [DMG](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_aarch64.dmg) | Drag NetMask into Applications. |
-| **Mac · Intel · macOS 12+** | [DMG](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_x64.dmg) | Drag NetMask into Applications. |
-| **Linux · x64 · NetworkManager** | [DEB](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_amd64.deb) · [AppImage](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_amd64.AppImage) | Install the DEB, or make the AppImage executable. |
+| **Windows 10 / 11 · x64** | [Setup](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_x64-setup.exe) · [MSI](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_x64_en-US.msi) | Run the installer. |
+| **macOS 12+ · Apple silicon** | [DMG](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_aarch64.dmg) | Drag NetMask into Applications. |
+| **macOS 12+ · Intel** | [DMG](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_x64.dmg) | Drag NetMask into Applications. |
+| **Linux · x64 · NetworkManager** | [DEB](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_amd64.deb) · [AppImage](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_amd64.AppImage) | Install the DEB or make the AppImage executable. |
 
-[Release notes](https://github.com/billighost/netmask/releases/tag/v2.3.0) · [Checksums](https://github.com/billighost/netmask/releases/download/v2.3.0/checksums.txt) · [Installation notes](../../SECURITY.md) · [All releases](https://github.com/billighost/netmask/releases)
+[Release notes](https://github.com/billighost/netmask/releases/tag/v2.7.0) · [Checksums](https://github.com/billighost/netmask/releases/download/v2.7.0/checksums.txt) · [Installation and privacy notes](../../SECURITY.md)
 
 ## Inside the app
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="../assets/fieldnotes-dark.png"><img src="../assets/fieldnotes-paper.png" width="960" alt="NetMask showing the Studio connection, saved network profiles, local name editing, privacy controls, and network tools"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="../assets/fieldnotes-dark.png"><img src="../assets/fieldnotes-paper.png" width="960" alt="NetMask Fieldnotes interface showing fictional connection readings, saved networks, and local label controls"></picture>
 
-<sub>The actual Fieldnotes interface, using fictional networks and sample measurements.</sub>
+<sub>The Fieldnotes interface with fictional networks and sample measurements.</sub>
 
-## Three things to try
+## Start with these
 
-1. **Make a network recognisable.** Select a profile, write a local name, and choose **Save name**. **Restore original** brings the old one back.
-2. **Keep names out of a screenshot.** Enable **Hide names while sharing**. You can also hide the access point address shown inside NetMask.
-3. **Understand your connection.** Read the live activity and response times, open **Connection details**, or **Compare DNS**. Small **i** buttons explain the values.
+1. **Enable monitoring deliberately.** History and usage stay off until enabled. Choose retention, pause sampling, or delete all monitoring records.
+2. **Answer “what happened yesterday?”** Open History for measured drops, latency spikes, jitter, switches, and visible gaps. Open This week for findings that admit when evidence is thin.
+3. **Set a network limit.** Usage totals stay tied to saved networks across restarts and adapter changes, but are labelled as observed on this computer rather than provider billing data.
+4. **Choose Going live before a call.** NetMask checks the connection, enables sharing mode, and reports readiness in plain language. Supported app detection only offers a prompt.
+5. **Build a provider report.** Preview measured evidence with identifiers redacted by default; missing samples remain missing and Wi-Fi passwords are never included.
 
-You can also reconnect saved Wi-Fi, run a small download test, or share supported personal Wi-Fi with a QR image. QR codes contain readable credentials.
+Per-network presets preview label and display changes before applying them and support undo. Alerts are opt-in, require confirmation, use cooldowns, and describe access-point or behavior changes without assuming a security incident.
 
-## What to expect
+## Honest boundaries
 
-- **Local changes.** Your router's Wi-Fi name stays the same. Windows profile labels, Mac service labels, and Linux NetworkManager names are separate from that broadcast name.
-- **Clear limits.** Available tools depend on your OS, adapter, and permissions. Missing readings stay unavailable. Display privacy does not make the connection anonymous.
-- **A flexible window.** Paper and Dark themes, custom controls, and scrolling app panels and dialogs down to **320 × 200**.
+- All monitoring and configuration data stays on this device; NetMask adds no telemetry service.
+- Sharing mode affects NetMask’s display, not other applications, the router, or internet anonymity.
+- Local label support and available readings vary by OS, adapter, driver, and permission. Unsupported controls explain why.
+- The interface remains usable at **320 × 200** in Paper and Dark themes.
 
 ## Development
 

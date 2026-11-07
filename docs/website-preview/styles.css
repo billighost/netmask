@@ -1,5 +1,4 @@
 /* NetMask website direction room — three deliberately different visual systems. */
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Manrope:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&display=swap');
 
 :root{--progress:0;--ease:cubic-bezier(.2,.75,.25,1)}
 *{box-sizing:border-box}

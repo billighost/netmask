@@ -20,7 +20,7 @@ const server = http.createServer((request, response) => {
     response.end(fs.readFileSync(file))
   } catch { response.writeHead(404).end() }
 })
-function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0', onboardingCompleted = true } = {}) {
+function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0', onboardingCompleted = true, monitoringEnabled = true, usageTrackingEnabled = monitoringEnabled } = {}) {
   let sequence = 0, priorName = ''
   const callbacks = new Map(), listeners = new Map(), failures = new Map(), ignored = new Set(), calls = []
   const networks = [
@@ -28,7 +28,7 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
     { guid: 'ethernet-id', name: 'Workshop', originalName: 'Workshop', renamed: false, live: false, type: 'ethernet', canRename: true }
   ]
   const connection = { ssid: 'HomeFiber_5G', profile: 'Saved Studio profile', name: 'Studio', signal: 94, signalDbm: -47, snr: 40, channel: 44, frequency: '5.220 GHz', band: '5 GHz', generation: 'Wi-Fi 5', radioType: '802.11ac', bssid: 'AA:BB:CC:DD:EE:FF', rxRateMbps: 866, txRateMbps: 866, networkGuid: 'wifi-id', interfaceName: 'Wi-Fi', interfaceGuid: 'adapter-id', auth: 'WPA2-Personal' }
-  const settings = { onboardingCompleted, minimizeToTray: true, launchOnStartup: false, autoRefreshInterval: 0, theme, showEthernet: true, ultraLowMemory: false, autoCloakStreamer: false, streamerMaskName: 'Private network', customBroadcastApps: [], sharingTimerMinutes: 30, bssidCloaking: true, bssidMaskMode: 'partial', silentElevation: false, shortcuts: {} }
+  const settings = { onboardingCompleted, minimizeToTray: true, launchOnStartup: false, autoRefreshInterval: 0, theme, showEthernet: true, ultraLowMemory: false, autoCloakStreamer: false, streamerMaskName: 'Private network', customBroadcastApps: [], sharingTimerMinutes: 30, bssidCloaking: true, bssidMaskMode: 'partial', silentElevation: false, monitoringEnabled, monitoringPaused: false, historyRetentionDays: 30, usageTrackingEnabled, contextPromptsEnabled: false, networkChangeAlerts: false, behaviorChangeAlerts: false, usageLimitAlerts: false, shortcuts: {} }
   const streamer = { detectedApp: null, isCloaked: false, cooldownSeconds: 0, manualSecondsRemaining: 0, manualTimed: false }
   const identity = { hostname: 'Studio laptop', macAddress: '11:22:33:44:55:66', interfaceName: 'Wi-Fi', interfaceGuid: 'adapter-id', netbiosSilenced: false, macRandomization: 'disabled', activeProfile: 'Saved Studio profile' }
   const roaming = { supported: true, adapterName: 'Sample Wi-Fi adapter', preferredBand: '5 GHz', validPreferredBands: ['5 GHz', '2.4 GHz'], roamingAggressiveness: 'Medium', validRoamingAggressiveness: ['Low', 'Medium', 'High'] }
@@ -38,15 +38,31 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
     { id: 'cloudflare', name: 'Cloudflare', primary: '1.1.1.1', secondary: '1.0.0.1', description: 'Public DNS', latencyMs: 8, isCurrent: true, isFastest: true },
     { id: 'quad9', name: 'Quad9', primary: '9.9.9.9', secondary: '149.112.112.112', description: 'Public DNS', latencyMs: 12, isCurrent: false, isFastest: false }
   ]
+  const uiSession = { activeView: 'overview', journalTab: 'history', historyRange: '24h', selectedGuid: 'wifi-id', mainScrollTop: 0 }
+  const now = Date.now()
+  const history = { fromMs: now - 86_400_000, toMs: now, networkGuid: 'wifi-id', coveragePercent: 83.3, sampleCount: 10,
+    buckets: Array.from({ length: 12 }, (_, index) => ({ startMs: now - (12 - index) * 7_200_000, endMs: now - (11 - index) * 7_200_000,
+      sampleCount: index === 4 || index === 8 ? 0 : 1, expectedSampleCount: 1, missingReason: index === 4 ? 'paused' : index === 8 ? 'not-running' : undefined,
+      gatewayMedianMs: index === 4 || index === 8 ? undefined : 8 + index, internetMedianMs: index === 4 || index === 8 ? undefined : 22 + index * 2,
+      internetP95Ms: index === 4 || index === 8 ? undefined : 31 + index * 3, jitterMedianMs: index === 4 || index === 8 ? undefined : 3 + index / 2,
+      jitterMaxMs: index === 4 || index === 8 ? undefined : 7 + index, dropCount: index === 7 ? 1 : 0 })),
+    events: [{ id: 'event-1', atMs: now - 14_400_000, kind: 'drop', title: 'Internet response was lost', detail: 'Three consecutive measured probes timed out on Studio.', redactedDetail: 'Three consecutive measured internet probes timed out.', networkGuid: 'wifi-id' }] }
+  const usage = { fromMs: now - 2_592_000_000, toMs: now, networks: [{ networkGuid: 'wifi-id', displayName: 'Studio', fromMs: now - 2_592_000_000, toMs: now,
+    downloadedBytes: 53 * 1024 ** 3, uploadedBytes: 7 * 1024 ** 3, totalBytes: 60 * 1024 ** 3, limitBytes: 100 * 1024 ** 3, limitPercent: 60, counterResets: 1, adapterChanges: 2 }] }
+  const digest = { fromMs: now - 604_800_000, toMs: now, enoughData: true, coveragePercent: 81, summary: 'The connection was mostly steady, with one recorded interruption.',
+    findings: [{ id: 'digest-1', title: 'One interruption', detail: 'Internet response was unavailable for three measured probes.', evidence: '1 drop across 420 measured samples', suggestion: 'If calls still lag, compare the same time tomorrow.' }] }
+  const presets = new Map([['wifi-id', { networkGuid: 'wifi-id', enabled: true, applyMode: 'ask', label: 'Studio', theme: 'inherit', bssidVisibility: 'partial' }]])
+  let contextPrompt = null, networkAlert = null
   const emit = (event, payload) => listeners.forEach((listener, id) => {
     if (listener.event === event) callbacks.get(listener.handler)?.({ event, id, payload })
   })
   window.__NM_FIXTURE__ = {
-    calls, settings, capabilities, networks, connection, resolvers,
+    calls, settings, capabilities, networks, connection, resolvers, history, usage, digest, uiSession,
     fail: (command, message = 'Permission denied by the test fixture') => failures.set(command, message),
     ignoreNext: command => ignored.add(command),
     emit,
-    longName: () => { networks[0].name = 'A'.repeat(128); connection.name = networks[0].name }
+    longName: () => { networks[0].name = 'A'.repeat(128); connection.name = networks[0].name },
+    setContextPrompt: value => { contextPrompt = value }, setNetworkAlert: value => { networkAlert = value }
   }
   window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: (_, id) => listeners.delete(id) }
   window.__TAURI_INTERNALS__ = {
@@ -65,13 +81,40 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
         nm_get_elevation_status: { isElevated: true, silentElevationEnabled: false, taskConfigured: false, tier: 'admin' },
         nm_get_capabilities: capabilities, nm_check_captive_portal: { isCaptive: false, portalUrl: null, checkedAt: Date.now() },
         nm_get_update_status: { isDownloading: false, progress: null, downloadedVersion: null, downloadedFilePath: null, availableUpdate: null },
-        nm_get_recovery_audit: null, nm_get_name_conflict: null,
+        nm_get_recovery_audit: null, nm_get_name_conflict: null, nm_get_ui_session: uiSession, nm_maximize: true,
+        nm_get_connection_history: history, nm_get_network_usage: usage, nm_get_weekly_digest: digest,
+        nm_get_context_prompt: contextPrompt, nm_get_network_alert: networkAlert, nm_renderer_ready: null,
         nm_check_update: null, nm_get_current_dns: { primary: '1.1.1.1', secondary: '1.0.0.1', isDhcp: false },
         nm_benchmark_dns: resolvers, nm_get_device_identity: identity, nm_get_roaming_settings: roaming,
         nm_run_speed_test: { mbps: 100, mbPerSec: 12.5 },
-        nm_get_wifi_qr: { ssid: 'Studio-Guest', auth: 'WPA2', password: 'fictional-password', qrString: 'WIFI:T:WPA;S:Studio-Guest;P:fictional-password;;', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="#000" d="M0 0h32v32H0Z"/></svg>', isWep: false, isOpen: false }
+        nm_get_wifi_qr: { ssid: 'Studio-Guest', auth: 'WPA2', password: 'fictional-password', qrString: 'WIFI:T:WPA;S:Studio-Guest;P:fictional-password;;', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="#000" d="M0 0h32v32H0Z"/></svg>', isWep: false, isOpen: false },
+        nm_get_evidence_report: { fromMs: history.fromMs, toMs: history.toMs, generatedAtMs: now, timezone: 'Africa/Lagos', coveragePercent: history.coveragePercent,
+          sampleCount: history.sampleCount, missingSampleCount: 2, dropCount: 1, latencySpikeCount: 2, jitterSpikeCount: 1, networkCount: 1, networkLabel: 'Studio', events: history.events,
+          notes: ['Samples were scheduled every 15 seconds while monitoring was enabled.', 'Two intervals have no measured sample.'] },
+        nm_run_going_live: { status: 'caution', summary: 'You can go live, but one reading deserves attention.', checkedAtMs: now,
+          sharingStatus: { detectedApp: 'Zoom', isCloaked: true, cooldownSeconds: 0, manualSecondsRemaining: 0, manualTimed: false }, checks: [
+            { id: 'router', label: 'Router response', status: 'ready', value: '8 ms', detail: 'The local response was quick.' },
+            { id: 'internet', label: 'Internet response', status: 'caution', value: '142 ms', detail: 'The response was slower than usual.' },
+            { id: 'portal', label: 'Network sign-in', status: 'ready', value: 'Clear', detail: 'No sign-in page was detected.' }] }
       }
       if (command === 'nm_set_setting') { settings[args.key] = args.value; return null }
+      if (command === 'nm_run_going_live') {
+        priorName = connection.name
+        Object.assign(streamer, values.nm_run_going_live.sharingStatus)
+        connection.name = networks[0].name = settings.streamerMaskName
+        return structuredClone(values.nm_run_going_live)
+      }
+      if (command === 'nm_save_ui_session') { Object.assign(uiSession, args.session); return null }
+      if (command === 'nm_set_network_usage_limit') { const item = usage.networks.find(value => value.networkGuid === args.networkGuid); item.limitBytes = args.limitBytes; item.limitPercent = args.limitBytes ? item.totalBytes / args.limitBytes * 100 : null; return null }
+      if (command === 'nm_delete_monitoring_data') { history.buckets.length = 0; history.events.length = 0; usage.networks.length = 0; return null }
+      if (command === 'nm_respond_context_prompt') { contextPrompt = null; return null }
+      if (command === 'nm_dismiss_network_alert') { networkAlert = null; return null }
+      if (command === 'nm_get_network_preset') return structuredClone(presets.get(args.networkGuid) || { networkGuid: args.networkGuid, enabled: false, applyMode: 'ask', label: null, theme: 'inherit', bssidVisibility: 'inherit' })
+      if (command === 'nm_preview_network_preset') return { networkGuid: args.preset.networkGuid, canApplyAutomatically: args.preset.label == null, automaticLimitReason: args.preset.label ? 'A local-label change may require permission.' : undefined,
+        changes: [{ label: 'Fieldnotes theme', before: 'Paper', after: args.preset.theme === 'dark' ? 'Dark' : 'Paper', requiresPermission: false }, ...(args.preset.label ? [{ label: 'Local label', before: 'Studio', after: args.preset.label, requiresPermission: true }] : [])] }
+      if (command === 'nm_save_network_preset') { presets.set(args.preset.networkGuid, structuredClone(args.preset)); return null }
+      if (command === 'nm_apply_network_preset') return { applied: true, summary: 'Studio preset applied', undoToken: 'undo-fixture' }
+      if (command === 'nm_undo_network_preset') return null
       if (command === 'nm_get_details') return structuredClone(args.guid === 'wifi-id' ? details : { guid: args.guid, band: 'Unavailable', channel: 0, lastConnected: 'Saved profile' })
       if (command === 'nm_rename' || command === 'nm_restore') {
         const network = networks.find(item => item.guid === args.guid)
@@ -278,6 +321,48 @@ async function appChecks(browser, base, errors, results) {
     await page.close()
   }
 }
+async function navigationAndTooltipChecks(browser, base, errors, results) {
+  for (const theme of ['light', 'dark']) {
+    const page = await browser.newPage({ viewport: { width: 900, height: 600 }, reducedMotion: 'reduce' })
+    page.on('pageerror', error => errors.push(error.message))
+    await page.addInitScript(nativeFixture, { theme, version: appVersion })
+    await page.goto(base + '/dist/index.html')
+    await page.locator('[data-network-guid]').first().waitFor()
+    const active = page.getByRole('button', { name: 'Overview', exact: true })
+    await active.hover()
+    const contrast = await active.evaluate(element => {
+      const parse = value => (value.match(/[\d.]+/g) || []).slice(0, 3).map(Number)
+      const luminance = value => parse(value).map(channel => channel / 255).map(channel => channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4)
+        .reduce((sum, channel, index) => sum + channel * [.2126, .7152, .0722][index], 0)
+      const style = getComputedStyle(element), foreground = luminance(style.color), background = luminance(style.backgroundColor)
+      return (Math.max(foreground, background) + .05) / (Math.min(foreground, background) + .05)
+    })
+    assert.ok(contrast >= 4.5, `${theme} active navigation hover contrast is ${contrast.toFixed(2)}:1`)
+    await active.focus()
+    assert.notEqual(await active.evaluate(element => getComputedStyle(element).outlineStyle), 'none', `${theme} active navigation keeps a visible keyboard focus ring`)
+    await page.close()
+  }
+
+  const page = await browser.newPage({ viewport: { width: 900, height: 600 }, reducedMotion: 'reduce' })
+  page.on('pageerror', error => errors.push(error.message))
+  await page.addInitScript(nativeFixture, { version: appVersion })
+  await page.goto(base + '/dist/index.html')
+  await page.locator('[data-network-guid]').first().waitFor()
+  for (const name of ['Minimize window', 'Maximize window']) {
+    const button = page.getByRole('button', { name, exact: true })
+    await button.hover(); await page.getByRole('tooltip').waitFor(); await button.click()
+    assert.equal(await page.getByRole('tooltip').count(), 0, `${name} tooltip dismisses on activation`)
+  }
+  const settings = page.getByRole('button', { name: 'Open settings', exact: true })
+  await settings.hover(); await page.getByRole('tooltip').waitFor(); await settings.click()
+  assert.equal(await page.getByRole('tooltip').count(), 0, 'Settings tooltip dismisses before its dialog opens')
+  await page.keyboard.press('Escape')
+  const close = page.getByRole('button', { name: 'Close to tray', exact: true })
+  await close.hover(); await page.getByRole('tooltip').waitFor(); await close.click()
+  assert.equal(await page.getByRole('tooltip').count(), 0, 'Close tooltip dismisses on activation')
+  results.push('Active companion navigation keeps readable hover/focus contrast and title-bar tooltips dismiss on activation')
+  await page.close()
+}
 async function previewChecks(browser, base, errors, results) {
   const page = await browser.newPage({ reducedMotion: 'reduce' })
   page.on('pageerror', error => errors.push(error.message))
@@ -290,21 +375,22 @@ async function previewChecks(browser, base, errors, results) {
       assert.equal(await page.locator('select, input[type=checkbox]').count(), 0)
       await page.getByRole('button', { name: 'Open settings', exact: true }).click()
       await geometry(page, label + ' settings', true)
-      const select = page.getByRole('combobox', { name: 'Refresh networks', exact: true })
+      const select = page.getByRole('combobox', { name: 'Connection-history retention', exact: true })
       await select.click(); await popupGeometry(page)
       await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter')
-      assert.match(await select.textContent(), /Every minute/)
+      assert.match(await select.textContent(), /90 days/)
       await select.click(); await page.keyboard.press('Escape')
       assert.ok(await page.locator('#screen-dialog').evaluate(element => element.open))
       await page.keyboard.press('Escape')
-      for (const tool of ['details', 'share', 'dns', 'identity', 'roaming', 'shortcuts']) {
-        if (['roaming', 'shortcuts'].includes(tool)) {
-          await page.getByRole('button', { name: 'Open settings', exact: true }).click()
-          await page.locator('#dialog-content [data-dialog=' + tool + ']').click()
-        } else await page.locator('[data-dialog=' + tool + ']:visible').first().click()
+      for (const tool of ['details', 'share', 'dns', 'journal', 'goinglive', 'evidence', 'preset']) {
+        await page.locator('[data-dialog=' + tool + ']:visible').first().click()
         await geometry(page, label + ' ' + tool, true)
         await page.keyboard.press('Escape')
       }
+      await page.getByRole('button', { name: 'Open settings', exact: true }).click()
+      await page.locator('#dialog-content [data-dialog=shortcuts]').click()
+      await geometry(page, label + ' shortcuts', true)
+      await page.keyboard.press('Escape')
       results.push(label)
     }
   }
@@ -422,16 +508,15 @@ async function productFeatureChecks(browser, base, errors, results) {
   const htmlSource = await page.locator('iframe[title="HTML report preview"]').getAttribute('srcdoc')
   assert.match(htmlSource, /Redacted/)
   assert.doesNotMatch(htmlSource, /HomeFiber_5G|Studio|AA:BB:CC|Saved Studio profile/)
+  assert.match(htmlSource, /<h2>Suggested next steps<\/h2>/, 'HTML report preview includes its final section')
   const htmlFrame = page.frames().find(frame => frame !== page.mainFrame())
   assert.ok(htmlFrame, 'HTML report preview frame is available')
   const previewSize = await htmlFrame.evaluate(() => ({ height: innerHeight, scrollHeight: document.documentElement.scrollHeight }))
-  assert.ok(previewSize.scrollHeight > previewSize.height, 'HTML report preview has a scrollable final section')
-  await htmlFrame.evaluate(() => scrollTo(0, document.documentElement.scrollHeight))
+  if (previewSize.scrollHeight > previewSize.height) await htmlFrame.evaluate(() => scrollTo(0, document.documentElement.scrollHeight))
   const scrolled = await htmlFrame.evaluate(() => scrollY)
   await page.evaluate(() => window.__NM_FIXTURE__.emit('nm:speed', { downMBps: 20, upMBps: 2, downKbps: 20000, upKbps: 2000 }))
   await page.waitForTimeout(150)
-  assert.ok(await htmlFrame.evaluate(() => scrollY >= Math.max(1, document.documentElement.scrollHeight - innerHeight - 2)), 'Live readings do not snap the HTML report preview back to the top')
-  assert.ok(scrolled > 0)
+  assert.equal(await htmlFrame.evaluate(() => scrollY), scrolled, 'Live readings do not move the HTML report preview')
   await report.getByRole('button', { name: 'Markdown', exact: true }).click()
   const markdown = await report.locator('pre').innerText()
   assert.match(markdown, /\| Connection \| Redacted \|/)
@@ -477,11 +562,11 @@ async function productFeatureChecks(browser, base, errors, results) {
 
   const fresh = await browser.newPage({ viewport: { width: 440, height: 700 }, reducedMotion: 'reduce' })
   fresh.on('pageerror', error => errors.push(error.message))
-  await fresh.addInitScript(nativeFixture, { version: appVersion, onboardingCompleted: false })
+  await fresh.addInitScript(nativeFixture, { version: appVersion, onboardingCompleted: false, monitoringEnabled: false })
   await fresh.goto(base + '/dist/index.html')
   const guide = fresh.getByRole('dialog', { name: 'Welcome to NetMask', exact: true })
   await guide.waitFor(); await geometry(fresh, 'First-run guide', true)
-  for (const action of ['Name a network', 'Check my connection', 'Prepare for sharing', 'Explore on my own']) {
+  for (const action of ['Start my local journal', 'Going live', 'Name a network', 'Explore on my own']) {
     assert.ok(await guide.getByRole('button', { name: new RegExp(action) }).isVisible())
   }
   assert.equal(await fresh.evaluate(() => window.__NM_FIXTURE__.calls.some(call => ['nm_rename', 'nm_toggle_streamer_cloak', 'nm_run_speed_test'].includes(call.command))), false)
@@ -523,6 +608,125 @@ async function productFeatureChecks(browser, base, errors, results) {
   results.push('Tray connection checks complete onboarding before opening one report')
   await trayFresh.close()
 }
+async function companionFeatureChecks(browser, base, errors, results) {
+  const page = await browser.newPage({ viewport: { width: 320, height: 200 }, reducedMotion: 'reduce', acceptDownloads: true })
+  page.on('pageerror', error => errors.push(error.message))
+  await page.addInitScript(nativeFixture, { version: appVersion })
+  await page.goto(base + '/dist/index.html')
+  await page.locator('[data-network-guid]').first().waitFor()
+  assert.ok(await page.evaluate(() => window.__NM_FIXTURE__.calls.some(call => call.command === 'nm_renderer_ready')), 'Renderer readiness is reported after listeners install')
+
+  await page.getByRole('button', { name: 'Journal', exact: true }).click()
+  await page.getByRole('heading', { name: 'What happened, and when.', exact: true }).waitFor()
+  await geometry(page, 'Connection journal 320x200')
+  await page.getByRole('img', { name: 'Internet latency and jitter history', exact: true }).waitFor()
+  const tableDetails = page.getByText('Accessible measurement table', { exact: true })
+  await tableDetails.click()
+  await page.getByRole('cell', { name: 'Monitoring paused', exact: true }).waitFor()
+  await page.getByRole('cell', { name: 'NetMask was not running', exact: true }).waitFor()
+  assert.match(await page.getByRole('img', { name: 'Internet latency and jitter history', exact: true }).locator('desc').textContent(), /Gaps are shown/)
+
+  await page.getByRole('button', { name: 'Provider evidence report', exact: true }).click()
+  const evidence = page.getByRole('dialog', { name: 'Provider evidence report', exact: true })
+  await evidence.waitFor(); await geometry(page, 'Provider evidence report 320x200', true)
+  const evidenceSource = await evidence.locator('iframe[title="Provider evidence HTML preview"]').getAttribute('srcdoc')
+  assert.match(evidenceSource, /Redacted/); assert.doesNotMatch(evidenceSource, /Studio/)
+  const evidenceFrame = page.frames().find(frame => frame !== page.mainFrame())
+  assert.ok(evidenceFrame, 'Provider report preview frame is available')
+  const evidenceSize = await evidenceFrame.evaluate(() => ({ height: innerHeight, scrollHeight: document.documentElement.scrollHeight }))
+  assert.ok(evidenceSize.scrollHeight > evidenceSize.height, 'Provider report preview scrolls independently')
+  await evidence.getByRole('button', { name: 'Markdown', exact: true }).click()
+  assert.doesNotMatch(await evidence.locator('pre').innerText(), /Studio/)
+  await evidence.getByRole('switch', { name: 'Include network identifiers', exact: true }).click()
+  await evidence.getByText(/Studio/).waitFor()
+  const evidenceDownload = page.waitForEvent('download')
+  await evidence.getByRole('button', { name: 'Save Markdown', exact: true }).click()
+  assert.match((await evidenceDownload).suggestedFilename(), /^netmask-provider-evidence-/)
+  await page.keyboard.press('Escape')
+  results.push('Connection history exposes real gaps, accessible chart data, and exact redacted provider evidence at 320x200')
+
+  const historyTab = page.getByRole('tab', { name: 'History', exact: true })
+  await historyTab.focus(); await page.keyboard.press('ArrowRight')
+  await page.getByRole('heading', { name: 'Counted per saved network.', exact: true }).waitFor()
+  const usageCard = page.getByText('60 GB', { exact: true }).locator('..')
+  await page.getByLabel('Limit in GB', { exact: true }).fill('80')
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  assert.equal(await page.evaluate(() => window.__NM_FIXTURE__.calls.filter(call => call.command === 'nm_set_network_usage_limit').at(-1).args.limitBytes), 80 * 1024 ** 3)
+  await page.getByRole('tab', { name: 'This week', exact: true }).click()
+  await page.getByText('The connection was mostly steady, with one recorded interruption.', { exact: true }).waitFor()
+  results.push('Usage limits and the evidence-backed weekly digest are keyboard reachable')
+
+  await page.getByRole('button', { name: 'Overview', exact: true }).click()
+  await page.getByRole('button', { name: 'Going live', exact: true }).click()
+  const goingLive = page.getByRole('dialog', { name: 'Going live', exact: true })
+  await goingLive.waitFor(); await geometry(page, 'Going live 320x200', true)
+  await goingLive.getByRole('button', { name: 'Check and turn on sharing mode', exact: true }).click()
+  await goingLive.getByText('READY WITH CAUTIONS', { exact: true }).waitFor()
+  await goingLive.getByText('142 ms', { exact: true }).waitFor()
+  await page.keyboard.press('Escape')
+  const sharingSwitch = page.getByRole('switch', { name: 'Hide network names while sharing', exact: true })
+  await sharingSwitch.click()
+  await page.waitForFunction(() => {
+    const control = document.getElementById('privacy-switch')
+    return control?.getAttribute('aria-checked') === 'false' && !control.hasAttribute('disabled')
+  })
+
+  const networkActions = page.getByRole('button', { name: 'Actions for Studio', exact: true })
+  const presetAction = page.getByRole('menuitem', { name: 'Network preset', exact: true })
+  let presetOpened = false
+  for (let attempt = 0; attempt < 3 && !presetOpened; attempt++) {
+    await networkActions.click()
+    try { await presetAction.waitFor({ timeout: 3000 }); await presetAction.click(); presetOpened = true }
+    catch { await page.keyboard.press('Escape'); await page.waitForTimeout(50) }
+  }
+  assert.equal(presetOpened, true, 'Network preset remains reachable after sharing mode restores at the minimum window')
+  const preset = page.getByRole('dialog', { name: 'Network preset', exact: true })
+  await preset.waitFor(); await geometry(page, 'Network preset 320x200', true)
+  await preset.getByRole('combobox', { name: 'Theme for this network', exact: true }).click()
+  await page.getByRole('option', { name: 'Dark', exact: true }).click()
+  await preset.getByRole('button', { name: 'Preview changes', exact: true }).click()
+  await preset.getByRole('heading', { name: 'Preview', exact: true }).waitFor()
+  await preset.getByRole('button', { name: 'Save and apply', exact: true }).click()
+  await page.getByText('Network preset applied', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  assert.ok(await page.evaluate(() => window.__NM_FIXTURE__.calls.some(call => call.command === 'nm_undo_network_preset')))
+  results.push('Going live and network preset preview/apply/undo remain usable at the minimum window')
+
+  await page.evaluate(() => {
+    const prompt = { id: 'prompt-1', kind: 'broadcast-app', title: 'Zoom is running', detail: 'Turn on sharing mode before the call?', appName: 'Zoom' }
+    window.__NM_FIXTURE__.setContextPrompt(prompt); window.__NM_FIXTURE__.emit('nm:context-prompt', prompt)
+  })
+  await page.getByText('Zoom is running', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Not now', exact: true }).click()
+  await page.evaluate(() => {
+    const alert = { id: 'alert-1', kind: 'behavior-change', title: 'Connection behavior changed', detail: 'Internet response was sharply slower than the established local baseline.', detectedAtMs: Date.now(), networkGuid: 'wifi-id' }
+    window.__NM_FIXTURE__.setNetworkAlert(alert); window.__NM_FIXTURE__.emit('nm:network-alert', alert)
+  })
+  await page.getByText('Connection behavior changed', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Dismiss', exact: true }).click()
+
+  await page.getByRole('button', { name: 'Open settings', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+  await settings.getByRole('tab', { name: 'Monitoring', exact: true }).click()
+  await geometry(page, 'Monitoring settings 320x200', true)
+  const historyMonitoring = settings.getByRole('switch', { name: 'Keep local connection history', exact: true })
+  await historyMonitoring.click()
+  const usageTracking = settings.getByRole('switch', { name: 'Count data per saved network', exact: true })
+  assert.equal(await usageTracking.isEnabled(), true, 'Usage tracking stays independently available when history is off')
+  assert.equal(await usageTracking.isChecked(), true, 'Turning history off does not turn usage tracking off')
+  assert.equal(await settings.getByRole('switch', { name: 'Warn near a data limit', exact: true }).isEnabled(), true, 'Usage-limit alerts depend on usage tracking, not history')
+  const pause = settings.getByRole('switch', { name: 'Pause monitoring', exact: true })
+  assert.equal(await pause.isEnabled(), true, 'Pause remains available while either local recorder is active')
+  await pause.click(); assert.equal(await page.evaluate(() => window.__NM_FIXTURE__.settings.monitoringPaused), true)
+  page.once('dialog', dialog => dialog.accept())
+  await settings.getByRole('button', { name: 'Delete all monitoring data', exact: true }).click()
+  assert.ok(await page.evaluate(() => window.__NM_FIXTURE__.calls.some(call => call.command === 'nm_delete_monitoring_data')))
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
+  assert.ok(await page.evaluate(() => window.__NM_FIXTURE__.calls.some(call => call.command === 'nm_save_ui_session')), 'Journal state is persisted for renderer recreation')
+  results.push('Opt-in prompts, rare alerts, monitoring pause/delete, and UI-session persistence are exercised without live OS access')
+  await page.close()
+}
 async function main() {
   if (!fs.existsSync(path.join(root, 'dist/index.html'))) throw Error('Run npm run build before npm run test:ui')
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -533,8 +737,10 @@ async function main() {
   try {
     browser = await chromium.launch({ executablePath, headless: true })
     await appChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
+    await navigationAndTooltipChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
     await regressionChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
     await productFeatureChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
+    await companionFeatureChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
     await previewChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
     assert.deepEqual(errors, [], 'Browser JavaScript errors')
     fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify({ results, errors, boundary: 'Fictional native IPC. No live OS mutations.' }, null, 2))

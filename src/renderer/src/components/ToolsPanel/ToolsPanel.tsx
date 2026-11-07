@@ -1,7 +1,7 @@
 import React from 'react'
 import { shallow } from 'zustand/shallow'
 import { useStore } from '../../store'
-import { DnsIcon, RadioIcon, QrCodeIcon, InfoIcon, DownloadIcon } from '../../icons'
+import { DnsIcon, RadioIcon, QrCodeIcon, InfoIcon, DownloadIcon, PulseIcon } from '../../icons'
 import styles from './ToolsPanel.module.css'
 import { sharingModeActive } from '../../network-state'
 
@@ -11,6 +11,8 @@ export const ToolsPanel: React.FC = () => {
   const state = useStore.getState()
   const activeGuid = connection?.networkGuid || networks.find(network => network.live)?.guid
   const tools = [
+    { label: 'Going live', icon: <PulseIcon size={14} />, action: () => state.setGoingLiveOpen(true), disabled: !connection },
+    { label: 'Connection journal', icon: <DownloadIcon size={14} />, action: () => state.setActiveView('journal'), disabled: false },
     { label: 'Connection details', icon: <InfoIcon size={14} />, action: () => state.setDetailsModalGuid(activeGuid!), disabled: !activeGuid },
     { label: 'Connection report', icon: <DownloadIcon size={14} />, action: () => state.setReportModalOpen(true), disabled: false },
     { label: 'Share Wi-Fi', icon: <QrCodeIcon size={14} />, action: () => state.setWifiShareModalProfile(connection!.profile || connection!.ssid), disabled: sharing || !connection || capabilities?.wifiSharing === false },

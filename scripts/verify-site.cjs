@@ -1,7 +1,7 @@
 const { chromium } = require('playwright')
 
 const origin = process.argv[2] || 'http://127.0.0.1:4174'
-const expectedVersion = '2.6.0'
+const expectedVersion = '2.7.0'
 const routes = [
   ['/', false],
   ['/story/', false],

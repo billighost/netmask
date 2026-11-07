@@ -26,7 +26,7 @@ export const SettingsModal: React.FC = () => {
   const [dataBusy, setDataBusy] = useState(false)
   const [maskName, setMaskName] = useState(settings.streamerMaskName)
   const [customApps, setCustomApps] = useState(settings.customBroadcastApps.join(', '))
-  const [tab, setTab] = useState<'general' | 'privacy' | 'tools' | 'about'>('general')
+  const [tab, setTab] = useState<'general' | 'privacy' | 'monitoring' | 'tools' | 'about'>('general')
   const state = useStore.getState()
   useEffect(() => { window.nm.getVersion().then(setVersion).catch(() => setVersion('Unavailable')) }, [])
   useEffect(() => { setMaskName(settings.streamerMaskName) }, [settings.streamerMaskName])
@@ -138,6 +138,13 @@ export const SettingsModal: React.FC = () => {
     } catch (error) { state.addToast(errorMessage(error, 'The diagnostic report could not be created'), 'error') }
     finally { setDataBusy(false) }
   }
+  const deleteMonitoringData = async () => {
+    if (!window.confirm('Delete all connection history and data-usage records from this device? Network names, presets, settings, and recovery records will stay. This cannot be undone.')) return
+    setDataBusy(true)
+    try { await window.nm.deleteMonitoringData(); state.addToast('Connection history and usage records deleted', 'success') }
+    catch (error) { state.addToast(errorMessage(error, 'The local monitoring data could not be deleted'), 'error') }
+    finally { setDataBusy(false) }
+  }
   const startTutorial = () => {
     state.setSettingsOpen(false)
     requestAnimationFrame(() => state.setOnboardingOpen(true))
@@ -149,7 +156,7 @@ export const SettingsModal: React.FC = () => {
     { label: 'Wi-Fi adapter settings', icon: <RadioIcon size={14} />, action: () => state.setRoamingModalOpen(true), disabled: capabilities?.roamingTuning === false }
   ]
   const ready = downloaded && (!update || downloaded === update.version)
-  const tabs = [{ id: 'general' as const, label: 'General' }, { id: 'privacy' as const, label: 'Privacy' }, { id: 'tools' as const, label: 'Tools' }, { id: 'about' as const, label: 'About' }]
+  const tabs = [{ id: 'general' as const, label: 'General' }, { id: 'privacy' as const, label: 'Privacy' }, { id: 'monitoring' as const, label: 'Monitoring' }, { id: 'tools' as const, label: 'Tools' }, { id: 'about' as const, label: 'About' }]
   const intervalOptions = [10, 30, 60, 0].map(value => ({ value, label: value ? 'Every ' + value + ' seconds' : 'Only when I refresh' }))
   if (![10, 30, 60, 0].includes(settings.autoRefreshInterval)) intervalOptions.push({ value: settings.autoRefreshInterval, label: 'Every ' + settings.autoRefreshInterval + ' seconds' })
   return <Dialog label="Settings" onClose={() => state.setSettingsOpen(false)} scrimClass={styles.scrim} modalClass={styles.modal}>
@@ -184,7 +191,8 @@ export const SettingsModal: React.FC = () => {
           <p className={styles.note}>{streamer.isCloaked ? 'Your private display name is active.' : streamer.detectedApp ? streamer.detectedApp + ' is running.' : 'Your usual display name is showing.'}</p>
           <button type="button" className={styles.button} disabled={capabilities?.networkRename === false || streamerBusy} onClick={() => void toggleStreamer()}><ShieldIcon size={13} />{streamerBusy ? 'Updating…' : streamer.isCloaked ? 'Restore my display name' : 'Use my private name'}</button>
           {streamer.error && <p className="nm-error" role="status">{sharing ? 'Sharing mode needs attention. Exit it to view the detailed error.' : streamer.error}</p>}
-          <Toggle label="Use a private name with broadcast apps" sub="Recognizes common call, recording, and streaming apps." help="Looks only at executable names for OBS, Streamlabs, Discord, Zoom, Teams, Webex, Slack, Skype, Loom, Riverside, XSplit, Twitch Studio, and NVIDIA Broadcast. It never reads browser tabs or history. After the app closes, NetMask waits briefly before restoring your previous name." on={settings.autoCloakStreamer} disabled={capabilities?.networkRename === false} onChange={value => void state.updateSetting('autoCloakStreamer', value)} />
+          <Toggle label="Use a private name automatically with broadcast apps" sub="Recognizes common call, recording, and streaming apps." help="Looks only at executable names for OBS, Streamlabs, Discord, Zoom, Teams, Webex, Slack, Skype, Loom, Riverside, XSplit, Twitch Studio, and NVIDIA Broadcast. It never reads browser tabs or history. Automatic mode takes precedence over prompts." on={settings.autoCloakStreamer} disabled={capabilities?.networkRename === false} onChange={value => void (async () => { if (await state.updateSetting('autoCloakStreamer', value)) { if (value && settings.contextPromptsEnabled) await state.updateSetting('contextPromptsEnabled', false) } })()} />
+          <Toggle label="Offer sharing mode when a call app opens" sub="Show one calm prompt instead of changing anything automatically." help="This is opt-in and uses the same local executable-name detection. NetMask never reads meeting names, contacts, browser tabs, or call content. Turning prompts on turns automatic mode off." on={settings.contextPromptsEnabled} onChange={value => void (async () => { if (await state.updateSetting('contextPromptsEnabled', value)) { if (value && settings.autoCloakStreamer) await state.updateSetting('autoCloakStreamer', false) } })()} />
           <div className={styles.timerRow}><Select id="sharing-timer" label="Sharing timer" value={settings.sharingTimerMinutes} options={[15, 30, 60].map(value => ({ value, label: value + ' minutes' }))} onChange={value => void state.updateSetting('sharingTimerMinutes', value as 15 | 30 | 60)} />
             <button type="button" className={styles.button} disabled={capabilities?.networkRename === false || streamerBusy || !connection} onClick={() => void startStreamerTimer(settings.sharingTimerMinutes)}>{streamer.manualSecondsRemaining > 0 ? Math.ceil(streamer.manualSecondsRemaining / 60) + ' min left' : 'Start timer'}</button></div>
           <div className={styles.field}><label className="nm-field-label" htmlFor="streamer-mask-name">My private display name</label><input id="streamer-mask-name" className={styles.textInput} maxLength={256} value={maskName} disabled={sharing} onChange={event => setMaskName(event.target.value)} onBlur={() => void saveMask()} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() } }} />
@@ -198,6 +206,23 @@ export const SettingsModal: React.FC = () => {
           <div className={styles.field}><label className="nm-field-label" htmlFor="bssid-mask-style">How much to hide</label><Select id="bssid-mask-style" label="How much of the access point address to hide" value={settings.bssidMaskMode} disabled={!settings.bssidCloaking}
             options={[{ value: 'partial', label: 'The last half', description: 'Keep the manufacturer prefix visible.' }, { value: 'full', label: 'The whole address', description: 'Hide every part of the address.' }]} onChange={value => void state.updateSetting('bssidMaskMode', value)} /></div>
         </section>
+      </>}
+      {tab === 'monitoring' && <>
+        <section className={styles.section}><h3 className={styles.sectionTitle}>Local connection journal <HelpTip label="Connection monitoring">Stores bounded latency, jitter, drop, and adapter-counter observations in your account's NetMask data directory. No telemetry is sent to NetMask or another service.</HelpTip></h3>
+          <Toggle label="Keep local connection history" sub="Record measured drops, latency, and jitter. Data-use counting is a separate choice." on={settings.monitoringEnabled} onChange={value => void state.updateSetting('monitoringEnabled', value)} />
+          <Toggle label="Pause monitoring" sub="Keep existing records but stop new connection and usage samples." on={settings.monitoringPaused} disabled={!settings.monitoringEnabled && !settings.usageTrackingEnabled} onChange={value => void state.updateSetting('monitoringPaused', value)} />
+          <Toggle label="Count data per saved network" sub="Maintain counter baselines across restarts, adapter changes, and network switches." on={settings.usageTrackingEnabled} onChange={value => void state.updateSetting('usageTrackingEnabled', value)} />
+          <div className={styles.field}><label className="nm-field-label" htmlFor="history-retention">Connection-history retention</label><Select id="history-retention" label="Connection-history retention" value={settings.historyRetentionDays} disabled={!settings.monitoringEnabled}
+            options={[7, 30, 90].map(value => ({ value, label: `${value} days` }))} onChange={value => void state.updateSetting('historyRetentionDays', value as 7 | 30 | 90)} /></div>
+          <p className={styles.note}>Pauses and times when NetMask is not running appear as gaps. NetMask never fills them with estimated samples.</p>
+        </section>
+        <section className={styles.section}><h3 className={styles.sectionTitle}>Calm alerts</h3>
+          <Toggle label="Tell me when the access point changes" sub="Only after a meaningful, confirmed change behind a familiar saved name." on={settings.networkChangeAlerts} disabled={!settings.monitoringEnabled} onChange={value => void state.updateSetting('networkChangeAlerts', value)} />
+          <Toggle label="Tell me about sharp behavior changes" sub="Requires enough history for a stable baseline; otherwise NetMask stays quiet." on={settings.behaviorChangeAlerts} disabled={!settings.monitoringEnabled} onChange={value => void state.updateSetting('behaviorChangeAlerts', value)} />
+          <Toggle label="Warn near a data limit" sub="Notify once near the limit and once when it is passed." on={settings.usageLimitAlerts} disabled={!settings.usageTrackingEnabled} onChange={value => void state.updateSetting('usageLimitAlerts', value)} />
+        </section>
+        <section className={styles.section}><h3 className={styles.sectionTitle}>Delete local records</h3><p className={styles.note}>Deletes connection samples, events, digests, and usage totals. Presets, settings, saved labels, and recovery records are not deleted.</p>
+          <button type="button" className={styles.button + ' ' + styles.danger} disabled={dataBusy} onClick={() => void deleteMonitoringData()}>{dataBusy ? 'Deleting…' : 'Delete all monitoring data'}</button></section>
       </>}
       {tab === 'tools' && <>
         <section className={styles.section}><h3 className={styles.sectionTitle}>Take a closer look</h3><div className={styles.toolGrid}>

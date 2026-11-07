@@ -5,7 +5,7 @@
 .title { font: 29px/1.2 var(--font-display); letter-spacing: -.6px; font-weight: 400; }
 .closeBtn { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-secondary); border-radius: 3px; }
 .closeBtn:hover { background: var(--accent-dim); color: var(--accent); }
-.tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.tabs { display: grid; grid-template-columns: repeat(5, minmax(72px, 1fr)); gap: 3px; padding: 0 16px; border-bottom: 1px solid var(--border); overflow-x: auto; }
 .tab { font-size: 11px; color: var(--text-secondary); padding: 10px 4px; border-bottom: 2px solid transparent; }
 .tab:hover { color: var(--accent); }
 .tabActive { color: var(--accent); border-bottom-color: var(--accent); }

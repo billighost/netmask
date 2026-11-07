@@ -1,10 +1,10 @@
 # NetMask branding: Orbit
 
-**Orbit, option 15, is the selected logo for Fieldnotes.** The choice is recorded in [selection.json](selection.json). Its tilted orbit surrounds a Wi-Fi signal, with a terracotta dot. It is applied to the app, tray, installers, resources, and desktop icon formats.
+**Orbit, option 15, is the selected logo for Fieldnotes.** The choice is recorded in [selection.json](selection.json). Its tilted orbit surrounds a connection signal, with a terracotta dot marking one measured moment. The orbit now fits NetMask's broader role as an always-available local connection companion: it suggests observation over time without implying surveillance, anonymity, or router control. It is applied to the app, tray, installers, resources, and desktop icon formats.
 
 Open [the gallery](index.html) in a browser to explore **20 transparent logo directions** for Fieldnotes. It works directly from this folder, without a server or an internet connection.
 
-The first four marks are the original Fold, Signal, Monogram, and Quiet Eye. The next sixteen combine labels, folds, signals, eyes, and letterforms into additional directions.
+The first four marks are the original Fold, Signal, Monogram, and Quiet Eye. The next sixteen combine labels, folds, signals, eyes, and letterforms into additional directions. These alternatives remain historical design studies; Orbit is the active identity.
 
 Use the collection buttons to see the originals, new directions, or your shortlist. Add up to four favorites, then choose **Compare favorites** to see their title bars and desktop shortcuts together. Paper and Dark switch the preview colors. Your choices stay in the browser when local storage is available; Orbit stays marked as the current identity while you explore alternatives.
 
@@ -26,7 +26,7 @@ The entire page scrolls at small window heights. The controls use the Fieldnotes
 | 12 | Nest | N + signal |
 | 13 | Label N | Label + N |
 | 14 | Quiet Fold | Fold + eye |
-| 15 | Orbit | Eye + signal |
+| 15 | Orbit | Observation + connection signal |
 | 16 | Cut Signal | Signal + fold |
 | 17 | Link | Connection + N |
 | 18 | Halo | Signal + eye |

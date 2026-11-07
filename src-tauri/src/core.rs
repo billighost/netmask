@@ -1,6 +1,11 @@
 //! Native business logic has no dependency on Tauri or a running webview.
 //! This lets the same code shipped in the app be tested without a desktop session.
+pub mod analysis;
+pub mod companion;
 pub mod dns;
+pub mod evidence;
+pub mod monitor;
+pub mod observations;
 pub mod operations;
 pub mod ping;
 pub mod platform;

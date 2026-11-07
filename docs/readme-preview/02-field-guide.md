@@ -1,50 +1,47 @@
 # NetMask
 
-### A familiar name for your connection.
+### Know your connection. Control what you show.
 
-`HomeFiber_5G` can be **Studio**. An old wired profile can be **Workshop**. NetMask gives saved networks local names that make sense to you, keeps the originals, and puts connection details within reach.
+NetMask is a local-first desktop companion for understanding how a connection behaved, preparing for calls, managing what appears on screen, and keeping local network labels familiar and recoverable.
 
-<img src="../assets/fieldnotes-themes.png" width="960" alt="The actual NetMask app side by side in its warm Paper and green Dark themes, using fictional Studio and Workshop networks">
+<img src="../assets/fieldnotes-themes.png" width="960" alt="NetMask Fieldnotes interface in Paper and Dark themes with fictional network and connection data">
 
-<sub>Fieldnotes: warm paper, green ink, and room to breathe. Sample networks and measurements.</sub>
+<sub>Fieldnotes: warm paper, green ink, and room to breathe. All shown networks and measurements are fictional.</sub>
 
-## Give one a name
+## Follow a connection over time
 
-1. **Choose a saved network.** NetMask shows the profiles available on your computer.
-2. **Write a name you recognise.** Select **Save name**; your system asks for permission when needed.
-3. **Change your mind whenever you like.** Select **Restore original** to put the saved name back.
+1. **Enable local monitoring.** Choose 7, 30, or 90 days of retention. Pause whenever you want.
+2. **Open History.** Review measured drops, latency spikes, jitter, and network switches. Missing samples remain missing.
+3. **Check Usage and This week.** See observed data use per saved network and an evidence-aware weekly digest. Personal limits warn near and over the amount you set.
+4. **Export a provider report.** Choose a period, preview the evidence, and save readable HTML or Markdown. Identifiers are redacted by default and Wi-Fi passwords are never included.
 
-Your router keeps broadcasting the same Wi-Fi name. Windows may still show that name in its Wi-Fi menu; NetMask edits the local profile label.
+Observed usage is what this computer counted, not a billing-grade provider total. Digests say plainly when there is not enough measured history to support a finding.
 
-## A few useful things beside it
+## Prepare without surprises
 
-**See what's happening.** Read transfer activity, response time, and available Wi-Fi details. The little **i** buttons explain technical terms in simple words.
+**Going live** checks the router, an internet target, and sign-in state before turning on sharing mode. Supported call or broadcast app detection can offer to do this, but every prompt and action is opt-in.
 
-**Share your screen comfortably.** Apply a private display name and hide the access point address inside NetMask. Display privacy changes what is shown; it does not make your connection anonymous.
+Per-network presets can hold a preferred local label and display choices. NetMask previews every change, asks when the operating system requires permission, and provides a safe undo. Calm alerts require confirmation and enough baseline history before reporting a changed access point or sharp behavior shift.
 
-**Stay close to your tools.** Reconnect saved Wi-Fi, compare DNS lookup times, test a small download, or create a QR code for supported personal Wi-Fi. A QR code includes readable credentials, so share it with someone you want to give access.
+Sharing mode changes what NetMask displays. It does not anonymize the connection or hide details in other applications. New access points can be normal mesh or enterprise roaming, so alerts describe a change rather than claiming an attack.
 
-## Pick your download
+## Download v2.7.0
 
-**v2.3.0** · [What's new](https://github.com/billighost/netmask/releases/tag/v2.3.0)
+- **Windows 10 / 11 · x64** — [Setup](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_x64-setup.exe) · [MSI](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_x64_en-US.msi)
+- **macOS 12+ · Apple silicon** — [DMG](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_aarch64.dmg)
+- **macOS 12+ · Intel** — [DMG](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_x64.dmg)
+- **Linux · x64 · NetworkManager** — [DEB](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_amd64.deb) · [AppImage](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_amd64.AppImage)
 
-- **Windows 10 / 11 · x64** — [Installer](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_x64-setup.exe) · [MSI](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_x64_en-US.msi). Run the installer.
-- **Mac · Apple silicon · macOS 12+** — [Download DMG](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_aarch64.dmg). Drag NetMask into Applications.
-- **Mac · Intel · macOS 12+** — [Download DMG](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_x64.dmg). Drag NetMask into Applications.
-- **Linux · x64 · NetworkManager** — [Debian / Ubuntu](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_amd64.deb) · [AppImage](https://github.com/billighost/netmask/releases/download/v2.3.0/NetMask_2.3.0_amd64.AppImage). Install the DEB, or make the AppImage executable and open it.
+[Release notes](https://github.com/billighost/netmask/releases/tag/v2.7.0) · [Checksums](https://github.com/billighost/netmask/releases/download/v2.7.0/checksums.txt) · [Privacy and installation notes](../../SECURITY.md)
 
-[Verify your download](https://github.com/billighost/netmask/releases/download/v2.3.0/checksums.txt) · [Installation notes](../../SECURITY.md) · [Other releases](https://github.com/billighost/netmask/releases)
+## Made for a small corner of the desktop
 
-## Made for a small corner of your desktop
-
-Paper and Dark themes. Custom menus and switches. Internally scrolling panels and dialogs, even at **320 × 200**. Settings keeps General, Privacy, Tools, and About easy to find.
-
-Names and preferences stay in your account's data directory. Tools vary by OS and adapter, and unavailable controls explain why. Windows changes profile labels, macOS changes service labels, and Linux changes NetworkManager names.
+The app stays usable at **320 × 200**, supports Paper and Dark themes, and keeps unsupported platform controls disabled with a plain explanation. Monitoring data, settings, presets, labels, and recovery records stay local. Monitoring data can be deleted without removing saved labels or their recovery records.
 
 <details>
 <summary>Build NetMask or contribute</summary>
 
-The app uses Tauri 2, Rust, React, and TypeScript. Install Node.js 22.12+, Rust 1.90+, and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
+Install Node.js 22.12+, Rust 1.90+, and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```sh
 npm ci

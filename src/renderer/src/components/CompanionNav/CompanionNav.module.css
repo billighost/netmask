@@ -1,0 +1,6 @@
+.nav { display: flex; gap: 3px; width: fit-content; margin: 0 0 17px; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-surface-1); }
+.nav button { min-width: 78px; padding: 7px 12px; border-radius: 3px; color: var(--text-secondary); font-size: 10px; }
+.nav button:hover { color: var(--text-primary); }
+.nav .active { background: var(--accent); color: var(--accent-btn-text); }
+.nav .active:hover { background: var(--accent-bright); color: var(--accent-btn-text); }
+@media (max-width: 360px) { .nav { width: 100%; } .nav button { flex: 1; min-width: 0; } }

@@ -1,5 +1,5 @@
-use crate::system;
 use crate::types::{Connection, Network};
+use crate::{settings, system};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -119,6 +119,38 @@ pub fn get_connection() -> Result<Option<Connection>, String> {
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or(Value::Null);
     Ok(Some(parse_connection(&airport, &interface, ssid)))
+}
+
+pub fn active_network_context() -> Result<Option<super::ActiveNetworkContext>, String> {
+    let route = system::run("route", &["-n", "get", "default"])?;
+    let Some(interface) = route.lines().find_map(|line| {
+        line.trim()
+            .strip_prefix("interface:")
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+    }) else {
+        return Ok(None);
+    };
+    let data = services()?;
+    let service_id = service_id_for_device(&data, &interface)?.to_owned();
+    let display_label = editable_service_name(&data, &service_id)
+        .unwrap_or("Active network")
+        .to_owned();
+    let is_wifi = wifi_interface().is_ok_and(|wifi| wifi == interface);
+    Ok(Some(super::ActiveNetworkContext {
+        network_id: settings::fingerprint_local("network", &service_id)?,
+        display_label,
+        network_type: if is_wifi { "wifi" } else { "ethernet" }.into(),
+        interface_id: settings::fingerprint_local("interface", &interface)?,
+        interface_name: Some(interface),
+        counter_interface_id: None,
+        // macOS can withhold BSSID and signal without Location permission. The
+        // lightweight tray sampler leaves them unavailable instead of running
+        // system_profiler or prompting in the background.
+        access_point_fingerprint: None,
+        signal_dbm: None,
+    }))
 }
 
 fn services() -> Result<Value, String> {

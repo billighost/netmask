@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { lazy, Suspense, useEffect, useRef } from 'react'
 import { useStore, DEFAULT_SHORTCUTS } from './store'
 import { TitleBar } from './components/TitleBar/TitleBar'
 import { HeroCard } from './components/HeroCard/HeroCard'
@@ -25,11 +25,21 @@ import styles from './App.module.css'
 import { refreshNetworks, reconnectSelected, restoreNetworkDisplayName, toggleStreamer, startStreamerTimer, selectNetworkAndFocus, runSpeedTest } from './network-actions'
 import { errorMessage, sharingModeActive, visibleNetworks } from './network-state'
 import { requestAutomaticUpdateCheck, subscribeToUpdates } from './update-actions'
+import { CompanionNav } from './components/CompanionNav/CompanionNav'
+import { CompanionBanners } from './components/CompanionBanners/CompanionBanners'
+
+const JournalView = lazy(() => import('./components/Journal/JournalView').then(module => ({ default: module.JournalView })))
+const GoingLiveModal = lazy(() => import('./components/GoingLiveModal/GoingLiveModal').then(module => ({ default: module.GoingLiveModal })))
+const NetworkPresetModal = lazy(() => import('./components/NetworkPresetModal/NetworkPresetModal').then(module => ({ default: module.NetworkPresetModal })))
+const EvidenceReportModal = lazy(() => import('./components/EvidenceReportModal/EvidenceReportModal').then(module => ({ default: module.EvidenceReportModal })))
 
 export const App: React.FC = () => {
   const autoRefreshInterval = useStore(s => s.settings.autoRefreshInterval)
   const visible = useStore(s => s.visible)
+  const activeView = useStore(s => s.activeView)
   const autoRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const mainRef = useRef<HTMLElement>(null)
+  const scrollSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const refresh = () => refreshNetworks().catch(error => useStore.setState({ connectionError: errorMessage(error) }))
 
@@ -37,18 +47,22 @@ export const App: React.FC = () => {
     let active = true
     const unsubUpdates = subscribeToUpdates()
     // Initial load
-    ;(async () => {
+    const bootstrap = (async () => {
         const results = await Promise.allSettled([
           window.nm.isAdmin(),
           window.nm.getSettings(),
           window.nm.getStreamerStatus(),
           window.nm.getElevationStatus(),
           window.nm.getCapabilities(),
-          window.nm.getRecoveryAudit()
+          window.nm.getRecoveryAudit(),
+          window.nm.getUiSession(),
+          window.nm.getContextPrompt(),
+          window.nm.getNetworkAlert(),
+          window.nm.getPendingPresetUndo()
         ])
         if (!active) return
         const state = useStore.getState()
-        const [admin, preferences, streamer, elevation, capabilities, recoveryAudit] = results
+        const [admin, preferences, streamer, elevation, capabilities, recoveryAudit, uiSession, contextPrompt, networkAlert, presetUndo] = results
         if (admin.status === 'fulfilled') state.setAdminOk(admin.value)
         if (preferences.status === 'fulfilled') {
           state.setSettings(preferences.value)
@@ -59,16 +73,23 @@ export const App: React.FC = () => {
         if (elevation.status === 'fulfilled') state.setElevationStatus(elevation.value)
         if (capabilities.status === 'fulfilled') useStore.setState({ capabilities: capabilities.value })
         if (recoveryAudit.status === 'fulfilled') useStore.setState({ recoveryAudit: recoveryAudit.value })
+        if (uiSession.status === 'fulfilled') state.initializeUiSession(uiSession.value)
+        if (contextPrompt.status === 'fulfilled') state.setContextPrompt(contextPrompt.value)
+        if (networkAlert.status === 'fulfilled') state.setNetworkAlert(networkAlert.value)
+        if (presetUndo.status === 'fulfilled' && presetUndo.value?.undoToken) {
+          state.setPresetUndo({ token: presetUndo.value.undoToken, summary: presetUndo.value.summary })
+        }
 
         await refresh()
         if (!active) return
+        if (uiSession.status === 'fulfilled') requestAnimationFrame(() => { if (mainRef.current) mainRef.current.scrollTop = uiSession.value.mainScrollTop || 0 })
         // Probe the established snapshot so its initial epoch cannot invalidate
         // a fast successful response while the first network read is pending.
         const probeEpoch = useStore.getState().connectionEpoch
         window.nm.checkCaptivePortal().then(status => {
           if (active && probeEpoch === useStore.getState().connectionEpoch) useStore.getState().setCaptivePortal(status)
         }).catch(() => {})
-    })()
+    })().catch(() => {})
 
     // Speed subscription
     const unsubSpeed = window.nm.onSpeed(sample => {
@@ -89,6 +110,13 @@ export const App: React.FC = () => {
       void refreshNetworks(true).catch(error => useStore.setState({ connectionError: errorMessage(error) }))
     })
 
+    const unsubContextPrompt = window.nm.onContextPrompt(prompt => useStore.getState().setContextPrompt(prompt))
+    const unsubNetworkAlert = window.nm.onNetworkAlert(alert => useStore.getState().setNetworkAlert(alert))
+    const unsubPresetApplied = window.nm.onPresetApplied(result => {
+      if (result.undoToken) useStore.getState().setPresetUndo({ token: result.undoToken, summary: result.summary })
+      useStore.getState().addToast(result.summary, result.applied ? 'success' : 'info')
+    })
+
     // Streamer status subscription
     const unsubStreamer = window.nm.onStreamerStatus(status => {
       const changed = useStore.getState().streamerStatus.isCloaked !== status.isCloaked
@@ -96,17 +124,19 @@ export const App: React.FC = () => {
       if (changed) refresh()
     })
 
-    const unsubTrayCheck = window.nm.onTrayConnectionCheck(() => {
+    const handleUiIntent = async (intent: 'connection-check' | 'going-live') => {
+      await bootstrap
+      if (!active) return
       const state = useStore.getState()
-      void (async () => {
-        if (state.onboardingOpen) {
-          if (!await state.updateSetting('onboardingCompleted', true)) return
-          state.setOnboardingOpen(false)
-        }
-        state.setReportModalOpen(true)
-        void runSpeedTest()
-      })()
-    })
+      if (state.onboardingOpen) {
+        if (!await state.updateSetting('onboardingCompleted', true)) return
+        state.setOnboardingOpen(false)
+      }
+      if (intent === 'going-live') state.setGoingLiveOpen(true)
+      else { state.setReportModalOpen(true); void runSpeedTest() }
+    }
+    const unsubTrayCheck = window.nm.onTrayConnectionCheck(() => { void handleUiIntent('connection-check') })
+    const unsubUiIntent = window.nm.onUiIntent(intent => { void handleUiIntent(intent) })
 
     const onVisibility = (visible: boolean) => {
       const changed = useStore.getState().visible !== visible
@@ -120,6 +150,7 @@ export const App: React.FC = () => {
     const documentVisibility = () => onVisibility(!document.hidden)
     document.addEventListener('visibilitychange', documentVisibility)
     documentVisibility()
+    void window.nm.rendererReady().then(intent => { if (intent) void handleUiIntent(intent) }).catch(() => {})
 
     return () => {
       active = false
@@ -128,8 +159,12 @@ export const App: React.FC = () => {
       unsubPing()
       unsubCaptive()
       unsubNetworkChanged()
+      unsubContextPrompt()
+      unsubNetworkAlert()
+      unsubPresetApplied()
       unsubStreamer()
       unsubTrayCheck()
+      unsubUiIntent()
       unsubVisibility()
       document.removeEventListener('visibilitychange', documentVisibility)
     }
@@ -178,6 +213,9 @@ export const App: React.FC = () => {
         state.roamingModalOpen
         || state.onboardingOpen
         || state.reportModalOpen
+        || state.goingLiveOpen
+        || Boolean(state.presetModalGuid)
+        || state.evidenceReportOpen
       if (isAnyModalOpen) {
         if (matchedAction !== 'closeModals' && matchedAction !== 'openSettings' && matchedAction !== 'openShortcuts') {
           return
@@ -327,6 +365,9 @@ export const App: React.FC = () => {
           else if (state.privacyCloakModalOpen) state.setPrivacyCloakModalOpen(false)
           else if (state.roamingModalOpen) state.setRoamingModalOpen(false)
           else if (state.reportModalOpen) state.setReportModalOpen(false)
+          else if (state.goingLiveOpen) state.setGoingLiveOpen(false)
+          else if (state.presetModalGuid) state.setPresetModalGuid(null)
+          else if (state.evidenceReportOpen) state.setEvidenceReportOpen(false)
           else if (state.onboardingOpen) void state.updateSetting('onboardingCompleted', true).then(saved => { if (saved) state.setOnboardingOpen(false) })
           break
         }
@@ -340,18 +381,24 @@ export const App: React.FC = () => {
   return (
     <div className={styles.app}>
       <TitleBar />
-      <main className={styles.main} id="main-content">
+      <main ref={mainRef} className={styles.main} id="main-content" onScroll={event => {
+        if (scrollSaveRef.current) clearTimeout(scrollSaveRef.current)
+        const top = event.currentTarget.scrollTop
+        scrollSaveRef.current = setTimeout(() => useStore.getState().saveUiSession(top), 250)
+      }}>
         <div className={styles.workspace}>
         <CaptivePortalBanner />
         <UpdateBanner />
         <RecoveryBanner />
-        <div className={styles.layout}>
+        <CompanionBanners />
+        <CompanionNav />
+        {activeView === 'overview' ? <div className={styles.layout}>
           <div className={styles.connection}><HeroCard /></div>
           <div className={styles.profiles}><NetworkList /></div>
           <div className={styles.editor}><ActionPanel /></div>
           <div className={styles.privacy}><PrivacyPanel /></div>
           <div className={styles.tools}><ToolsPanel /></div>
-        </div>
+        </div> : <Suspense fallback={<p className={styles.loading}>Opening your local journal…</p>}><JournalView /></Suspense>}
         <footer className={styles.footnote}><span>Local names. Your router stays the same.</span><button type="button" onClick={() => useStore.getState().setShortcutsModalOpen(true)}>Keyboard controls</button></footer>
         </div>
       </main>
@@ -366,6 +413,7 @@ export const App: React.FC = () => {
       <RoamingTunerModal />
       <ConnectionReportModal />
       <FirstRunGuide />
+      <Suspense fallback={null}><GoingLiveModal /><NetworkPresetModal /><EvidenceReportModal /></Suspense>
     </div>
   )
 }

@@ -1,7 +1,7 @@
 {
   "name": "netmask",
-  "version": "2.6.0",
-  "description": "Cross-platform local network display name manager for Windows, macOS, and Linux",
+  "version": "2.7.0",
+  "description": "Local-first desktop companion for connection history, observed data use, call readiness, display privacy, and reversible network labels",
   "author": {
     "name": "Bello Bilal",
     "email": "bb2010ng@gmail.com",

@@ -126,8 +126,14 @@ fn detected_name(process: &str, custom: &[String]) -> Option<String> {
 }
 
 fn running_broadcast_app() -> Result<Option<String>, String> {
-    let custom = settings::get_settings().custom_broadcast_apps;
-    running_broadcast_app_with_custom(&custom)
+    let preferences = settings::get_settings();
+    let detected = running_broadcast_app_with_custom(&preferences.custom_broadcast_apps)?;
+    Ok(detected.filter(|app| {
+        !preferences
+            .suppressed_broadcast_apps
+            .iter()
+            .any(|ignored| ignored.eq_ignore_ascii_case(app))
+    }))
 }
 
 fn running_broadcast_app_with_custom(custom: &[String]) -> Result<Option<String>, String> {
@@ -322,10 +328,12 @@ pub fn check_streamer_now() -> StreamerStatus {
     let scan_due = state
         .last_scan
         .is_none_or(|last| now.saturating_duration_since(last) >= Duration::from_secs(5));
-    let auto_enabled = settings::get_settings().auto_cloak_streamer;
+    let detection_mode = settings::get_settings().streamer_detection_mode;
+    let scan_enabled = matches!(detection_mode.as_str(), "suggest" | "automatic");
+    let auto_enabled = detection_mode == "automatic";
     if scan_due {
         state.last_scan = Some(now);
-        match if auto_enabled {
+        match if scan_enabled {
             running_broadcast_app()
         } else {
             Ok(None)

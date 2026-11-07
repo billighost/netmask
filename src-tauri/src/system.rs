@@ -285,12 +285,26 @@ mod tests {
             )
             .is_err()
         );
-        assert!(started.elapsed() < Duration::from_secs(2));
+        // Windows can spend several seconds starting a second signed test
+        // binary on a busy linker, antivirus, or CI host. The fixture itself
+        // sleeps for eight seconds, so six seconds still proves the 100 ms
+        // deadline closed its inherited pipes before the fixture completed.
+        let startup_ceiling = if cfg!(windows) {
+            Duration::from_secs(6)
+        } else {
+            Duration::from_secs(2)
+        };
+        assert!(started.elapsed() < startup_ceiling);
         let started = Instant::now();
+        let descendant_fixture_timeout = if cfg!(windows) {
+            Duration::from_secs(4)
+        } else {
+            Duration::from_secs(2)
+        };
         assert!(
             fixture(
                 "system::tests::fixture_leaves_descendant",
-                Duration::from_secs(2)
+                descendant_fixture_timeout
             )
             .is_ok()
         );
