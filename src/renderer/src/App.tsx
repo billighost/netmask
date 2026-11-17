@@ -265,7 +265,7 @@ export const App: React.FC = () => {
             break
           }
           const net = state.networks.find(n => n.guid === state.selectedGuid)
-          if (net && net.renamed) {
+          if (net && (net.renamed || net.nameSyncPending) && net.canRename !== false) {
             restoreNetworkDisplayName(net.guid, net.originalName, net.name).then(() => {
               state.addToast('Original local label restored', 'success')
             }).catch(error => state.addToast(errorMessage(error, 'Failed to restore original name'), 'error'))

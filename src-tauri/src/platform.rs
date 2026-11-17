@@ -467,9 +467,9 @@ pub fn rename_with_mode(
     Err("The operating system did not confirm the new display name. The original name is still saved.".into())
 }
 fn display_name_confirmed(networks: &[Network], guid: &str, expected_name: &str) -> bool {
-    networks
-        .iter()
-        .any(|network| network.guid == guid && network.name == expected_name)
+    networks.iter().any(|network| {
+        network.guid == guid && network.name == expected_name && !network.name_sync_pending
+    })
 }
 pub fn rename_network(
     guid: &str,
@@ -825,6 +825,14 @@ mod tests {
             std::slice::from_ref(&network),
             "stable-id",
             "Unconfirmed"
+        ));
+        assert!(!display_name_confirmed(
+            &[Network {
+                name_sync_pending: true,
+                ..network.clone()
+            }],
+            "stable-id",
+            "Reading room"
         ));
         assert!(!display_name_confirmed(
             &[Network {

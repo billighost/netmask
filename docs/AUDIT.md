@@ -1,5 +1,7 @@
 # NetMask implementation audit
 
+Patch review, 2026-11-17 (v2.7.1): Windows no longer treats every duplicate SSID as an ambiguous selected network. A shared resolver uses recovery links, the connected profile on its adapter, exact profile names, and finally a unique SSID match. Stable Windows network GUIDs remain editable across repair, restoration, and subsequent renames. Standalone ambiguous duplicates remain disabled with actionable guidance. Confirmation rejects a remaining current Windows/profile mismatch; missing historical rows retain recovery without claiming a current mismatch. Restore checks occupied names, and conflict repair uses a separate Windows recovery GUID when available. Native and browser regression fixtures use fictional profiles; live permission prompts and adapter mutations remain hardware verification boundaries. See [patch release notes](releases/v2.7.1.md).
+
 Audit date: 2026-11-07. Scope: the current v2.7.0 working tree for the desktop companion expansion. This document records source evidence and verification boundaries; it is not a security certification or a claim that every operating-system path has been exercised on real hardware.
 
 ## Product contract

@@ -1,6 +1,13 @@
 use crate::{platform, settings};
 use std::collections::HashMap;
 
+fn preserve_recovery_identity(guid: &str) -> bool {
+    // Legacy WLAN recovery keys also identify saved networks in persisted
+    // sharing sessions, presets, and history. Keep their original value so
+    // restoring a label does not switch the network to a different GUID.
+    cfg!(windows) && guid.starts_with("wlan:")
+}
+
 fn recovery_audit_ready(installed: &str, pending: &str) -> Result<bool, String> {
     Ok(!crate::updater::compare_semver(installed, pending)?.is_lt())
 }
@@ -103,7 +110,7 @@ pub fn rename(
         // Recovery data must reach disk before the first OS change.
         settings::write_backup(&backup)?;
         platform::rename_with_mode(guid, new_name, Some(&network.name), allow_prompt)?;
-        if backup.get(guid).is_some_and(|name| name == new_name) {
+        if backup.get(guid).is_some_and(|name| name == new_name) && !preserve_recovery_identity(guid) {
             backup.remove(guid);
             settings::write_backup(&backup)?;
             links.remove(guid);
@@ -153,7 +160,14 @@ pub fn repair_name_conflict(
             .or_insert_with(|| network.original_name.clone());
         backup
             .entry(conflict.conflicting_guid.clone())
-            .or_insert(conflict.current_name);
+            .or_insert(conflict.current_name.clone());
+        if let Some(stable_id) = platform::stable_recovery_id(&conflict.conflicting_guid, Some(&conflict.current_name))? {
+            if links.get(&conflict.conflicting_guid).is_some_and(|existing| existing != &stable_id) {
+                return Err("The conflicting saved profile has a different recovery identity. Refresh before repairing it.".into());
+            }
+            links.insert(conflict.conflicting_guid.clone(), stable_id);
+            settings::write_name_links(&links)?;
+        }
         settings::write_backup(&backup)?;
         #[cfg(windows)]
         if !platform::is_admin() {
@@ -170,6 +184,7 @@ pub fn repair_name_conflict(
         if backup
             .get(guid)
             .is_some_and(|original| original == new_name)
+            && !preserve_recovery_identity(guid)
         {
             backup.remove(guid);
             links.remove(guid);
@@ -188,7 +203,9 @@ pub fn restore(guid: &str, current_name: Option<&str>) -> Result<(), String> {
             .ok_or("No original name is saved for this network")?
             .clone();
         platform::rename_with_mode(guid, &original, current_name, true)?;
-        backup.remove(guid);
+        if !preserve_recovery_identity(guid) {
+            backup.remove(guid);
+        }
         settings::write_backup(&backup)?;
         let mut links = settings::read_name_links()?;
         links.remove(guid);
@@ -202,7 +219,7 @@ pub fn restore_records(
 ) -> Vec<String> {
     let mut errors = Vec::new();
     backup.retain(|guid, original| match restore(guid, original) {
-        Ok(()) => false,
+        Ok(()) => preserve_recovery_identity(guid),
         Err(error) => {
             errors.push(format!("{guid}: {error}"));
             true
@@ -248,6 +265,17 @@ pub fn import_backup(json: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn successful_legacy_restore_keeps_the_record_that_stabilizes_network_identity() {
+        let mut backup = HashMap::from([
+            ("wlan:legacy".into(), "Original Wi-Fi".into()),
+            ("windows-guid".into(), "Other original".into()),
+        ]);
+        assert!(restore_records(&mut backup, |_, _| Ok(())).is_empty());
+        assert_eq!(backup.len(), 1);
+        assert_eq!(backup["wlan:legacy"], "Original Wi-Fi");
+    }
     #[test]
     fn partial_restore_keeps_failed_recovery_records() {
         let mut backup = HashMap::from([

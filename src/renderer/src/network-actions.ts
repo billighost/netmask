@@ -36,6 +36,9 @@ function confirmedNetwork(guid: string, expectedName: string): Network {
   if (!network || network.name !== expectedName || !connectionMatches) {
     throw new Error('The operating system reported success, but the refreshed local label did not change. Nothing was reported as saved.')
   }
+  if (network.nameSyncPending) {
+    throw new Error('The Windows label and saved Wi-Fi profile still differ. Refresh and retry to finish repairing the name.')
+  }
   return network
 }
 

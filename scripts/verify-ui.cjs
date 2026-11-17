@@ -52,7 +52,7 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
   const digest = { fromMs: now - 604_800_000, toMs: now, enoughData: true, coveragePercent: 81, summary: 'The connection was mostly steady, with one recorded interruption.',
     findings: [{ id: 'digest-1', title: 'One interruption', detail: 'Internet response was unavailable for three measured probes.', evidence: '1 drop across 420 measured samples', suggestion: 'If calls still lag, compare the same time tomorrow.' }] }
   const presets = new Map([['wifi-id', { networkGuid: 'wifi-id', enabled: true, applyMode: 'ask', label: 'Studio', theme: 'inherit', bssidVisibility: 'partial' }]])
-  let contextPrompt = null, networkAlert = null
+  let contextPrompt = null, networkAlert = null, nameConflict = null
   const emit = (event, payload) => listeners.forEach((listener, id) => {
     if (listener.event === event) callbacks.get(listener.handler)?.({ event, id, payload })
   })
@@ -62,7 +62,8 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
     ignoreNext: command => ignored.add(command),
     emit,
     longName: () => { networks[0].name = 'A'.repeat(128); connection.name = networks[0].name },
-    setContextPrompt: value => { contextPrompt = value }, setNetworkAlert: value => { networkAlert = value }
+    setContextPrompt: value => { contextPrompt = value }, setNetworkAlert: value => { networkAlert = value },
+    setNameConflict: value => { nameConflict = value }
   }
   window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: (_, id) => listeners.delete(id) }
   window.__TAURI_INTERNALS__ = {
@@ -81,7 +82,7 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
         nm_get_elevation_status: { isElevated: true, silentElevationEnabled: false, taskConfigured: false, tier: 'admin' },
         nm_get_capabilities: capabilities, nm_check_captive_portal: { isCaptive: false, portalUrl: null, checkedAt: Date.now() },
         nm_get_update_status: { isDownloading: false, progress: null, downloadedVersion: null, downloadedFilePath: null, availableUpdate: null },
-        nm_get_recovery_audit: null, nm_get_name_conflict: null, nm_get_ui_session: uiSession, nm_maximize: true,
+        nm_get_recovery_audit: null, nm_get_name_conflict: nameConflict, nm_get_ui_session: uiSession, nm_maximize: true,
         nm_get_connection_history: history, nm_get_network_usage: usage, nm_get_weekly_digest: digest,
         nm_get_context_prompt: contextPrompt, nm_get_network_alert: networkAlert, nm_renderer_ready: null,
         nm_check_update: null, nm_get_current_dns: { primary: '1.1.1.1', secondary: '1.0.0.1', isDhcp: false },
@@ -116,10 +117,18 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
       if (command === 'nm_apply_network_preset') return { applied: true, summary: 'Studio preset applied', undoToken: 'undo-fixture' }
       if (command === 'nm_undo_network_preset') return null
       if (command === 'nm_get_details') return structuredClone(args.guid === 'wifi-id' ? details : { guid: args.guid, band: 'Unavailable', channel: 0, lastConnected: 'Saved profile' })
-      if (command === 'nm_rename' || command === 'nm_restore') {
+      if (command === 'nm_rename' || command === 'nm_restore' || command === 'nm_repair_name_conflict') {
         const network = networks.find(item => item.guid === args.guid)
+        if (command === 'nm_repair_name_conflict') {
+          const other = networks.find(item => item.guid === nameConflict.conflictingGuid)
+          other.name = other.profile = nameConflict.suggestedName
+          other.renamed = other.name !== other.originalName
+          nameConflict = null
+        }
         network.name = command === 'nm_restore' ? network.originalName : args.newName
         network.renamed = network.name !== network.originalName
+        network.nameSyncPending = false
+        if (network.type === 'wifi') network.profile = network.name
         if (network.live) connection.name = network.name
         return null
       }
@@ -307,6 +316,53 @@ async function appChecks(browser, base, errors, results) {
   await page.keyboard.press('Escape')
   results.push('Rename, restore, masking, errors, settings rollback, menu, filtered keyboard navigation, and speed test')
   await page.close()
+  const repairPage = await browser.newPage({ viewport: { width: 440, height: 700 }, reducedMotion: 'reduce' })
+  repairPage.on('pageerror', error => errors.push(error.message))
+  await repairPage.addInitScript(nativeFixture, { version: appVersion })
+  await repairPage.goto(base + '/dist/index.html')
+  await repairPage.locator('#rename-network-input').waitFor()
+  await repairPage.evaluate(() => {
+    const network = window.__NM_FIXTURE__.networks[0]
+    Object.assign(network, { name: network.originalName, renamed: false, nameSyncPending: true, profile: 'Old alias' })
+    window.__NM_FIXTURE__.connection.name = network.name
+  })
+  await repairPage.getByRole('button', { name: 'Refresh saved networks', exact: true }).click()
+  await repairPage.getByText('Windows has a saved Wi-Fi profile and local label that no longer match.', { exact: false }).waitFor()
+  assert.ok(await repairPage.locator('#rename-network-input').isEnabled())
+  assert.ok(await repairPage.getByRole('button', { name: 'Restore original', exact: true }).isEnabled())
+  assert.ok(await repairPage.getByRole('button', { name: 'Save name', exact: true }).isEnabled(), 'unchanged text must still repair a mismatch')
+  await repairPage.getByRole('button', { name: 'Save name', exact: true }).click()
+  await repairPage.waitForFunction(() => !window.__NM_FIXTURE__.networks[0].nameSyncPending)
+  assert.equal(await repairPage.getByText('Windows has a saved Wi-Fi profile and local label that no longer match.', { exact: false }).count(), 0)
+  await repairPage.locator('#rename-network-input').fill('Reading room')
+  await repairPage.getByRole('button', { name: 'Save name', exact: true }).click()
+  await repairPage.waitForFunction(() => document.getElementById('connection-name').textContent === 'Reading room')
+  await repairPage.getByRole('button', { name: 'Restore original', exact: true }).click()
+  await repairPage.waitForFunction(() => document.getElementById('connection-name').textContent === 'HomeFiber_5G')
+  assert.ok(await repairPage.locator('#rename-network-input').isEnabled())
+  await repairPage.locator('#rename-network-input').fill('Renamed again')
+  await repairPage.getByRole('button', { name: 'Save name', exact: true }).click()
+  await repairPage.waitForFunction(() => document.getElementById('connection-name').textContent === 'Renamed again')
+  await repairPage.evaluate(() => {
+    const fixture = window.__NM_FIXTURE__
+    fixture.networks.push({ guid: 'duplicate-id', name: 'HomeFiber_5G', originalName: 'HomeFiber_5G', renamed: false, live: false, type: 'wifi', profile: 'HomeFiber_5G', canRename: true })
+    fixture.setNameConflict({ conflictingGuid: 'duplicate-id', currentName: 'HomeFiber_5G', suggestedName: 'HomeFiber_5G (saved)' })
+  })
+  await repairPage.getByRole('button', { name: 'Restore original', exact: true }).click()
+  await repairPage.getByRole('button', { name: 'Free this label', exact: true }).waitFor()
+  assert.equal(await repairPage.locator('#rename-network-input').inputValue(), 'HomeFiber_5G')
+  repairPage.once('dialog', dialog => dialog.accept())
+  await repairPage.getByRole('button', { name: 'Free this label', exact: true }).click()
+  await repairPage.waitForFunction(() => document.getElementById('connection-name').textContent === 'HomeFiber_5G')
+  assert.equal(await repairPage.evaluate(() => window.__NM_FIXTURE__.networks.find(item => item.guid === 'duplicate-id').name), 'HomeFiber_5G (saved)')
+  assert.ok(await repairPage.locator('#rename-network-input').isEnabled())
+  await repairPage.evaluate(() => { window.__NM_FIXTURE__.networks[0].canRename = false; window.__NM_FIXTURE__.networks[0].nameSyncPending = true })
+  await repairPage.getByRole('button', { name: 'Refresh saved networks', exact: true }).click()
+  await repairPage.getByText('Connect to it and refresh the network list to edit its label.', { exact: false }).first().waitFor()
+  assert.ok(await repairPage.locator('#rename-network-input').isDisabled())
+  assert.equal(await repairPage.getByText('Save a name or restore the original to repair both.', { exact: false }).count(), 0)
+  results.push('Name mismatch repair, unchanged-label save, restore, subsequent rename, and actionable ambiguity explanation')
+  await repairPage.close()
   for (const platform of ['macos', 'linux']) {
     const page = await browser.newPage({ viewport: { width: 320, height: 200 }, reducedMotion: 'reduce' })
     page.on('pageerror', error => errors.push(error.message))

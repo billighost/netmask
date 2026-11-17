@@ -1,6 +1,6 @@
 [package]
 name = "netmask"
-version = "2.7.0"
+version = "2.7.1"
 description = "Local-first desktop companion for connection history and reversible network labels"
 authors = ["Bello Bilal <bb2010ng@gmail.com>"]
 license = "MIT"

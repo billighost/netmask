@@ -21,13 +21,13 @@ Everything stays on the device. Monitoring is off until enabled, can be paused, 
 
 ## Get NetMask
 
-**Latest: v2.7.0** · [Release notes](https://github.com/billighost/netmask/releases/tag/v2.7.0)
+**Latest: v2.7.1** · [Release notes](https://github.com/billighost/netmask/releases/tag/v2.7.1)
 
 | Windows 10 / 11 | macOS 12+ | Linux |
 | --- | --- | --- |
-| **x64**<br>[Setup](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_x64-setup.exe) · [MSI](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_x64_en-US.msi) | [Apple silicon](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_aarch64.dmg)<br>[Intel](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_x64.dmg) | **x64 · NetworkManager**<br>[Debian / Ubuntu](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_amd64.deb) · [AppImage](https://github.com/billighost/netmask/releases/download/v2.7.0/NetMask_2.7.0_amd64.AppImage) |
+| **x64**<br>[Setup](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_x64-setup.exe) · [MSI](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_x64_en-US.msi) | [Apple silicon](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_aarch64.dmg)<br>[Intel](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_x64.dmg) | **x64 · NetworkManager**<br>[Debian / Ubuntu](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_amd64.deb) · [AppImage](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_amd64.AppImage) |
 
-[Verify checksums](https://github.com/billighost/netmask/releases/download/v2.7.0/checksums.txt) · [Installation and privacy notes](../../SECURITY.md) · [All releases](https://github.com/billighost/netmask/releases)
+[Verify checksums](https://github.com/billighost/netmask/releases/download/v2.7.1/checksums.txt) · [Installation and privacy notes](../../SECURITY.md) · [All releases](https://github.com/billighost/netmask/releases)
 
 ## Small, honest, cross-platform
 
