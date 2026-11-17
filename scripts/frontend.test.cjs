@@ -208,6 +208,16 @@ test('restore success is withheld until the refreshed network and connection con
   assert.equal(confirmed.name, wifi.originalName)
   assert.equal(useStore.getState().connection.name, wifi.originalName)
 })
+test('a matching label cannot report rename or restore success while the saved profile still differs', async () => {
+  reset()
+  window.nm.rename = async () => {}
+  window.nm.restore = async () => {}
+  for (const name of ['Studio', wifi.originalName]) {
+    window.nm.getNetworkSnapshot = async () => ({ networks: [{ ...wifi, name, nameSyncPending: true }], connection: { ...connection, name }, connectionError: null })
+    await assert.rejects(actions.saveNetworkDisplayName('wifi-id', name, name), /still differ/)
+    await assert.rejects(actions.restoreNetworkDisplayName('wifi-id', name, name), /still differ/)
+  }
+})
 test('refresh failure clears stale connection state and always ends loading', async () => {
   reset()
   useStore.setState({ networks: [wifi], connection })

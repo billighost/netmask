@@ -1,6 +1,6 @@
 {
   "name": "netmask",
-  "version": "2.7.0",
+  "version": "2.7.1",
   "description": "Local-first desktop companion for connection history, observed data use, call readiness, display privacy, and reversible network labels",
   "author": {
     "name": "Bello Bilal",

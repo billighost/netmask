@@ -4,7 +4,7 @@ import fieldnotesPaper from '../../docs/assets/fieldnotes-paper.png'
 
 type Page = 'home' | 'story' | 'downloads' | 'project' | 'motion'
 
-const release = '2.7.0'
+const release = '2.7.1'
 const siteUrl = 'https://getnetmask.vercel.app'
 const releaseBase = `https://github.com/billighost/netmask/releases/download/v${release}`
 const links = {
