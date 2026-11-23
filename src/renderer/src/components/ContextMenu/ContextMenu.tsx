@@ -17,9 +17,25 @@ export const ContextMenu: React.FC = () => {
     if (!contextMenu) return
     const previous = document.activeElement as HTMLElement | null
     let restoreFocus = true
+    const scrollPositions = new Map<HTMLElement, { top: number; left: number }>()
+    let anchor = Array.from(document.querySelectorAll<HTMLElement>('[data-network-guid]'))
+      .find(element => element.dataset.networkGuid === contextMenu.guid)?.parentElement ?? null
+    while (anchor) {
+      scrollPositions.set(anchor, { top: anchor.scrollTop, left: anchor.scrollLeft })
+      anchor = anchor.parentElement
+    }
     ref.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true })
     const outside = (event: MouseEvent) => { if (!ref.current?.contains(event.target as Node)) { restoreFocus = false; hide() } }
-    const scroll = (event: Event) => { if (!ref.current?.contains(event.target as Node)) { restoreFocus = false; hide() } }
+    const scroll = (event: Event) => {
+      const target = event.target === document ? document.scrollingElement : event.target
+      if (!(target instanceof HTMLElement) || ref.current?.contains(target)) return
+      const position = scrollPositions.get(target)
+      // A pointer or focus scroll can dispatch after the menu has opened.
+      // Close only when its anchor actually moves from the observed position.
+      if (position && (target.scrollTop !== position.top || target.scrollLeft !== position.left)) {
+        restoreFocus = false; hide()
+      }
+    }
     document.addEventListener('mousedown', outside)
     document.addEventListener('scroll', scroll, true)
     window.addEventListener('resize', hide)

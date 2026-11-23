@@ -8,6 +8,76 @@ fn preserve_recovery_identity(guid: &str) -> bool {
     cfg!(windows) && guid.starts_with("wlan:")
 }
 
+#[cfg(windows)]
+fn remember_user_label(guid: &str, label: &str) -> Result<(), String> {
+    let sharing = settings::storage().read::<serde_json::Value>("streamer.json")?;
+    let mut labels = settings::read_name_labels()?;
+    if update_user_label(&mut labels, guid, label, sharing.as_ref()) {
+        settings::write_name_labels(&labels)?;
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn seed_user_label(guid: &str, current_label: &str) -> Result<(), String> {
+    // Persist the observed starting label before a first mutation. A failed
+    // NLM write with failed rollback must not become an inferred new nickname
+    // when an older installation had no desired-label record yet.
+    if !settings::read_name_labels()?.contains_key(guid) {
+        remember_user_label(guid, current_label)?;
+    }
+    Ok(())
+}
+
+#[cfg(any(windows, test))]
+fn update_user_label(
+    labels: &mut HashMap<String, String>,
+    guid: &str,
+    label: &str,
+    sharing: Option<&serde_json::Value>,
+) -> bool {
+    if sharing.is_some_and(|record| {
+        record.get("guid").and_then(serde_json::Value::as_str) == Some(guid)
+            && record.get("mask").and_then(serde_json::Value::as_str) == Some(label)
+    }) {
+        return false;
+    }
+    if labels.get(guid).is_some_and(|previous| previous == label) {
+        return false;
+    }
+    labels.insert(guid.into(), label.into());
+    true
+}
+
+/// Repair existing nicknames on every connection, even while the webview is
+/// closed. Sharing recovery always takes precedence; there are no UAC prompts.
+pub fn reconcile_connected_name() -> Result<bool, String> {
+    #[cfg(windows)]
+    {
+        settings::storage().with_lock("network-mutations", || {
+            if settings::storage()
+                .read::<serde_json::Value>("streamer.json")?
+                .is_some_and(|record| !record.is_null())
+            {
+                return Ok(false);
+            }
+            let mut backup = settings::read_backup()?;
+            if backup.is_empty() {
+                return Ok(false);
+            }
+            platform::windows::reconcile_connected_name(
+                &mut backup,
+                &mut settings::read_name_links()?,
+                &mut settings::read_name_labels()?,
+            )
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(false)
+    }
+}
+
 fn recovery_audit_ready(installed: &str, pending: &str) -> Result<bool, String> {
     Ok(!crate::updater::compare_semver(installed, pending)?.is_lt())
 }
@@ -109,7 +179,11 @@ pub fn rename(
         backup.entry(guid.into()).or_insert_with(|| network.original_name.clone());
         // Recovery data must reach disk before the first OS change.
         settings::write_backup(&backup)?;
+        #[cfg(windows)]
+        seed_user_label(guid, &network.name)?;
         platform::rename_with_mode(guid, new_name, Some(&network.name), allow_prompt)?;
+        #[cfg(windows)]
+        remember_user_label(guid, new_name)?;
         if backup.get(guid).is_some_and(|name| name == new_name) && !preserve_recovery_identity(guid) {
             backup.remove(guid);
             settings::write_backup(&backup)?;
@@ -170,6 +244,11 @@ pub fn repair_name_conflict(
         }
         settings::write_backup(&backup)?;
         #[cfg(windows)]
+        {
+            seed_user_label(guid, &network.name)?;
+            seed_user_label(&conflict.conflicting_guid, &conflict.current_name)?;
+        }
+        #[cfg(windows)]
         if !platform::is_admin() {
             crate::privileged::run(crate::privileged::Request::RepairConflict {
                 id: guid.into(),
@@ -181,6 +260,11 @@ pub fn repair_name_conflict(
         }
         #[cfg(not(windows))]
         platform::repair_name_conflict(guid, new_name, current_name)?;
+        #[cfg(windows)]
+        {
+            remember_user_label(guid, new_name)?;
+            remember_user_label(&conflict.conflicting_guid, &conflict.suggested_name)?;
+        }
         if backup
             .get(guid)
             .is_some_and(|original| original == new_name)
@@ -203,6 +287,12 @@ pub fn restore(guid: &str, current_name: Option<&str>) -> Result<(), String> {
             .ok_or("No original name is saved for this network")?
             .clone();
         platform::rename_with_mode(guid, &original, current_name, true)?;
+        #[cfg(windows)]
+        {
+            let mut labels = settings::read_name_labels()?;
+            labels.remove(guid);
+            settings::write_name_labels(&labels)?;
+        }
         if !preserve_recovery_identity(guid) {
             backup.remove(guid);
         }
@@ -232,7 +322,14 @@ pub fn restore_all() -> Result<(), String> {
     settings::storage().with_lock("network-mutations", || {
         let mut backup = settings::read_backup()?;
         let errors = restore_records(&mut backup, |guid, name| {
-            platform::rename_with_mode(guid, name, None, true)
+            platform::rename_with_mode(guid, name, None, true)?;
+            #[cfg(windows)]
+            {
+                let mut labels = settings::read_name_labels()?;
+                labels.remove(guid);
+                settings::write_name_labels(&labels)?;
+            }
+            Ok(())
         });
         settings::write_backup(&backup)?;
         let mut links = settings::read_name_links()?;
@@ -265,6 +362,51 @@ pub fn import_backup(json: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn successful_renames_replace_intent_and_sharing_masks_preserve_it() {
+        let mut labels = HashMap::new();
+        assert!(update_user_label(&mut labels, "network", "Studio", None));
+        assert!(!update_user_label(&mut labels, "network", "Studio", None));
+        assert!(update_user_label(
+            &mut labels,
+            "network",
+            "Reading room",
+            None
+        ));
+        let sharing =
+            serde_json::json!({"guid":"network","mask":"Connected","previousName":"Reading room"});
+        assert!(!update_user_label(
+            &mut labels,
+            "network",
+            "Connected",
+            Some(&sharing)
+        ));
+        assert_eq!(labels["network"], "Reading room");
+        assert!(!update_user_label(
+            &mut labels,
+            "network",
+            "Reading room",
+            Some(&sharing)
+        ));
+        assert!(update_user_label(
+            &mut labels,
+            "other",
+            "Connected",
+            Some(&sharing)
+        ));
+        assert_eq!(labels["other"], "Connected");
+        // A conflict repair deliberately moves the other profile too.
+        assert!(update_user_label(
+            &mut labels,
+            "other",
+            "Other (saved)",
+            None
+        ));
+        assert_eq!(labels["other"], "Other (saved)");
+        labels.remove("network");
+        assert!(!labels.contains_key("network"));
+    }
     #[cfg(windows)]
     #[test]
     fn successful_legacy_restore_keeps_the_record_that_stabilizes_network_identity() {

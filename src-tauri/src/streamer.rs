@@ -238,7 +238,7 @@ pub fn get_streamer_status() -> StreamerStatus {
 }
 
 fn activate(state: &mut State, manual: bool, manual_until: Option<i64>) -> Result<(), String> {
-    let snapshot = platform::get_network_snapshot(&settings::read_backup()?)?;
+    let snapshot = platform::get_active_network_snapshot(&settings::read_backup()?)?;
     let connection = snapshot
         .connection
         .ok_or("Connect to Wi-Fi before masking its display name")?;
@@ -266,21 +266,25 @@ fn activate(state: &mut State, manual: bool, manual_until: Option<i64>) -> Resul
     };
     save_record(&Some(record.clone()))?;
     state.record = Some(record.clone());
+    // A sharing record disables nickname display projection so failed mask
+    // writes stay visible to recovery. Reload that observed state for the
+    // mutation's expected name, retaining the user's nickname for restoration.
+    let before_change = platform::get_active_network_snapshot(&settings::read_backup()?)?
+        .networks
+        .into_iter()
+        .find(|network| network.guid == record.guid)
+        .ok_or("The network changed before sharing mode could be applied")?;
     if let Err(error) = operations::rename(
         &record.guid,
         &record.mask,
-        Some(&record.previous_name),
+        Some(&before_change.name),
         manual,
     ) {
         // A rejected change that left the old name intact must permit retry.
         // If the OS changed the name or cannot be inspected, keep recovery data.
         let unchanged = settings::read_backup()
             .and_then(|backup| platform::get_networks(&backup))
-            .is_ok_and(|networks| {
-                networks.iter().any(|network| {
-                    network.guid == record.guid && network.name == record.previous_name
-                })
-            });
+            .is_ok_and(|networks| unchanged_label_state(&networks, &before_change));
         if unchanged {
             save_record(&None)?;
             state.record = None;
@@ -291,6 +295,18 @@ fn activate(state: &mut State, manual: bool, manual_until: Option<i64>) -> Resul
     state.restore_at = None;
     state.error = None;
     Ok(())
+}
+
+fn unchanged_label_state(
+    networks: &[crate::types::Network],
+    before: &crate::types::Network,
+) -> bool {
+    networks.iter().any(|network| {
+        network.guid == before.guid
+            && network.name == before.name
+            && network.profile == before.profile
+            && network.name_sync_pending == before.name_sync_pending
+    })
 }
 
 fn restore(state: &mut State, allow_prompt: bool) -> Result<(), String> {
@@ -351,7 +367,8 @@ pub fn check_streamer_now() -> StreamerStatus {
             }
         }
         if let Some(record) = state.record.clone() {
-            match settings::read_backup().and_then(|backup| platform::get_network_snapshot(&backup))
+            match settings::read_backup()
+                .and_then(|backup| platform::get_active_network_snapshot(&backup))
             {
                 Ok(snapshot) => {
                     let current = snapshot.connection.as_ref();
@@ -437,7 +454,7 @@ pub fn start_streamer_timer(minutes: i32) -> StreamerStatus {
         let deadline = unix_now() + i64::from(minutes) * 60;
         if let Some(mut record) = state.record.clone() {
             let snapshot = settings::read_backup()
-                .and_then(|backup| platform::get_network_snapshot(&backup))?;
+                .and_then(|backup| platform::get_active_network_snapshot(&backup))?;
             let still_masked = snapshot.connection.is_some_and(|connection| {
                 connection.network_guid.as_deref() == Some(record.guid.as_str())
                     && connection.name == record.mask
@@ -479,6 +496,44 @@ pub fn shutdown() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn sharing_rechecks_raw_labels_and_retains_pending_nickname_for_restore() {
+        let record = Recovery {
+            guid: "network".into(),
+            previous_name: "Studio".into(),
+            mask: "SSID".into(),
+            manual: true,
+            manual_until: None,
+        };
+        // The caller saw the actual nicknamed WLAN profile before persisting
+        // the recovery record; afterward it sees the raw unsynchronized NLM
+        // label. The mask may itself equal that original NLM label.
+        let before = crate::types::Network {
+            guid: record.guid.clone(),
+            name: "SSID".into(),
+            original_name: "SSID".into(),
+            renamed: false,
+            name_sync_pending: true,
+            live: true,
+            network_type: "wifi".into(),
+            profile: Some("Studio".into()),
+            can_rename: true,
+        };
+        assert_eq!(before.name, record.mask);
+        assert_eq!(record.previous_name, "Studio");
+        assert!(unchanged_label_state(
+            std::slice::from_ref(&before),
+            &before
+        ));
+        let mut changed_profile = before.clone();
+        changed_profile.profile = Some(record.mask.clone());
+        changed_profile.name_sync_pending = false;
+        assert!(!unchanged_label_state(&[changed_profile], &before));
+        let mut changed_nlm = before.clone();
+        changed_nlm.name = "Other mask".into();
+        assert!(!unchanged_label_state(&[changed_nlm], &before));
+        assert!(!unchanged_label_state(&[], &before));
+    }
     #[test]
     #[cfg(windows)]
     fn broadcast_detection_uses_the_native_process_snapshot_without_a_shell_timeout() {

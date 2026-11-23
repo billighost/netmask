@@ -1,0 +1,3 @@
+html[data-mini], html[data-mini] body, html[data-mini] #root { background: transparent; }
+html[data-mini] { color-scheme: light dark; }
+.mini-error { position: fixed; bottom: 4px; right: 4px; z-index: 20; max-width: calc(100% - 8px); padding: 7px 9px; border: 1px solid var(--red); border-radius: 5px; background: var(--bg-app); color: var(--red); text-align: left; font-size: 10px; }

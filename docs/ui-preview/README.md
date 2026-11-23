@@ -4,6 +4,8 @@
 
 Open [index.html](index.html) directly in a browser to explore the original studies. Adjust the height to 200 px, drag the preview corner, or [compare all four](compare.html).
 
+The [mini mode preview](../mini-preview/index.html) preserves three activation placements and five floating-window designs as interactive references. The implemented direction places Mini mode beside Overview and Journal and offers all five designs in Settings, each with a minimal Wi-Fi-speed view. The sample page supports dragging, metric choices, opacity and size controls, and a dismissible announcement.
+
 | Direction | Approach | Status |
 | --- | --- | --- |
 | Fieldnotes | Warm paper, serif network names, green ink, fine dividers | Selected and implemented |

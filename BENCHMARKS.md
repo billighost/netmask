@@ -2,6 +2,10 @@
 
 The current app uses Tauri and the operating system's webview. Previous numbers came from the retired Electron runtime and contained inconsistent memory labels and claims; they do not establish the current app's footprint. Installer size, Rust binary size, resident RAM, private working set, total working set, and committed memory are different measurements.
 
+## v2.8.0 measurement scope
+
+Mini mode adds a visible webview while preserving the hidden main session. Existing tray measurements below describe their named versions and window states; they do not establish Mini mode's resource use. Measure full mode, each minimal/full widget state, restoration, and a completely hidden tray state separately before making new RAM, CPU, disk, or battery claims. The nickname worker also adds a periodic native reconciliation check whose resource cost requires its own production measurement. No new performance number is claimed for v2.8.0.
+
 ## v2.7.0 tray measurement, Windows, 2026-11-07
 
 The current implementation keeps the main Tauri webview intact but hidden when the app closes to the tray. Visible-only transfer and captive-portal polling stop, while opted-in history, observed usage, context detection, and alerts continue on reduced native schedules. On Windows, the app requests bounded working-set trims for its host and WebView2 descendants while it remains hidden; reopening cancels any remaining scheduled passes.

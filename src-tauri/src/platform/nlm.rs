@@ -1,7 +1,8 @@
 //! The Network List Manager supplies real profile IDs and live state without
 //! parsing shell output or guessing identity from a displayed network name.
 use windows::Win32::Networking::NetworkListManager::{
-    INetworkListManager, NLM_ENUM_NETWORK_ALL, NetworkListManager,
+    INetworkListManager, NLM_ENUM_NETWORK, NLM_ENUM_NETWORK_ALL, NLM_ENUM_NETWORK_CONNECTED,
+    NetworkListManager,
 };
 use windows::Win32::System::Com::{
     CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize,
@@ -48,8 +49,16 @@ fn with_manager<T>(
 }
 
 pub fn profiles() -> Result<Vec<Profile>, String> {
+    profiles_with_filter(NLM_ENUM_NETWORK_ALL)
+}
+
+pub fn connected_profiles() -> Result<Vec<Profile>, String> {
+    profiles_with_filter(NLM_ENUM_NETWORK_CONNECTED)
+}
+
+fn profiles_with_filter(filter: NLM_ENUM_NETWORK) -> Result<Vec<Profile>, String> {
     with_manager(|manager| {
-        let enumeration = unsafe { manager.GetNetworks(NLM_ENUM_NETWORK_ALL) }
+        let enumeration = unsafe { manager.GetNetworks(filter) }
             .map_err(|_| "Cannot enumerate Windows network profiles")?;
         let mut profiles = Vec::new();
         loop {
@@ -90,6 +99,18 @@ pub fn profiles() -> Result<Vec<Profile>, String> {
                     return Err("Windows returned too many network interfaces".into());
                 }
                 if let Some(connection) = next[0].take() {
+                    // A network can be live through Ethernet while retaining
+                    // a historical Wi-Fi connection. Automatic repair needs
+                    // a currently connected adapter, not that association.
+                    // Snapshots use this proof for live rows too, while
+                    // disconnected rows retain historical adapter evidence.
+                    if (filter == NLM_ENUM_NETWORK_CONNECTED || live)
+                        && unsafe { connection.IsConnected() }
+                            .map_err(|_| "Network interface connection state unavailable")?
+                            != true
+                    {
+                        continue;
+                    }
                     adapters.push(identifier(
                         unsafe { connection.GetAdapterId() }
                             .map_err(|_| "Adapter identifier unavailable")?,

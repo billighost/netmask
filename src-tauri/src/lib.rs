@@ -1,6 +1,7 @@
 pub use netmask_core::*;
 pub mod commands;
 pub mod companion_commands;
+mod mini;
 
 use std::sync::{
     Arc, Mutex,
@@ -167,9 +168,10 @@ fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
 }
 
 fn window_visible(app: &AppHandle) -> bool {
-    app.get_webview_window("main").is_some_and(|window| {
-        window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(true)
-    })
+    mini::visible(app)
+        || app.get_webview_window("main").is_some_and(|window| {
+            window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(true)
+        })
 }
 
 fn show_existing_window(app: &AppHandle) -> bool {
@@ -177,7 +179,7 @@ fn show_existing_window(app: &AppHandle) -> bool {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
-        let _ = window.emit("nm:visibility", true);
+        let _ = window.emit_to("main", "nm:visibility", true);
         true
     } else {
         false
@@ -224,6 +226,7 @@ fn create_main_window(app: &AppHandle) -> Result<(), String> {
 }
 
 fn request_main_window(app: &AppHandle, intent: Option<&str>) {
+    mini::dismiss(app);
     let lifecycle = app.state::<UiLifecycle>();
     let _transition = lifecycle
         .transition
@@ -286,7 +289,7 @@ fn destroy_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         lifecycle.hidden_to_tray.store(true, Ordering::SeqCst);
         let _ = window.hide();
-        let _ = window.emit("nm:visibility", false);
+        let _ = window.emit_to("main", "nm:visibility", false);
         #[cfg(windows)]
         schedule_windows_webview_trim(app.clone());
     }
@@ -302,7 +305,7 @@ fn hide_window_to_tray(window: &Window) {
     persist_window_handle(window);
     lifecycle.hidden_to_tray.store(true, Ordering::SeqCst);
     let _ = window.hide();
-    let _ = window.emit("nm:visibility", false);
+    let _ = window.emit_to(window.label(), "nm:visibility", false);
     #[cfg(windows)]
     schedule_windows_webview_trim(app.clone());
 }
@@ -399,6 +402,9 @@ fn schedule_windows_webview_trim(app: AppHandle) {
                 .lock()
                 .unwrap_or_else(|error| error.into_inner());
             if tray_trim_cancelled(lifecycle.hidden_to_tray.load(Ordering::SeqCst)) {
+                return;
+            }
+            if mini::visible(&app) {
                 return;
             }
             let webviews_trimmed = trim_windows_webview_working_sets();
@@ -563,6 +569,39 @@ fn start_workers(
     running: Arc<AtomicBool>,
     sharing_item: CheckMenuItem<tauri::Wry>,
 ) {
+    #[cfg(windows)]
+    {
+        let repair_app = app.clone();
+        let repair_running = running.clone();
+        std::thread::spawn(move || {
+            let mut previous_error = None;
+            while repair_running.load(Ordering::Relaxed) {
+                match operations::reconcile_connected_name() {
+                    Ok(changed) => {
+                        previous_error = None;
+                        if changed {
+                            let _ = repair_app.emit("nm:network-changed", ());
+                        }
+                    }
+                    Err(error) => {
+                        if previous_error.as_ref() != Some(&error) {
+                            log::warn!("Automatic Wi-Fi nickname repair is pending: {error}");
+                            let _ = repair_app.emit("nm:network-changed", ());
+                            previous_error = Some(error);
+                        }
+                    }
+                }
+                // Short waits let shutdown finish promptly. Retry after a
+                // later connection or permissions change, not just startup.
+                for _ in 0..5 {
+                    std::thread::sleep(Duration::from_secs(1));
+                    if !repair_running.load(Ordering::Relaxed) {
+                        break;
+                    }
+                }
+            }
+        });
+    }
     let activation_app = app.clone();
     let activation_running = running.clone();
     std::thread::spawn(move || {
@@ -942,6 +981,7 @@ pub fn run() {
             transition: Mutex::new(()),
         })
         .manage(CompanionRuntime::new())
+        .manage(mini::MiniRuntime::default())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Warn)
@@ -998,7 +1038,10 @@ pub fn run() {
             }
             let sharing_event = sharing.clone();
             tray.on_menu_event(move |app, event| match event.id.as_ref() {
-                "show" => request_main_window(app, None),
+                "show" => {
+                    let app = app.clone();
+                    tauri::async_runtime::spawn_blocking(move || request_main_window(&app, None));
+                }
                 "sharing" => {
                     let app = app.clone();
                     let sharing = sharing_event.clone();
@@ -1009,7 +1052,10 @@ pub fn run() {
                     });
                 }
                 "connection-check" => {
-                    request_main_window(app, Some("connection-check"));
+                    let app = app.clone();
+                    tauri::async_runtime::spawn_blocking(move || {
+                        request_main_window(&app, Some("connection-check"))
+                    });
                 }
                 "quit" => exit_app(app),
                 _ => {}
@@ -1021,12 +1067,16 @@ pub fn run() {
                     ..
                 } = event
                 {
-                    let app = tray.app_handle();
-                    if window_visible(app) {
-                        destroy_main_window(app);
-                    } else {
-                        request_main_window(app, None);
-                    }
+                    let app = tray.app_handle().clone();
+                    tauri::async_runtime::spawn_blocking(move || {
+                        if mini::visible(&app) {
+                            mini::restore_main(&app, false);
+                        } else if window_visible(&app) {
+                            destroy_main_window(&app);
+                        } else {
+                            request_main_window(&app, None);
+                        }
+                    });
                 }
             })
             .build(app)?;
@@ -1041,23 +1091,32 @@ pub fn run() {
             }
             Ok(())
         })
-        .on_window_event(|window, event| match event {
-            tauri::WindowEvent::CloseRequested { api, .. } => {
-                api.prevent_close();
-                if settings::get_settings().minimize_to_tray {
-                    hide_window_to_tray(window);
-                } else {
-                    exit_app(window.app_handle());
+        .on_window_event(|window, event| {
+            if mini::on_window_event(window, event) {
+                return;
+            }
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    if settings::get_settings().minimize_to_tray {
+                        let window = window.clone();
+                        tauri::async_runtime::spawn_blocking(move || hide_window_to_tray(&window));
+                    } else {
+                        exit_app(window.app_handle());
+                    }
                 }
+                tauri::WindowEvent::Resized(_) => {
+                    let _ =
+                        window.emit("nm:maximize-change", window.is_maximized().unwrap_or(false));
+                    let _ = window.emit_to(
+                        window.label(),
+                        "nm:visibility",
+                        window.is_visible().unwrap_or(false)
+                            && !window.is_minimized().unwrap_or(true),
+                    );
+                }
+                _ => {}
             }
-            tauri::WindowEvent::Resized(_) => {
-                let _ = window.emit("nm:maximize-change", window.is_maximized().unwrap_or(false));
-                let _ = window.emit(
-                    "nm:visibility",
-                    window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(true),
-                );
-            }
-            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             commands::nm_is_admin,
@@ -1079,6 +1138,7 @@ pub fn run() {
             commands::nm_check_captive_portal,
             commands::nm_open_external,
             commands::nm_get_network_snapshot,
+            commands::nm_get_active_network_snapshot,
             commands::nm_get_networks,
             commands::nm_get_connection,
             commands::nm_get_details,
@@ -1094,6 +1154,10 @@ pub fn run() {
             commands::nm_get_settings,
             commands::nm_set_setting,
             commands::nm_renderer_ready,
+            commands::nm_show_mini,
+            commands::nm_restore_main,
+            commands::nm_start_mini_drag,
+            commands::nm_set_mini_menu_open,
             commands::nm_minimize,
             commands::nm_maximize,
             commands::nm_is_maximized,
@@ -1142,6 +1206,7 @@ pub fn run() {
                 let app = app.clone();
                 tauri::async_runtime::spawn_blocking(move || {
                     persist_window(&app);
+                    mini::persist_on_exit(&app);
                     streamer::shutdown();
                     app.exit(0);
                 });

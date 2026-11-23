@@ -1,10 +1,10 @@
 import { useStore } from './store'
-import { visibleNetworks, nextSelection, errorMessage, connectionKey, reconcileNetworks, sameFields, sharingModeActive } from './network-state'
+import { visibleNetworks, nextSelection, errorMessage, connectionKey, snapshotConnectionKey, reconcileNetworks, sameFields, sharingModeActive } from './network-state'
 import type { Network } from './types'
 
 let refreshPromise: Promise<void> | null = null
 
-export async function refreshNetworks(afterMutation = false): Promise<void> {
+export async function refreshNetworks(afterMutation = false, activeOnly = false): Promise<void> {
   if (refreshPromise) {
     try { await refreshPromise } catch (error) { if (!afterMutation) throw error }
     if (!afterMutation) return
@@ -12,10 +12,10 @@ export async function refreshNetworks(afterMutation = false): Promise<void> {
   if (refreshPromise) return refreshPromise
   useStore.getState().setRefreshing(true)
   refreshPromise = (async () => {
-    const snapshot = await window.nm.getNetworkSnapshot()
+    const snapshot = await (activeOnly ? window.nm.getActiveNetworkSnapshot() : window.nm.getNetworkSnapshot())
     const state = useStore.getState()
     const visible = visibleNetworks(snapshot.networks, state.settings, state.networkSearch, state.streamerStatus.isCloaked)
-    const changed = connectionKey(state.connection) !== connectionKey(snapshot.connection)
+    const changed = snapshotConnectionKey(state.connection, state.networks) !== snapshotConnectionKey(snapshot.connection, snapshot.networks)
     if (changed) state.resetTelemetry()
     useStore.setState({ networks: reconcileNetworks(state.networks, snapshot.networks),
       connection: state.connection && snapshot.connection && sameFields(state.connection, snapshot.connection) ? state.connection : snapshot.connection,

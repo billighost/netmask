@@ -118,6 +118,13 @@ export const tauriApi = {
   importBackup: (json: string): Promise<void> => invoke('nm_import_backup', { json }),
 
   getSettings: (): Promise<AppSettings> => invoke('nm_get_settings'),
+  onSettingsChanged: createListener<AppSettings>('nm:settings-changed'),
+  onMiniLayout: createListener<{ top: number; right: number; effectiveScale?: number }>('nm:mini-layout'),
+  getActiveNetworkSnapshot: (): Promise<NetworkSnapshot> => invoke('nm_get_active_network_snapshot'),
+  showMini: (): Promise<void> => invoke('nm_show_mini'),
+  restoreMain: (customize = false): Promise<void> => invoke('nm_restore_main', { customize }),
+  startMiniDrag: (): Promise<void> => invoke('nm_start_mini_drag'),
+  setMiniMenuOpen: (open: boolean): Promise<void> => invoke('nm_set_mini_menu_open', { open }),
   setSetting: (key: string, value: unknown): Promise<void> =>
     invoke('nm_set_setting', { key, value }),
 
@@ -139,8 +146,8 @@ export const tauriApi = {
   onMaximizeChange: createListener<boolean>('nm:maximize-change'),
   onVisibility: createListener<boolean>('nm:visibility'),
   onTrayConnectionCheck: createListener<void>('nm:tray-connection-check'),
-  rendererReady: (): Promise<'connection-check' | 'going-live' | null> => invoke('nm_renderer_ready'),
-  onUiIntent: createListener<'connection-check' | 'going-live'>('nm:ui-intent'),
+  rendererReady: (): Promise<'connection-check' | 'going-live' | 'mini-settings' | null> => invoke('nm_renderer_ready'),
+  onUiIntent: createListener<'connection-check' | 'going-live' | 'mini-settings'>('nm:ui-intent'),
   onSpeed: createListener<SpeedSample>('nm:speed'),
 
   getVersion: (): Promise<string> => invoke('nm_get_version'),

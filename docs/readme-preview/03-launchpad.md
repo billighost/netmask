@@ -6,16 +6,16 @@
 
 Local connection history, observed data use, Going live checks, reversible network presets, evidence-aware weekly findings, provider reports, calm alerts, and recoverable local labels for Windows, macOS, and Linux.
 
-## Download v2.7.1
+## Download v2.8.0
 
 | Your computer | Get the app | Install |
 | --- | --- | --- |
-| **Windows 10 / 11 · x64** | [Setup](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_x64-setup.exe) · [MSI](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_x64_en-US.msi) | Run the installer. |
-| **macOS 12+ · Apple silicon** | [DMG](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_aarch64.dmg) | Drag NetMask into Applications. |
-| **macOS 12+ · Intel** | [DMG](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_x64.dmg) | Drag NetMask into Applications. |
-| **Linux · x64 · NetworkManager** | [DEB](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_amd64.deb) · [AppImage](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_amd64.AppImage) | Install the DEB or make the AppImage executable. |
+| **Windows 10 / 11 · x64** | [Setup](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_x64-setup.exe) · [MSI](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_x64_en-US.msi) | Run the installer. |
+| **macOS 12+ · Apple silicon** | [DMG](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_aarch64.dmg) | Drag NetMask into Applications. |
+| **macOS 12+ · Intel** | [DMG](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_x64.dmg) | Drag NetMask into Applications. |
+| **Linux · x64 · NetworkManager** | [DEB](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_amd64.deb) · [AppImage](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_amd64.AppImage) | Install the DEB or make the AppImage executable. |
 
-[Release notes](https://github.com/billighost/netmask/releases/tag/v2.7.1) · [Checksums](https://github.com/billighost/netmask/releases/download/v2.7.1/checksums.txt) · [Installation and privacy notes](../../SECURITY.md)
+[Release notes](https://github.com/billighost/netmask/releases/tag/v2.8.0) · [Checksums](https://github.com/billighost/netmask/releases/download/v2.8.0/checksums.txt) · [Installation and privacy notes](../../SECURITY.md)
 
 ## Inside the app
 

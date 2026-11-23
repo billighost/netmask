@@ -1,5 +1,11 @@
 # NetMask implementation audit
 
+Release review, 2026-11-23 (v2.8.0): Mini mode adds a second visible webview with five designs, a minimal Wi-Fi-link-rate view, remembered work-area placement, custom appearance controls, and a return to the full settings. Visibility-aware transfer and ping workers also serve the mini view. The main session stays intact, and prior tray-memory measurements are not a measurement of mini mode. Always-on-top and transparency remain dependent on the OS and compositor.
+
+Mini and background active-context reads use an active snapshot with the WLAN inventory and connected NLM profiles/adapters. The main saved-network list retains the full snapshot; both share display/recovery normalization and connection-generation tracking. This avoids unrelated historical NLM enumeration in live-reading paths without asserting a measured timing improvement. The saved-list orphan filter removes only disconnected rows with no adapters, no matched WLAN profile, no backup, and no recovery link, preserving other OS metadata and recovery records.
+
+Windows nickname reconciliation uses persisted adapter/SSID identity when historical NLM adapter associations disappear. The connected nickname is checked by a native worker under the existing mutation lock; sharing recovery prevents automatic label changes. Duplicate display representations use exact saved-profile identity, and automatic duplicate deletion additionally requires equal complete configuration and accessible credentials. Differently configured, managed, enterprise, and inaccessible profiles are preserved. Case-only names, later edits, rollback, and transferred GUID label intent are part of the regression scope. This section describes the source contract; the release PR and CI retain the verification results for the final commit.
+
 Patch review, 2026-11-17 (v2.7.1): Windows no longer treats every duplicate SSID as an ambiguous selected network. A shared resolver uses recovery links, the connected profile on its adapter, exact profile names, and finally a unique SSID match. Stable Windows network GUIDs remain editable across repair, restoration, and subsequent renames. Standalone ambiguous duplicates remain disabled with actionable guidance. Confirmation rejects a remaining current Windows/profile mismatch; missing historical rows retain recovery without claiming a current mismatch. Restore checks occupied names, and conflict repair uses a separate Windows recovery GUID when available. Native and browser regression fixtures use fictional profiles; live permission prompts and adapter mutations remain hardware verification boundaries. See [patch release notes](releases/v2.7.1.md).
 
 Audit date: 2026-11-07. Scope: the current v2.7.0 working tree for the desktop companion expansion. This document records source evidence and verification boundaries; it is not a security certification or a claim that every operating-system path has been exercised on real hardware.
@@ -75,7 +81,7 @@ The Fieldnotes interface retains Paper and Dark themes, focus trapping/restorati
 
 No new NetMask service or telemetry endpoint is introduced. Background history can send ICMP to the gateway and `1.1.1.1` when enabled. Captive-portal checks use Microsoft's documented test URL while visible or during Going live. Explicit DNS, speed, update, and opened-link requests remain documented in [SECURITY.md](../SECURITY.md). Observation storage, analysis, alerts, and report rendering themselves make no outbound request.
 
-## Verification record for this working tree
+## Verification record for the v2.7.0 working tree
 
 Completed during the documentation pass:
 

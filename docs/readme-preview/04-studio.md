@@ -20,18 +20,18 @@ NetMask can also give a saved network a familiar local label while preserving it
 
 ## Take it with you
 
-**v2.7.1** · [What changed](https://github.com/billighost/netmask/releases/tag/v2.7.1)
+**v2.8.0** · [What changed](https://github.com/billighost/netmask/releases/tag/v2.8.0)
 
 **Windows 10 / 11 · x64**<br>
-[Setup](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_x64-setup.exe) · [MSI](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_x64_en-US.msi)
+[Setup](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_x64-setup.exe) · [MSI](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_x64_en-US.msi)
 
 **macOS 12+**<br>
-[Apple silicon](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_aarch64.dmg) · [Intel](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_x64.dmg)
+[Apple silicon](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_aarch64.dmg) · [Intel](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_x64.dmg)
 
 **Linux · x64 · NetworkManager**<br>
-[Debian / Ubuntu](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_amd64.deb) · [AppImage](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_amd64.AppImage)
+[Debian / Ubuntu](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_amd64.deb) · [AppImage](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_amd64.AppImage)
 
-[Checksums](https://github.com/billighost/netmask/releases/download/v2.7.1/checksums.txt) · [Installation and privacy notes](../../SECURITY.md) · [All releases](https://github.com/billighost/netmask/releases)
+[Checksums](https://github.com/billighost/netmask/releases/download/v2.8.0/checksums.txt) · [Installation and privacy notes](../../SECURITY.md) · [All releases](https://github.com/billighost/netmask/releases)
 
 <details>
 <summary>Platform and interface details</summary>

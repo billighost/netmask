@@ -1,6 +1,6 @@
 {
   "name": "netmask",
-  "version": "2.7.1",
+  "version": "2.8.0",
   "description": "Local-first desktop companion for connection history, observed data use, call readiness, display privacy, and reversible network labels",
   "author": {
     "name": "Bello Bilal",
@@ -38,7 +38,7 @@
     "dist:linux": "tauri build --bundles deb,appimage",
     "typecheck": "tsc --noEmit",
     "lint": "node scripts/lint-hooks.js",
-    "test": "node --test scripts/frontend.test.cjs scripts/hooks.test.cjs scripts/release.test.cjs scripts/test-verification.js",
+    "test": "node --test scripts/frontend.test.cjs scripts/hooks.test.cjs scripts/mini-widget.test.cjs scripts/release.test.cjs scripts/test-verification.js",
     "test:ui": "node scripts/verify-ui.cjs",
     "benchmark:ui": "node scripts/benchmark-ui.cjs",
     "benchmark:memory": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/benchmark-memory.ps1",

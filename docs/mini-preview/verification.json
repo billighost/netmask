@@ -1,0 +1,24 @@
+{
+  "checks": [
+    "Three activation placement choices and five widget choices render",
+    "Every placement selects correctly; every widget starts at the top right",
+    "Every single metric is visible independently in all five designs; Little dial adapts its focal reading",
+    "Right-click opens popover; custom opacity and size sliders update the widget",
+    "Metric toggles work and at least one reading remains selected",
+    "Keyboard menu, Escape focus restoration, and arrow-key positioning work",
+    "Pointer drag moves the widget",
+    "Pause, full-mode restoration, and reactivation work",
+    "Banner dismissal persists across reloads",
+    "Theme and selections persist across reloads",
+    "All five designs and popover remain inside the desktop at 390px with size at 140%",
+    "No browser runtime errors"
+  ],
+  "passed": 12,
+  "screenshots": [
+    "placements-paper.png",
+    "widgets-paper.png",
+    "widgets-dark.png",
+    "desktop-menu.png",
+    "desktop-mobile.png"
+  ]
+}

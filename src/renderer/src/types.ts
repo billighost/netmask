@@ -72,7 +72,18 @@ export type SpeedTestResult = {
   mbPerSec: number
 }
 
+export type MiniMetric = 'download' | 'upload' | 'link' | 'signal' | 'latency'
+export type MiniWidgetPreferences = {
+  design: 'fieldnote' | 'ribbon' | 'glass' | 'dial' | 'signal'
+  minimal: boolean
+  opacity: number
+  size: number
+  metrics: MiniMetric[]
+}
+
 export type AppSettings = {
+  miniWidget: MiniWidgetPreferences
+  miniAnnouncementDismissed: boolean
   onboardingCompleted: boolean
   minimizeToTray: boolean
   launchOnStartup: boolean

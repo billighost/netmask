@@ -126,6 +126,32 @@ pub struct WindowBounds {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
+pub struct MiniWidgetPreferences {
+    pub design: String,
+    pub minimal: bool,
+    pub opacity: u32,
+    pub size: u32,
+    pub metrics: Vec<String>,
+}
+
+impl Default for MiniWidgetPreferences {
+    fn default() -> Self {
+        Self {
+            design: "fieldnote".into(),
+            minimal: false,
+            opacity: 96,
+            size: 100,
+            metrics: ["download", "upload", "link", "signal", "latency"]
+                .into_iter()
+                .map(String::from)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct AppSettings {
     pub onboarding_completed: bool,
     pub minimize_to_tray: bool,
@@ -152,6 +178,8 @@ pub struct AppSettings {
     pub bssid_mask_mode: String,
     pub silent_elevation: bool,
     pub window_bounds: Option<WindowBounds>,
+    pub mini_widget: MiniWidgetPreferences,
+    pub mini_announcement_dismissed: bool,
     pub shortcuts: HashMap<String, String>,
 }
 
