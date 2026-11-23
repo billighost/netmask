@@ -11,7 +11,10 @@ module.exports = async function miniFeatureChecks(browser, base, errors, results
     await page.addInitScript(nativeFixture, options)
     if (options.mini) await page.exposeFunction('__NM_MINI_RESIZE__', async (open, preferences) => {
       const size = miniWidgetSize(preferences)
-      await page.setViewportSize(open ? { width: size.width + 352, height: Math.max(size.height, 620) } : size)
+      const viewport = open ? { width: size.width + 352, height: Math.max(size.height, 620) } : size
+      await page.setViewportSize(viewport)
+      await page.waitForFunction(viewport => window.innerWidth === viewport.width && window.innerHeight === viewport.height, viewport)
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
     })
     await page.goto(base + '/dist/index.html' + (options.mini ? '?view=mini' : ''))
     return page
@@ -66,8 +69,13 @@ module.exports = async function miniFeatureChecks(browser, base, errors, results
     assert.equal(await widget(mini).getAttribute('data-mini-design'), design.value)
     assert.equal(await widget(mini).locator('[data-mini-metric]').count(), minimal ? 1 : 5)
     assert.match(await widget(mini).locator('[data-mini-metric="link"]').textContent(), /866/)
+    await mini.waitForFunction(() => {
+      const box = document.querySelector('[data-mini-design]').getBoundingClientRect()
+      return box.x >= -1 && box.y >= -1 && box.right <= window.innerWidth + 1 && box.bottom <= window.innerHeight + 1
+    })
     const box = await widget(mini).boundingBox(), viewport = mini.viewportSize()
-    assert.ok(box.x >= -1 && box.y >= -1 && box.x + box.width <= viewport.width + 1 && box.y + box.height <= viewport.height + 1)
+    assert.ok(box.x >= -1 && box.y >= -1 && box.x + box.width <= viewport.width + 1 && box.y + box.height <= viewport.height + 1,
+      JSON.stringify({design:design.value,minimal,box,viewport}))
     await mini.screenshot({ path: path.join(output, `mini-${design.value}-${minimal ? 'tiny' : 'full'}.png`), omitBackground: true })
   }
   results.push('All five production widget styles render full and tiny views with measured Wi-Fi link speed, matching native compact dimensions')
