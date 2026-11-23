@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>NetMask — Mini mode design preview</title>
+  <link rel="icon" href="../../src/renderer/public/branding/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="preview.css">
+</head>
+<body>
+  <header class="masthead"><a href="#" class="brand"><img src="../../src/renderer/public/branding/mark.svg" alt="" width="26" height="26">NetMask <span>DESIGN NOTES / 05</span></a><div class="mast-actions"><span class="preview-label">Interactive preview</span><button id="theme-toggle" class="quiet-button" aria-label="Switch to dark theme">◐ <span>Dark</span></button></div></header>
+  <main>
+    <section class="intro">
+      <div><p class="eyebrow"><span class="new-badge">NEW</span> A LITTLE MORE IN VIEW</p><h1>A small window.<br>A clear connection.</h1><p class="lede">Your connection, close at hand. Choose where mini mode lives in NetMask, then pick the small window that feels right on your desktop.</p></div>
+      <aside class="intro-note"><span class="note-rule"></span><p>Always in view.<br>Out of your way.</p><small>Drag it anywhere. Right-click to make it yours.</small><a href="#playground">Try the working preview <span>↗</span></a></aside>
+    </section>
+
+    <nav class="page-nav" aria-label="Preview sections"><a href="#placements"><span>01</span> Where to open it</a><a href="#designs"><span>02</span> How it looks</a><a href="#playground"><span>03</span> Make it yours</a><div id="selection-summary" aria-live="polite">Placement 2 · Window 1</div></nav>
+
+    <section id="placements" class="study-section">
+      <div class="section-heading"><div><p class="eyebrow">01 / THE WAY IN</p><h2>Three places. One small window.</h2></div><p>The same announcement appears in every option.<br>Close it once, and it stays out of your way.</p></div>
+      <div id="placement-grid" class="placement-grid"></div>
+    </section>
+
+    <section id="designs" class="study-section">
+      <div class="section-heading"><div><p class="eyebrow">02 / THE WINDOW</p><h2>Five ways to keep an eye on things.</h2></div><p>Paper, glass, a quiet ribbon, or a little instrument.<br>All five share the same controls.</p></div>
+      <div id="design-grid" class="design-grid"></div>
+      <p class="measurement-note"><span>↳</span> Live download and upload show current traffic. Wi-Fi link shows the connection to your router; an internet speed test measures a different thing.</p>
+    </section>
+
+    <section id="playground" class="study-section">
+      <div class="section-heading"><div><p class="eyebrow">03 / MAKE IT YOURS</p><h2>Try it on your desktop.</h2></div><div class="playground-actions"><button id="reset-position" class="quiet-button">Reset position ↗</button><button id="open-menu" class="primary-button">Customize window <span>⋯</span></button></div></div>
+      <div class="desktop" id="desktop">
+        <div class="wallpaper-orbit" aria-hidden="true"></div>
+        <div class="desktop-label"><span>YOUR SPACE</span><p>A little room to focus.</p></div>
+        <div class="desktop-document" aria-hidden="true"><span>MONDAY NOTES</span><h3>A good day<br>to make something.</h3><div></div><div></div><div></div><p>Keep the useful things close.</p></div>
+        <div id="full-app" class="full-app" hidden></div>
+        <div id="floating-widget" class="floating-widget" tabindex="0" role="group" aria-label="Mini connection window. Drag to move; right-click or press Shift F10 to customize."></div>
+        <div id="widget-menu" class="widget-menu" hidden role="dialog" aria-labelledby="menu-title">
+          <div class="menu-heading"><span id="menu-title">Make it yours</span><button id="close-menu" class="icon-button" aria-label="Close customization">×</button></div>
+          <div class="slider-row"><label for="opacity">Opacity <output id="opacity-output" for="opacity">96%</output></label><input type="range" id="opacity" min="35" max="100" value="96" step="1"></div>
+          <div class="slider-row"><label for="size">Size <output id="size-output" for="size">100%</output></label><input type="range" id="size" min="75" max="140" value="100" step="5"><div class="range-labels"><span>Smaller</span><span>Larger</span></div></div>
+          <div class="menu-divider"></div><p class="menu-eyebrow">SHOW IN THE WINDOW</p><div id="metric-options"></div>
+          <div class="menu-divider"></div>
+          <button class="menu-action" id="restore-full"><span>↗</span> Open full NetMask <small>Esc</small></button>
+          <button class="menu-action" id="test-speed"><span>⌁</span> Check internet speed</button>
+          <button class="menu-action" id="pause-readings"><span>Ⅱ</span> Pause readings</button>
+          <button class="menu-action" id="reset-widget"><span>↻</span> Reset appearance</button>
+          <div class="menu-foot"><span class="pin-icon">⌖</span> Always on top <span class="on-tag">ON</span></div>
+        </div>
+        <div class="desktop-taskbar" aria-hidden="true"><span>▦</span><span class="taskbar-search">⌕ &nbsp; Search</span><img src="../../src/renderer/public/branding/mark.svg" alt="" width="20" height="20"><span class="taskbar-time">10:24<br>Monday</span></div>
+        <div class="stage-toast" id="stage-toast" role="status" hidden></div>
+      </div>
+      <div class="playground-foot"><span>↔ Drag the window · Right-click for controls · Arrow keys move it</span><span>Fictional Studio network · Sample readings</span></div>
+    </section>
+    <footer><div><img src="../../src/renderer/public/branding/mark.svg" alt="" width="22" height="22"><span>NetMask / Fieldnotes</span></div><p id="choice-text">Your choice: placement 2 (Overview) + window 1 (Fieldnote).</p><button id="copy-choice" class="quiet-button">Copy my choice ↗</button></footer>
+  </main>
+  <script src="preview.js"></script>
+</body>
+</html>

@@ -1,12 +1,13 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const load = require('./load-renderer.cjs')
-const { visibleNetworks, nextSelection, maskBssid, connectionKey, reconcileNetworks } = load('network-state.ts')
+const { visibleNetworks, nextSelection, maskBssid, connectionKey, snapshotConnectionKey, wiredNetworkState, reconcileNetworks } = load('network-state.ts')
 const { createSettingsQueue } = load('settings-queue.ts')
 const { enablePrivacyControls } = load('privacy-actions.ts')
 const { useStore, getSpeedRingBuffer } = load('store.ts')
 const actions = load('network-actions.ts')
 const updates = load('update-actions.ts')
+const miniActions = load('mini-actions.ts')
 const { normalizeKeyCombination, parseKeyCombination, shortcutEquals } = load('keyboard-shortcuts.ts')
 const { createConnectionReport } = load('connection-report.ts')
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
@@ -409,6 +410,117 @@ test('the first automatic update check runs immediately and stale cached status 
   assert.equal(useStore.getState().updateError, null)
   assert.ok(useStore.getState().updateLastCheckedAt)
   unsubscribe()
+})
+
+test('wired snapshots have a stable physical identity without fabricating Wi-Fi details', () => {
+  const first = { ...ethernet, name: 'Workshop' }
+  const other = { ...ethernet, guid: 'other-wired-id', name: 'Office' }
+  assert.equal(wiredNetworkState([{ ...first, live: false }, wifi]), null)
+  assert.equal(wiredNetworkState([first]).name, 'Workshop')
+  assert.equal(snapshotConnectionKey(null, [first]), snapshotConnectionKey(null, [{ ...first, name: 'A new label' }]))
+  assert.equal(snapshotConnectionKey(null, [first, other]), snapshotConnectionKey(null, [other, first]))
+  assert.equal(wiredNetworkState([first, other]).name, 'Wired connections')
+  assert.notEqual(snapshotConnectionKey(null, [first]), snapshotConnectionKey(null, [other]))
+  assert.equal(snapshotConnectionKey(connection, [first]), connectionKey(connection))
+})
+
+test('a wired switch with no Wi-Fi connection clears traffic and latency through the active snapshot', async () => {
+  reset()
+  useStore.setState({ networks: [ethernet], connection: null })
+  useStore.getState().setSpeed({ available: true, downMBps: 4, upMBps: 1, downKbps: 4000, upKbps: 1000 })
+  useStore.getState().setPingTelemetry({ gatewayIp: null, gatewayMs: 2, internetMs: 18, jitterMs: 1, timestamp: Date.now() })
+  const epoch = useStore.getState().connectionEpoch
+  window.nm.getActiveNetworkSnapshot = async () => ({ networks: [{ ...ethernet, guid: 'office-wired-id' }], connection: null })
+  await actions.refreshNetworks(false, true)
+  assert.equal(useStore.getState().connection, null)
+  assert.equal(useStore.getState().connectionEpoch, epoch + 1)
+  assert.equal(useStore.getState().speed.available, false)
+  assert.equal(useStore.getState().pingTelemetry, null)
+})
+
+test('mini refresh uses the active snapshot and clears stale readings on the same-GUID physical switch', async () => {
+  reset()
+  useStore.setState({ networks: [wifi], connection })
+  useStore.getState().setSpeed({ available: true, downMBps: 4, upMBps: 1, downKbps: 4000, upKbps: 1000 })
+  let activeReads = 0
+  window.nm.getNetworkSnapshot = async () => { throw Error('Mini must not enumerate saved history') }
+  window.nm.getActiveNetworkSnapshot = async () => { activeReads++; return { networks: [wifi], connection: { ...connection, ssid: 'New physical network' } } }
+  await actions.refreshNetworks(false, true)
+  assert.equal(activeReads, 1)
+  assert.equal(useStore.getState().connection.ssid, 'New physical network')
+  assert.equal(useStore.getState().speed.available, false)
+})
+
+test('mini mode preserves the current view before opening and coalesces repeated activation', async () => {
+  reset()
+  const saved = deferred()
+  let opens = 0, session
+  document.getElementById = () => ({ scrollTop: 42 })
+  useStore.setState({ activeView: 'journal', journalTab: 'usage', historyRange: '7d', selectedGuid: wifi.guid })
+  window.nm.saveUiSession = value => { session = value; return saved.promise }
+  window.nm.showMini = async () => { opens++ }
+  const first = miniActions.activateMiniMode()
+  const second = miniActions.activateMiniMode()
+  assert.equal(opens, 0)
+  saved.resolve()
+  await Promise.all([first, second])
+  assert.equal(opens, 1)
+  assert.deepEqual(session, { activeView: 'journal', journalTab: 'usage', historyRange: '7d', selectedGuid: wifi.guid, mainScrollTop: 42 })
+})
+
+test('mini menu visibility requests keep order and a rejected expansion cannot poison collapse', async () => {
+  reset()
+  const expansion = deferred()
+  const calls = []
+  window.nm.setMiniMenuOpen = open => { calls.push(open); return calls.length === 1 ? expansion.promise : Promise.resolve() }
+  const first = miniActions.setMiniMenuVisibility(true)
+  const second = miniActions.setMiniMenuVisibility(false)
+  await Promise.resolve()
+  assert.deepEqual(calls, [true])
+  expansion.reject(Error('Window could not expand'))
+  await assert.rejects(first, /could not expand/)
+  await second
+  assert.deepEqual(calls, [true, false])
+})
+
+test('failed mini activation preserves the full view and permits retry', async () => {
+  reset()
+  let opens = 0
+  window.nm.saveUiSession = async () => { throw Error('View could not be saved') }
+  window.nm.showMini = async () => { opens++ }
+  await miniActions.activateMiniMode()
+  assert.equal(opens, 0)
+  assert.ok(useStore.getState().toasts.some(toast => toast.type === 'error'))
+  window.nm.saveUiSession = async () => {}
+  await miniActions.activateMiniMode()
+  assert.equal(opens, 1)
+})
+
+test('mini preference updates merge current choices and rejected writes restore confirmed preferences', async () => {
+  reset()
+  await miniActions.updateMiniPreferences({ design: 'glass', minimal: true })
+  await miniActions.updateMiniPreferences({ opacity: 60 })
+  assert.equal(useStore.getState().settings.miniWidget.design, 'glass')
+  assert.equal(useStore.getState().settings.miniWidget.minimal, true)
+  window.nm.setSetting = async () => { throw Error('Cannot save appearance') }
+  assert.equal(await miniActions.updateMiniPreferences({ size: 140, design: 'dial' }), false)
+  assert.equal(useStore.getState().settings.miniWidget.design, 'glass')
+  assert.equal(useStore.getState().settings.miniWidget.size, 100)
+  assert.equal(useStore.getState().settings.miniWidget.opacity, 60)
+})
+
+test('widget customization opens the mini settings section and invalidated traffic remains unavailable', () => {
+  reset()
+  useStore.setState({ contextMenu: { guid: wifi.guid, x: 1, y: 1 } })
+  useStore.getState().openMiniSettings()
+  assert.equal(useStore.getState().settingsOpen, true)
+  assert.equal(useStore.getState().settingsSection, 'mini')
+  assert.equal(useStore.getState().contextMenu, null)
+  useStore.getState().setSpeed({ available: true, downMBps: 1, upMBps: 0, downKbps: 1000, upKbps: 0 })
+  useStore.getState().resetTelemetry()
+  assert.equal(useStore.getState().speed.available, false)
+  useStore.getState().setSettingsOpen(false)
+  assert.equal(useStore.getState().settingsSection, 'general')
 })
 
 test('installer launch failure removes stale readiness so the download can be retried', async () => {

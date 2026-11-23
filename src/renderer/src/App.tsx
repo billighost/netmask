@@ -27,6 +27,7 @@ import { errorMessage, sharingModeActive, visibleNetworks } from './network-stat
 import { requestAutomaticUpdateCheck, subscribeToUpdates } from './update-actions'
 import { CompanionNav } from './components/CompanionNav/CompanionNav'
 import { CompanionBanners } from './components/CompanionBanners/CompanionBanners'
+import { MiniAnnouncement } from './components/MiniAnnouncement/MiniAnnouncement'
 
 const JournalView = lazy(() => import('./components/Journal/JournalView').then(module => ({ default: module.JournalView })))
 const GoingLiveModal = lazy(() => import('./components/GoingLiveModal/GoingLiveModal').then(module => ({ default: module.GoingLiveModal })))
@@ -45,6 +46,8 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     let active = true
+    let settingsEvents = 0
+    let streamerEvents = 0
     const unsubUpdates = subscribeToUpdates()
     // Initial load
     const bootstrap = (async () => {
@@ -65,11 +68,11 @@ export const App: React.FC = () => {
         const [admin, preferences, streamer, elevation, capabilities, recoveryAudit, uiSession, contextPrompt, networkAlert, presetUndo] = results
         if (admin.status === 'fulfilled') state.setAdminOk(admin.value)
         if (preferences.status === 'fulfilled') {
-          state.setSettings(preferences.value)
-          state.setOnboardingOpen(!preferences.value.onboardingCompleted)
+          if (settingsEvents === 0) state.setSettings(preferences.value)
+          state.setOnboardingOpen(!useStore.getState().settings.onboardingCompleted && !useStore.getState().settingsOpen)
           document.documentElement.setAttribute('data-theme', useStore.getState().settings.theme)
         } else state.addToast(errorMessage(preferences.reason, 'Settings could not be loaded'), 'error')
-        if (streamer.status === 'fulfilled') state.setStreamerStatus(streamer.value)
+        if (streamer.status === 'fulfilled' && streamerEvents === 0) state.setStreamerStatus(streamer.value)
         if (elevation.status === 'fulfilled') state.setElevationStatus(elevation.value)
         if (capabilities.status === 'fulfilled') useStore.setState({ capabilities: capabilities.value })
         if (recoveryAudit.status === 'fulfilled') useStore.setState({ recoveryAudit: recoveryAudit.value })
@@ -109,6 +112,11 @@ export const App: React.FC = () => {
     const unsubNetworkChanged = window.nm.onNetworkChanged(() => {
       void refreshNetworks(true).catch(error => useStore.setState({ connectionError: errorMessage(error) }))
     })
+    const unsubSettings = window.nm.onSettingsChanged(settings => {
+      settingsEvents++
+      useStore.getState().setSettings(settings)
+      document.documentElement.setAttribute('data-theme', useStore.getState().settings.theme)
+    })
 
     const unsubContextPrompt = window.nm.onContextPrompt(prompt => useStore.getState().setContextPrompt(prompt))
     const unsubNetworkAlert = window.nm.onNetworkAlert(alert => useStore.getState().setNetworkAlert(alert))
@@ -119,12 +127,14 @@ export const App: React.FC = () => {
 
     // Streamer status subscription
     const unsubStreamer = window.nm.onStreamerStatus(status => {
+      streamerEvents++
       const changed = useStore.getState().streamerStatus.isCloaked !== status.isCloaked
       useStore.getState().setStreamerStatus(status)
       if (changed) refresh()
     })
 
-    const handleUiIntent = async (intent: 'connection-check' | 'going-live') => {
+    const handleUiIntent = async (intent: 'connection-check' | 'going-live' | 'mini-settings') => {
+      if (intent === 'mini-settings') { useStore.getState().openMiniSettings(); return }
       await bootstrap
       if (!active) return
       const state = useStore.getState()
@@ -159,6 +169,7 @@ export const App: React.FC = () => {
       unsubPing()
       unsubCaptive()
       unsubNetworkChanged()
+      unsubSettings()
       unsubContextPrompt()
       unsubNetworkAlert()
       unsubPresetApplied()
@@ -392,6 +403,7 @@ export const App: React.FC = () => {
         <RecoveryBanner />
         <CompanionBanners />
         <CompanionNav />
+        <MiniAnnouncement />
         {activeView === 'overview' ? <div className={styles.layout}>
           <div className={styles.connection}><HeroCard /></div>
           <div className={styles.profiles}><NetworkList /></div>

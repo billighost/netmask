@@ -3,7 +3,8 @@
   "identifier": "default",
   "description": "Local window and event access for the NetMask interface",
   "windows": [
-    "main"
+    "main",
+    "mini"
   ],
   "permissions": [
     "core:default",

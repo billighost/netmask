@@ -1,6 +1,8 @@
-.nav { display: flex; gap: 3px; width: fit-content; margin: 0 0 17px; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-surface-1); }
+.nav { display: flex; gap: 3px; width: 100%; margin: 0 0 17px; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-surface-1); }
 .nav button { min-width: 78px; padding: 7px 12px; border-radius: 3px; color: var(--text-secondary); font-size: 10px; }
 .nav button:hover { color: var(--text-primary); }
 .nav .active { background: var(--accent); color: var(--accent-btn-text); }
 .nav .active:hover { background: var(--accent-bright); color: var(--accent-btn-text); }
+.nav .mini { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; color: var(--accent); background: var(--accent-dim); white-space: nowrap; }
+.newTag { font: 7px/1.5 var(--font-mono); letter-spacing: .5px; padding: 1px 3px; border-radius: 2px; color: var(--note); background: var(--red-dim); }
 @media (max-width: 360px) { .nav { width: 100%; } .nav button { flex: 1; min-width: 0; } }

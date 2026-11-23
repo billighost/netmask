@@ -1,0 +1,9 @@
+.banner { display: flex; align-items: flex-start; gap: 12px; padding: 15px; margin-bottom: 18px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--accent-dim); }
+.icon { color: var(--accent); font-size: 19px; line-height: 1; padding-top: 2px; }
+.banner > div { min-width: 0; flex: 1; }
+.banner strong { font-size: 11px; font-weight: 500; }
+.banner p { font-size: 10px; color: var(--text-secondary); line-height: 1.7; margin-block: 5px 8px; }
+.banner button:not(.close) { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 10px; font-weight: 500; padding: 3px 0; }
+.close { width: 24px; height: 24px; flex-shrink: 0; border-radius: 3px; color: var(--text-secondary); font-size: 18px; line-height: 1; }
+.close:hover { background: var(--bg-surface-1); color: var(--accent); }
+.newTag { display: inline-block; padding: 1px 4px; margin-left: 4px; border-radius: 2px; color: var(--note); background: var(--red-dim); font: 7px/1.5 var(--font-mono); letter-spacing: .5px; }

@@ -1,0 +1,247 @@
+const assert = require('node:assert/strict')
+const path = require('node:path')
+const load = require('./load-renderer.cjs')
+const { MINI_DESIGNS, DEFAULT_MINI_PREFERENCES, miniWidgetSize } = load('mini-display.ts')
+
+module.exports = async function miniFeatureChecks(browser, base, errors, results, nativeFixture) {
+  const output = path.resolve(__dirname, '../.tmp/ui-checks')
+  const makePage = async (options = {}, viewport = { width: 440, height: 700 }) => {
+    const page = await browser.newPage({ viewport, reducedMotion: 'reduce' })
+    page.on('pageerror', error => errors.push(error.message))
+    await page.addInitScript(nativeFixture, options)
+    if (options.mini) await page.exposeFunction('__NM_MINI_RESIZE__', async (open, preferences) => {
+      const size = miniWidgetSize(preferences)
+      await page.setViewportSize(open ? { width: size.width + 352, height: Math.max(size.height, 620) } : size)
+    })
+    await page.goto(base + '/dist/index.html' + (options.mini ? '?view=mini' : ''))
+    return page
+  }
+  const updateMini = (page, patch) => page.evaluate(async patch => {
+    const prefs = { ...window.__NM_FIXTURE__.settings.miniWidget, ...patch }
+    await window.nm.setSetting('miniWidget', prefs)
+  }, patch)
+  const sample = page => page.evaluate(() => {
+    window.__NM_FIXTURE__.emit('nm:speed', { available: true, downMBps: 3.1, upMBps: .4, downKbps: 3100, upKbps: 400 })
+    window.__NM_FIXTURE__.emit('nm:ping-telemetry', { gatewayIp: '', gatewayMs: 8, internetMs: 18, jitterMs: 2, timestamp: Date.now() })
+  })
+  const widget = page => page.locator('[data-mini-design]')
+
+  const main = await makePage()
+  await main.locator('[data-network-guid]').first().waitFor()
+  const activate = main.getByRole('navigation', { name: 'NetMask sections' }).getByRole('button', { name: 'Open mini mode', exact: true })
+  assert.match(await activate.textContent(), /NEW/)
+  await activate.click()
+  await main.waitForFunction(() => window.__NM_FIXTURE__.calls.some(call => call.command === 'nm_show_mini'))
+  await main.getByRole('button', { name: 'Dismiss mini mode announcement forever' }).click()
+  await main.waitForFunction(() => window.__NM_FIXTURE__.settings.miniAnnouncementDismissed)
+  await main.reload()
+  await main.locator('[data-network-guid]').first().waitFor()
+  assert.equal(await main.getByRole('button', { name: 'Dismiss mini mode announcement forever' }).count(), 0)
+  await main.evaluate(() => window.__NM_FIXTURE__.emit('nm:ui-intent', 'mini-settings'))
+  await main.getByRole('tab', { name: 'Mini mode', selected: true }).waitFor()
+  for (const design of MINI_DESIGNS) {
+    await main.getByRole('button', { name: design.label, exact: true }).click()
+    await main.waitForFunction(design => window.__NM_FIXTURE__.settings.miniWidget.design === design, design.value)
+  }
+  await main.getByRole('switch', { name: 'Tiny mode', exact: true }).click()
+  await main.waitForFunction(() => window.__NM_FIXTURE__.settings.miniWidget.minimal)
+  await main.locator('#mini-opacity').fill('60')
+  await main.locator('#mini-size').fill('125')
+  await main.waitForFunction(() => window.__NM_FIXTURE__.settings.miniWidget.opacity === 60 && window.__NM_FIXTURE__.settings.miniWidget.size === 125)
+  await main.screenshot({ path: path.join(output, 'mini-settings-paper.png') })
+  await main.setViewportSize({ width: 320, height: 200 })
+  const modal = await main.getByRole('dialog', { name: 'Settings', exact: true }).boundingBox()
+  assert.ok(modal.y >= 0 && modal.y + modal.height <= 201 && modal.width <= 320)
+  await main.getByRole('button', { name: 'Close settings' }).click()
+  results.push('Mini activation beside Overview/Journal, permanent banner dismissal, all five Settings styles, tiny mode, custom sliders, and minimum-window customization')
+  await main.close()
+
+  const mini = await makePage({ mini: true }, miniWidgetSize(DEFAULT_MINI_PREFERENCES))
+  await mini.getByRole('heading', { name: 'Studio', exact: true }).waitFor()
+  assert.equal(await mini.evaluate(() => window.__NM_FIXTURE__.calls.some(call => call.command === 'nm_get_network_snapshot')), false, 'Mini reads only the bounded active snapshot')
+  await sample(mini)
+  await mini.waitForFunction(() => document.querySelector('[data-mini-metric="download"]').textContent.includes('24.8'))
+  for (const design of MINI_DESIGNS) for (const minimal of [false, true]) {
+    await updateMini(mini, { design: design.value, minimal, opacity: 96, size: 100, metrics: [...DEFAULT_MINI_PREFERENCES.metrics] })
+    assert.equal(await widget(mini).getAttribute('data-mini-design'), design.value)
+    assert.equal(await widget(mini).locator('[data-mini-metric]').count(), minimal ? 1 : 5)
+    assert.match(await widget(mini).locator('[data-mini-metric="link"]').textContent(), /866/)
+    const box = await widget(mini).boundingBox(), viewport = mini.viewportSize()
+    assert.ok(box.x >= -1 && box.y >= -1 && box.x + box.width <= viewport.width + 1 && box.y + box.height <= viewport.height + 1)
+    await mini.screenshot({ path: path.join(output, `mini-${design.value}-${minimal ? 'tiny' : 'full'}.png`), omitBackground: true })
+  }
+  results.push('All five production widget styles render full and tiny views with measured Wi-Fi link speed, matching native compact dimensions')
+  await updateMini(mini, { design: 'ribbon', minimal: false, size: 140 })
+  await mini.setViewportSize({ width: 512, height: 124 })
+  await mini.evaluate(() => window.__NM_FIXTURE__.emit('nm:mini-layout', { top: 0, right: 0, effectiveScale: 512 / 394 }))
+  await mini.waitForFunction(() => document.querySelector('[data-mini-design]').getBoundingClientRect().width <= 513)
+  assert.equal(await mini.evaluate(() => window.__NM_FIXTURE__.settings.miniWidget.size), 140)
+  await mini.screenshot({ path: path.join(output, 'mini-ribbon-portrait.png'), omitBackground: true })
+  await updateMini(mini, { design: 'fieldnote', minimal: false, size: 100 })
+  await mini.evaluate(() => window.__NM_FIXTURE__.fail('nm_set_mini_menu_open', 'The window could not expand'))
+  await widget(mini).click({ button: 'right' })
+  await mini.getByRole('alert').filter({ hasText: 'The window could not expand' }).waitFor()
+  assert.equal(await mini.getByRole('dialog').count(), 0)
+  await widget(mini).click({ button: 'right' })
+  await mini.getByRole('dialog', { name: 'Make it yours' }).waitFor()
+  const controlsDoNotCoverWidget = () => mini.waitForFunction(() => {
+    const controls = document.querySelector('[data-nm-popover]')?.getBoundingClientRect()
+    const card = document.querySelector('[data-mini-design]')?.getBoundingClientRect()
+    return controls && card && (controls.right <= card.left || controls.left >= card.right || controls.bottom <= card.top || controls.top >= card.bottom)
+  })
+  await controlsDoNotCoverWidget()
+  await mini.evaluate(() => window.__NM_FIXTURE__.emit('nm:mini-layout', { top: 0, right: 352 }))
+  await mini.waitForFunction(() => document.querySelector('[data-mini-design]').getBoundingClientRect().left < 2)
+  await controlsDoNotCoverWidget()
+  await mini.evaluate(() => window.__NM_FIXTURE__.emit('nm:mini-layout', { top: 0, right: 0 }))
+  await controlsDoNotCoverWidget()
+  await mini.getByRole('slider', { name: /Opacity/ }).fill('55')
+  await mini.waitForFunction(() => window.__NM_FIXTURE__.settings.miniWidget.opacity === 55)
+  await controlsDoNotCoverWidget()
+  const sizeSlider = mini.getByRole('slider', { name: /Size/ })
+  await sizeSlider.dispatchEvent('pointerdown', { button: 0, pointerId: 1, pointerType: 'mouse' })
+  await sizeSlider.fill('120')
+  assert.equal(await mini.evaluate(() => window.__NM_FIXTURE__.settings.miniWidget.size), 100, 'Native resizing waits for the size gesture to finish, keeping its slider stationary')
+  assert.equal(await sizeSlider.inputValue(), '120')
+  await sizeSlider.dispatchEvent('pointerup', { button: 0, pointerId: 1, pointerType: 'mouse' })
+  await mini.waitForFunction(() => window.__NM_FIXTURE__.settings.miniWidget.size === 120)
+  await controlsDoNotCoverWidget()
+  await mini.screenshot({ path: path.join(output, 'mini-popover.png'), omitBackground: true })
+  await mini.evaluate(() => window.dispatchEvent(new Event('blur')))
+  await mini.waitForFunction(() => !document.querySelector('[data-nm-popover]'))
+  await widget(mini).click({ button: 'right' })
+  await mini.getByRole('dialog', { name: 'Make it yours' }).waitFor()
+  await mini.evaluate(() => window.__NM_FIXTURE__.fail('nm_set_mini_menu_open', 'The controls could not collapse'))
+  await mini.getByRole('button', { name: 'Close mini window controls' }).click()
+  await mini.getByRole('alert').filter({ hasText: 'The controls could not collapse' }).waitFor()
+  assert.ok(await mini.getByRole('dialog', { name: 'Make it yours' }).isVisible())
+  await mini.getByRole('button', { name: /Customize widget/ }).click()
+  await mini.waitForFunction(() => window.__NM_FIXTURE__.calls.some(call => call.command === 'nm_restore_main' && call.args.customize === true))
+  await mini.getByRole('button', { name: 'Customize mini window' }).click()
+  await mini.getByRole('button', { name: 'Pause readings' }).click()
+  await mini.evaluate(() => {
+    window.__NM_FIXTURE__.connection.ssid = 'Changed physical network'
+    window.__NM_FIXTURE__.connection.rxRateMbps = 1200
+    window.__NM_FIXTURE__.emit('nm:network-changed')
+  })
+  await mini.waitForFunction(() => document.querySelector('[data-mini-metric="link"]').dataset.available === 'false')
+  await mini.getByRole('button', { name: 'Customize mini window' }).click()
+  await mini.getByRole('button', { name: 'Resume readings' }).click()
+  await mini.waitForFunction(() => document.querySelector('[data-mini-metric="link"]').textContent.includes('1200'))
+  await mini.getByRole('button', { name: 'Customize mini window' }).click()
+  await mini.getByRole('button', { name: 'Open full NetMask', exact: true }).click()
+  await mini.waitForFunction(() => window.__NM_FIXTURE__.calls.some(call => call.command === 'nm_restore_main' && call.args.customize === false))
+  results.push('Native menu expansion failure leaves controls closed; right-click sliders/customize/full restore work; paused readings invalidate after a physical switch')
+  await mini.close()
+
+  const wired = await makePage({ mini: true, wiredOnly: true }, miniWidgetSize(DEFAULT_MINI_PREFERENCES))
+  await wired.getByRole('heading', { name: 'Workshop', exact: true }).waitFor()
+  await sample(wired)
+  for (const design of MINI_DESIGNS) {
+    await updateMini(wired, { design: design.value, minimal: false, size: 100 })
+    assert.match(await widget(wired).textContent(), /Wired/)
+    assert.equal(await widget(wired).locator('[data-mini-metric="download"]').getAttribute('data-available'), 'true')
+    assert.equal(await widget(wired).locator('[data-mini-metric="latency"]').getAttribute('data-available'), 'true')
+    assert.equal(await widget(wired).locator('[data-mini-metric="link"]').getAttribute('data-available'), 'false')
+    assert.equal(await widget(wired).locator('[data-mini-metric="signal"]').getAttribute('data-available'), 'false')
+    await updateMini(wired, { minimal: true })
+    assert.equal(await widget(wired).locator('[data-mini-metric]').count(), 1)
+    assert.equal(await widget(wired).locator('[data-mini-metric="link"]').getAttribute('data-available'), 'false')
+  }
+  await updateMini(wired, { design: 'fieldnote', minimal: false })
+  await wired.getByRole('button', { name: 'Customize mini window' }).click()
+  await wired.getByRole('button', { name: 'Pause readings' }).click()
+  await wired.evaluate(() => {
+    Object.assign(window.__NM_FIXTURE__.networks[0], { guid: 'office-wired-id', name: 'Office', originalName: 'Office' })
+    window.__NM_FIXTURE__.emit('nm:network-changed')
+  })
+  await wired.getByRole('heading', { name: 'Office', exact: true }).waitFor()
+  await wired.waitForFunction(() => document.querySelector('[data-mini-metric="download"]').dataset.available === 'false')
+  assert.equal(await widget(wired).locator('[data-mini-metric="latency"]').getAttribute('data-available'), 'false')
+  await sample(wired)
+  assert.equal(await widget(wired).locator('[data-mini-metric="download"]').getAttribute('data-available'), 'false')
+  await wired.getByRole('button', { name: 'Customize mini window' }).click()
+  await wired.getByRole('button', { name: 'Resume readings' }).click()
+  await wired.waitForFunction(() => document.querySelector('[data-mini-metric="download"]').textContent.includes('24.8'))
+  await wired.evaluate(() => window.__NM_FIXTURE__.emit('nm:streamer-status', { detectedApp: null, isCloaked: true, cooldownSeconds: 0, manualSecondsRemaining: 0, manualTimed: false }))
+  await wired.getByRole('heading', { name: 'Private network', exact: true }).waitFor()
+  assert.equal(await wired.getByRole('heading', { name: 'Office', exact: true }).count(), 0)
+  results.push('Wired-only snapshots show connected nicknames, measured traffic and latency in all five styles; tiny Wi-Fi values stay unavailable, paused wired switches invalidate readings, and sharing masks wired names')
+  await wired.close()
+
+  const privacy = await makePage({ mini: true, deferInitial: ['nm_get_streamer_status'] }, miniWidgetSize(DEFAULT_MINI_PREFERENCES))
+  await privacy.waitForFunction(() => window.__NM_FIXTURE__.pendingInitial('nm_get_streamer_status'))
+  await privacy.evaluate(() => window.__NM_FIXTURE__.emit('nm:streamer-status', { detectedApp: null, isCloaked: true, cooldownSeconds: 0, manualSecondsRemaining: 0, manualTimed: false }))
+  await privacy.getByRole('heading', { name: 'Private network', exact: true }).waitFor()
+  await privacy.evaluate(() => window.__NM_FIXTURE__.resolveInitial('nm_get_streamer_status'))
+  await privacy.waitForFunction(() => window.__NM_FIXTURE__.calls.some(call => call.command === 'nm_renderer_ready'))
+  assert.equal(await privacy.getByRole('heading', { name: 'Studio', exact: true }).count(), 0)
+  await privacy.close()
+  const unavailable = await makePage({ mini: true, initialFailures: { nm_get_streamer_status: 'Sharing state unavailable' } }, miniWidgetSize(DEFAULT_MINI_PREFERENCES))
+  await unavailable.getByRole('heading', { name: 'Private network', exact: true }).waitFor()
+  await unavailable.getByText('Sharing status is unavailable.', { exact: false }).waitFor()
+  assert.equal(await unavailable.getByRole('heading', { name: 'Studio', exact: true }).count(), 0)
+  await unavailable.evaluate(() => window.__NM_FIXTURE__.emit('nm:streamer-status', { detectedApp: null, isCloaked: false, cooldownSeconds: 0, manualSecondsRemaining: 0, manualTimed: false }))
+  await unavailable.getByRole('heading', { name: 'Studio', exact: true }).waitFor()
+  await unavailable.close()
+  results.push('Mini bootstrap cannot expose a network name when sharing status is unavailable or a late initial status follows a newer cloak event')
+
+  for (const isMini of [false, true]) {
+    const page = await makePage({ mini: isMini, deferInitial: ['nm_get_settings'] }, isMini ? miniWidgetSize(DEFAULT_MINI_PREFERENCES) : { width: 440, height: 700 })
+    await page.waitForFunction(() => window.__NM_FIXTURE__.pendingInitial('nm_get_settings'))
+    await page.evaluate(() => {
+      window.__NM_FIXTURE__.settings.miniWidget.design = 'glass'
+      window.__NM_FIXTURE__.settings.miniWidget.size = 125
+      window.__NM_FIXTURE__.settings.theme = 'dark'
+      window.__NM_FIXTURE__.emit('nm:settings-changed', structuredClone(window.__NM_FIXTURE__.settings))
+      window.__NM_FIXTURE__.resolveInitial('nm_get_settings')
+    })
+    if (isMini) await widget(page).filter({ has: page.getByRole('heading', { name: 'Studio', exact: true }) }).waitFor()
+    else {
+      await page.locator('[data-network-guid]').first().waitFor()
+      await page.evaluate(() => window.__NM_FIXTURE__.emit('nm:ui-intent', 'mini-settings'))
+      await page.getByRole('tab', { name: 'Mini mode', selected: true }).waitFor()
+      assert.equal(await page.getByRole('button', { name: 'Soft glass', exact: true }).getAttribute('aria-pressed'), 'true')
+      assert.equal(await page.locator('#mini-size').inputValue(), '125')
+    }
+    assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark')
+    await page.close()
+  }
+  results.push('Late initial Settings results cannot overwrite newer cross-window style, size, or theme preferences in main or mini renderers')
+  const slow = await makePage({ deferInitial: ['nm_get_network_snapshot'] })
+  await slow.waitForFunction(() => window.__NM_FIXTURE__.pendingInitial('nm_get_network_snapshot'))
+  await slow.evaluate(() => window.__NM_FIXTURE__.emit('nm:ui-intent', 'mini-settings'))
+  await slow.getByRole('tab', { name: 'Mini mode', selected: true }).waitFor()
+  await slow.evaluate(() => window.__NM_FIXTURE__.resolveInitial('nm_get_network_snapshot'))
+  await slow.close()
+  results.push('Customize opens the Mini mode Settings section while a slow Windows saved-network snapshot is still pending')
+}
+
+if (require.main === module) {
+  const fs = require('node:fs'), http = require('node:http')
+  const { chromium } = require('playwright')
+  const root = path.resolve(__dirname, '..'), dist = path.join(root, 'dist')
+  const mime = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.woff': 'font/woff', '.woff2': 'font/woff2' }
+  const server = http.createServer((request, response) => {
+    try {
+      const name = decodeURIComponent(new URL(request.url, 'http://localhost').pathname).replace(/^\/dist\//, '/')
+      const file = path.resolve(dist, '.' + name)
+      if (!file.startsWith(dist + path.sep)) { response.writeHead(403).end(); return }
+      response.setHeader('Content-Type', mime[path.extname(file)] || 'application/octet-stream')
+      response.end(fs.readFileSync(file))
+    } catch { response.writeHead(404).end() }
+  })
+  void (async () => {
+    let browser
+    const errors = [], results = []
+    try {
+      fs.mkdirSync(path.join(root, '.tmp/ui-checks'), { recursive: true })
+      await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+      const edge = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
+      browser = await chromium.launch({ headless: true, executablePath: fs.existsSync(edge) ? edge : undefined })
+      await module.exports(browser, 'http://127.0.0.1:' + server.address().port, errors, results, require('./verify-ui.cjs').nativeFixture)
+      assert.deepEqual(errors, [])
+      console.log(JSON.stringify({ checked: results.length, errors, results }, null, 2))
+    } finally { if (browser) await browser.close(); server.close() }
+  })().catch(error => { console.error(error.stack); process.exitCode = 1 })
+}

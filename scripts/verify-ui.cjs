@@ -20,15 +20,21 @@ const server = http.createServer((request, response) => {
     response.end(fs.readFileSync(file))
   } catch { response.writeHead(404).end() }
 })
-function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0', onboardingCompleted = true, monitoringEnabled = true, usageTrackingEnabled = monitoringEnabled } = {}) {
+function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0', onboardingCompleted = true, monitoringEnabled = true, usageTrackingEnabled = monitoringEnabled, deferInitial = [], initialFailures = {}, mini = false, wiredOnly = false } = {}) {
   let sequence = 0, priorName = ''
   const callbacks = new Map(), listeners = new Map(), failures = new Map(), ignored = new Set(), calls = []
+  Object.entries(initialFailures).forEach(([command, message]) => failures.set(command, message))
+  const deferredCommands = new Set(deferInitial), pendingReads = new Map()
+  let miniMenuOpen = false
   const networks = [
     { guid: 'wifi-id', name: 'Studio', originalName: 'HomeFiber_5G', renamed: true, live: true, type: 'wifi', profile: 'Saved Studio profile', canRename: true },
     { guid: 'ethernet-id', name: 'Workshop', originalName: 'Workshop', renamed: false, live: false, type: 'ethernet', canRename: true }
   ]
+  if (wiredOnly) networks.splice(0, networks.length, { guid: 'ethernet-id', name: 'Workshop', originalName: 'Workshop', renamed: false, live: true, type: 'ethernet', canRename: true })
   const connection = { ssid: 'HomeFiber_5G', profile: 'Saved Studio profile', name: 'Studio', signal: 94, signalDbm: -47, snr: 40, channel: 44, frequency: '5.220 GHz', band: '5 GHz', generation: 'Wi-Fi 5', radioType: '802.11ac', bssid: 'AA:BB:CC:DD:EE:FF', rxRateMbps: 866, txRateMbps: 866, networkGuid: 'wifi-id', interfaceName: 'Wi-Fi', interfaceGuid: 'adapter-id', auth: 'WPA2-Personal' }
   const settings = { onboardingCompleted, minimizeToTray: true, launchOnStartup: false, autoRefreshInterval: 0, theme, showEthernet: true, ultraLowMemory: false, autoCloakStreamer: false, streamerMaskName: 'Private network', customBroadcastApps: [], sharingTimerMinutes: 30, bssidCloaking: true, bssidMaskMode: 'partial', silentElevation: false, monitoringEnabled, monitoringPaused: false, historyRetentionDays: 30, usageTrackingEnabled, contextPromptsEnabled: false, networkChangeAlerts: false, behaviorChangeAlerts: false, usageLimitAlerts: false, shortcuts: {} }
+  Object.assign(settings, { miniWidget: { design: 'fieldnote', minimal: false, opacity: 96, size: 100, metrics: ['download', 'upload', 'link', 'signal', 'latency'] }, miniAnnouncementDismissed: false })
+  try { Object.assign(settings, JSON.parse(sessionStorage.getItem('nm-mini-fixture-settings') || '{}')) } catch {}
   const streamer = { detectedApp: null, isCloaked: false, cooldownSeconds: 0, manualSecondsRemaining: 0, manualTimed: false }
   const identity = { hostname: 'Studio laptop', macAddress: '11:22:33:44:55:66', interfaceName: 'Wi-Fi', interfaceGuid: 'adapter-id', netbiosSilenced: false, macRandomization: 'disabled', activeProfile: 'Saved Studio profile' }
   const roaming = { supported: true, adapterName: 'Sample Wi-Fi adapter', preferredBand: '5 GHz', validPreferredBands: ['5 GHz', '2.4 GHz'], roamingAggressiveness: 'Medium', validRoamingAggressiveness: ['Low', 'Medium', 'High'] }
@@ -64,10 +70,12 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
     longName: () => { networks[0].name = 'A'.repeat(128); connection.name = networks[0].name },
     setContextPrompt: value => { contextPrompt = value }, setNetworkAlert: value => { networkAlert = value },
     setNameConflict: value => { nameConflict = value }
+    , pendingInitial: command => pendingReads.has(command)
+    , resolveInitial: command => { deferredCommands.delete(command); (pendingReads.get(command) || []).forEach(read => read.resolve(read.snapshot)); pendingReads.delete(command) }
   }
   window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: (_, id) => listeners.delete(id) }
   window.__TAURI_INTERNALS__ = {
-    metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
+    metadata: { currentWindow: { label: mini ? 'mini' : 'main' }, currentWebview: { label: mini ? 'mini' : 'main' } },
     transformCallback: callback => { const id = ++sequence; callbacks.set(id, callback); return id },
     unregisterCallback: id => callbacks.delete(id),
     invoke: async (command, args = {}) => {
@@ -76,9 +84,14 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
       calls.push({ command, args })
       if (failures.has(command)) { const error = failures.get(command); failures.delete(command); throw Error(error) }
       if (ignored.delete(command)) return null
+      if (deferredCommands.has(command)) {
+        const snapshot = structuredClone(command === 'nm_get_settings' ? settings : ['nm_get_network_snapshot', 'nm_get_active_network_snapshot'].includes(command) ? { networks, connection: wiredOnly ? null : connection, connectionError: null } : streamer)
+        return new Promise(resolve => pendingReads.set(command, [...(pendingReads.get(command) || []), { resolve, snapshot }]))
+      }
       const values = {
         nm_is_admin: true, nm_get_version: version, nm_is_maximized: false, nm_get_settings: settings,
-        nm_get_network_snapshot: { networks, connection, connectionError: null }, nm_get_streamer_status: streamer,
+        nm_get_network_snapshot: { networks, connection: wiredOnly ? null : connection, connectionError: null }, nm_get_streamer_status: streamer,
+        nm_get_active_network_snapshot: { networks, connection: wiredOnly ? null : connection, connectionError: null },
         nm_get_elevation_status: { isElevated: true, silentElevationEnabled: false, taskConfigured: false, tier: 'admin' },
         nm_get_capabilities: capabilities, nm_check_captive_portal: { isCaptive: false, portalUrl: null, checkedAt: Date.now() },
         nm_get_update_status: { isDownloading: false, progress: null, downloadedVersion: null, downloadedFilePath: null, availableUpdate: null },
@@ -98,7 +111,15 @@ function nativeFixture({ theme = 'light', platform = 'windows', version = '0.0.0
             { id: 'internet', label: 'Internet response', status: 'caution', value: '142 ms', detail: 'The response was slower than usual.' },
             { id: 'portal', label: 'Network sign-in', status: 'ready', value: 'Clear', detail: 'No sign-in page was detected.' }] }
       }
-      if (command === 'nm_set_setting') { settings[args.key] = args.value; return null }
+      if (command === 'nm_set_setting') {
+        settings[args.key] = structuredClone(args.value)
+        sessionStorage.setItem('nm-mini-fixture-settings', JSON.stringify({ miniWidget: settings.miniWidget, miniAnnouncementDismissed: settings.miniAnnouncementDismissed }))
+        emit('nm:settings-changed', structuredClone(settings))
+        if (args.key === 'miniWidget' && window.__NM_MINI_RESIZE__) await window.__NM_MINI_RESIZE__(miniMenuOpen, settings.miniWidget)
+        return null
+      }
+      if (command === 'nm_set_mini_menu_open') { miniMenuOpen = args.open; if (window.__NM_MINI_RESIZE__) await window.__NM_MINI_RESIZE__(args.open, settings.miniWidget); emit('nm:mini-layout', { top: 0, right: 0 }); return null }
+      if (['nm_show_mini', 'nm_restore_main', 'nm_start_mini_drag'].includes(command)) return null
       if (command === 'nm_run_going_live') {
         priorName = connection.name
         Object.assign(streamer, values.nm_run_going_live.sharingStatus)
@@ -293,7 +314,16 @@ async function appChecks(browser, base, errors, results) {
   await page.getByRole('button', { name: 'Start download test', exact: true }).click()
   await page.getByText('100.0', { exact: false }).first().waitFor()
   await page.getByRole('button', { name: 'Close download speed test', exact: true }).click()
-  await page.getByRole('button', { name: 'Actions for HomeFiber_5G', exact: true }).click()
+  const savedActions = page.getByRole('button', { name: 'Actions for HomeFiber_5G', exact: true })
+  await savedActions.scrollIntoViewIfNeeded()
+  await savedActions.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  await savedActions.click()
+  await page.getByRole('menu').waitFor()
+  await page.locator('#main-content').evaluate(element => element.dispatchEvent(new Event('scroll')))
+  assert.equal(await page.getByRole('menu').count(), 1, 'A queued scroll at the same position must keep the new menu open')
+  await page.locator('#main-content').evaluate(element => element.scrollTop += element.scrollTop ? -1 : 1)
+  await page.getByRole('menu').waitFor({ state: 'hidden' })
+  await savedActions.click()
   await page.getByRole('menu').waitFor(); await page.keyboard.press('End')
   assert.equal(await page.getByRole('menuitem', { name: 'Device identity', exact: true }).count(), 0, 'Per-network menus must not show device-specific identity')
   assert.equal(await page.evaluate(() => document.activeElement.getAttribute('role')), 'menuitem')
@@ -309,7 +339,10 @@ async function appChecks(browser, base, errors, results) {
   await page.locator('#filter-networks-input').fill('Workshop')
   await page.keyboard.press('ArrowDown')
   assert.equal(await page.locator('[data-network-guid][aria-pressed=true]').getAttribute('data-network-guid'), 'ethernet-id')
-  await page.getByRole('button', { name: 'Actions for Workshop', exact: true }).click()
+  const wiredActions = page.getByRole('button', { name: 'Actions for Workshop', exact: true })
+  await wiredActions.scrollIntoViewIfNeeded()
+  await wiredActions.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  await wiredActions.click()
   await page.getByRole('menuitem', { name: 'Network details', exact: true }).click()
   await page.getByText('Saved profile', { exact: true }).waitFor()
   assert.equal(await page.getByText('-47 dBm', { exact: true }).count(), 0)
@@ -797,6 +830,7 @@ async function main() {
     await regressionChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
     await productFeatureChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
     await companionFeatureChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
+    await require('./verify-mini-ui.cjs')(browser, 'http://127.0.0.1:' + server.address().port, errors, results, nativeFixture)
     await previewChecks(browser, 'http://127.0.0.1:' + server.address().port, errors, results)
     assert.deepEqual(errors, [], 'Browser JavaScript errors')
     fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify({ results, errors, boundary: 'Fictional native IPC. No live OS mutations.' }, null, 2))

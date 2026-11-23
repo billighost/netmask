@@ -7,6 +7,17 @@ export function connectionKey(connection: Connection | null): string | null {
     connection.interfaceGuid ?? connection.interfaceName, connection.bssid]) : null
 }
 
+export function wiredNetworkState(networks: Network[]): { name: string; key: string } | null {
+  const wired = [...new Map(networks.filter(network => network.live && network.type === 'ethernet')
+    .map(network => [network.guid, network])).values()].sort((first, second) => first.guid.localeCompare(second.guid))
+  return wired.length ? { name: wired.length === 1 ? wired[0].name || 'Wired connection' : 'Wired connections',
+    key: JSON.stringify(['ethernet', wired.map(network => network.guid)]) } : null
+}
+
+export function snapshotConnectionKey(connection: Connection | null, networks: Network[]): string | null {
+  return connectionKey(connection) ?? wiredNetworkState(networks)?.key ?? null
+}
+
 export function sameFields<T extends object>(first: T, second: T): boolean {
   const keys = Object.keys(first) as (keyof T)[]
   return keys.length === Object.keys(second).length && keys.every(key => Object.is(first[key], second[key]))

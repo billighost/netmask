@@ -58,6 +58,7 @@ interface Store {
   adminOk: boolean
   refreshing: boolean
   settingsOpen: boolean
+  settingsSection: 'general' | 'mini'
   onboardingOpen: boolean
   reportModalOpen: boolean
   shortcutsModalOpen: boolean
@@ -113,6 +114,7 @@ interface Store {
   setAdminOk: (ok: boolean) => void
   setRefreshing: (r: boolean) => void
   setSettingsOpen: (open: boolean) => void
+  openMiniSettings: () => void
   setOnboardingOpen: (open: boolean) => void
   setReportModalOpen: (open: boolean) => void
   setShortcutsModalOpen: (open: boolean) => void
@@ -144,6 +146,8 @@ interface Store {
 let toastSeq = 0
 
 const DEFAULT_SETTINGS: AppSettings = {
+  miniWidget: { design: 'fieldnote', minimal: false, opacity: 96, size: 100, metrics: ['download', 'upload', 'link', 'signal', 'latency'] },
+  miniAnnouncementDismissed: false,
   onboardingCompleted: false,
   minimizeToTray: true,
   launchOnStartup: false,
@@ -186,13 +190,14 @@ export const useStore = create<Store>((set, get) => ({
   historyRange: '24h',
   settings: DEFAULT_SETTINGS,
   toasts: [],
-  speed: { downMBps: 0, upMBps: 0, downKbps: 0, upKbps: 0 },
+  speed: { available: false, downMBps: 0, upMBps: 0, downKbps: 0, upKbps: 0 },
   speedTick: 0,
   peakDownMBps: 0,
   testedSpeed: null,
   adminOk: false,
   refreshing: false,
   settingsOpen: false,
+  settingsSection: 'general',
   onboardingOpen: false,
   reportModalOpen: false,
   shortcutsModalOpen: false,
@@ -237,7 +242,8 @@ export const useStore = create<Store>((set, get) => ({
   }),
   saveUiSession: (mainScrollTop = 0) => persistUiSession(mainScrollTop),
   setSettings: (s) => set({ settings: settingWrites.initialize({
-    ...DEFAULT_SETTINGS, ...s, shortcuts: { ...DEFAULT_SHORTCUTS, ...(s?.shortcuts || {}) }
+    ...DEFAULT_SETTINGS, ...s, miniWidget: { ...DEFAULT_SETTINGS.miniWidget, ...s?.miniWidget },
+    shortcuts: { ...DEFAULT_SHORTCUTS, ...(s?.shortcuts || {}) }
   }) }),
 
   updateSetting: (key, val) => {
@@ -297,7 +303,7 @@ export const useStore = create<Store>((set, get) => ({
 
   resetTelemetry: () => {
     speedRingBuffer.fill(0)
-    set(state => ({ speed: { downMBps: 0, upMBps: 0, downKbps: 0, upKbps: 0 },
+    set(state => ({ speed: { available: false, downMBps: 0, upMBps: 0, downKbps: 0, upKbps: 0 },
       speedTick: state.speedTick + 1, testedSpeed: null, peakDownMBps: 0,
       pingTelemetry: null, captivePortal: null, dnsResults: null, deviceIdentity: null, roamingSettings: null,
       connectionEpoch: state.connectionEpoch + 1 }))
@@ -310,7 +316,8 @@ export const useStore = create<Store>((set, get) => ({
 
   setAdminOk: (ok) => set({ adminOk: ok }),
   setRefreshing: (r) => set({ refreshing: r }),
-  setSettingsOpen: (open) => set(state => ({ settingsOpen: open, contextMenu: open ? null : state.contextMenu })),
+  setSettingsOpen: (open) => set(state => ({ settingsOpen: open, settingsSection: 'general', contextMenu: open ? null : state.contextMenu })),
+  openMiniSettings: () => set({ settingsOpen: true, settingsSection: 'mini', contextMenu: null }),
   setOnboardingOpen: (open) => set(state => ({ onboardingOpen: open, contextMenu: open ? null : state.contextMenu })),
   setReportModalOpen: (open) => set(state => ({ reportModalOpen: open, contextMenu: open ? null : state.contextMenu })),
   setShortcutsModalOpen: (open) => set(state => ({ shortcutsModalOpen: open, contextMenu: open ? null : state.contextMenu })),

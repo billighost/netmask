@@ -119,6 +119,8 @@ Windows, macOS, and Linux remain the supported desktop platforms, with clear cap
 
 ## Near-term priorities
 
+Mini mode keeps current readings available while another app has focus. Its activation lives beside Overview and Journal, and Settings offers five visual designs with a minimal Wi-Fi-link-rate alternative for each. The widget's Customize action returns to the full settings. This view follows the same measured-data and privacy rules as the main interface; it introduces no cloud service or new monitoring default. Resource claims require measurements of this additional visible webview rather than reuse of an older hidden-tray result.
+
 1. Complete and publish reproducible tray and background-resource measurements.
 2. Finish cross-platform fixture and hardware verification for counters, context, and permissions.
 3. Improve explanatory copy when OS data is unavailable without adding fallback guesses.

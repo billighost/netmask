@@ -10,6 +10,7 @@ import { copyText, refreshNetworks, startStreamerTimer, toggleStreamer } from '.
 import { checkAppUpdate, downloadAppUpdate, installAppUpdate, openWebPage } from '../../update-actions'
 import { errorMessage, sharingModeActive } from '../../network-state'
 import styles from './SettingsModal.module.css'
+import { MiniSettingsPanel } from '../MiniSettingsPanel/MiniSettingsPanel'
 
 export const SettingsModal: React.FC = () => {
   const { open, settings, capabilities, elevation, streamer, streamerBusy, connection, update, downloading, progress, downloaded, updateError, updateLastCheckedAt } = useStore(state => ({
@@ -18,6 +19,7 @@ export const SettingsModal: React.FC = () => {
     updateError: state.updateError, updateLastCheckedAt: state.updateLastCheckedAt
   }), shallow)
   const sharing = sharingModeActive(streamer, streamerBusy)
+  const requestedSection = useStore(state => state.settingsSection)
   const [version, setVersion] = useState('…')
   const [checking, setChecking] = useState(false)
   const [updateStatus, setUpdateStatus] = useState('')
@@ -26,11 +28,17 @@ export const SettingsModal: React.FC = () => {
   const [dataBusy, setDataBusy] = useState(false)
   const [maskName, setMaskName] = useState(settings.streamerMaskName)
   const [customApps, setCustomApps] = useState(settings.customBroadcastApps.join(', '))
-  const [tab, setTab] = useState<'general' | 'privacy' | 'monitoring' | 'tools' | 'about'>('general')
+  const [tab, setTab] = useState<'general' | 'mini' | 'privacy' | 'monitoring' | 'tools' | 'about'>('general')
   const state = useStore.getState()
   useEffect(() => { window.nm.getVersion().then(setVersion).catch(() => setVersion('Unavailable')) }, [])
   useEffect(() => { setMaskName(settings.streamerMaskName) }, [settings.streamerMaskName])
   useEffect(() => { setCustomApps(settings.customBroadcastApps.join(', ')) }, [settings.customBroadcastApps])
+  useEffect(() => {
+    if (open && requestedSection === 'mini') {
+      setTab('mini')
+      requestAnimationFrame(() => document.getElementById('settings-tab-mini')?.focus())
+    }
+  }, [open, requestedSection])
   useEffect(() => {
     if (open) window.nm.getElevationStatus().then(state.setElevationStatus).catch(error => state.addToast(errorMessage(error), 'error'))
   }, [open])
@@ -156,7 +164,7 @@ export const SettingsModal: React.FC = () => {
     { label: 'Wi-Fi adapter settings', icon: <RadioIcon size={14} />, action: () => state.setRoamingModalOpen(true), disabled: capabilities?.roamingTuning === false }
   ]
   const ready = downloaded && (!update || downloaded === update.version)
-  const tabs = [{ id: 'general' as const, label: 'General' }, { id: 'privacy' as const, label: 'Privacy' }, { id: 'monitoring' as const, label: 'Monitoring' }, { id: 'tools' as const, label: 'Tools' }, { id: 'about' as const, label: 'About' }]
+  const tabs = [{ id: 'general' as const, label: 'General' }, { id: 'mini' as const, label: 'Mini mode' }, { id: 'privacy' as const, label: 'Privacy' }, { id: 'monitoring' as const, label: 'Monitoring' }, { id: 'tools' as const, label: 'Tools' }, { id: 'about' as const, label: 'About' }]
   const intervalOptions = [10, 30, 60, 0].map(value => ({ value, label: value ? 'Every ' + value + ' seconds' : 'Only when I refresh' }))
   if (![10, 30, 60, 0].includes(settings.autoRefreshInterval)) intervalOptions.push({ value: settings.autoRefreshInterval, label: 'Every ' + settings.autoRefreshInterval + ' seconds' })
   return <Dialog label="Settings" onClose={() => state.setSettingsOpen(false)} scrimClass={styles.scrim} modalClass={styles.modal}>
@@ -171,6 +179,7 @@ export const SettingsModal: React.FC = () => {
         setTab(tabs[target].id); document.getElementById('settings-tab-' + tabs[target].id)?.focus()
       }}>{item.label}</button>)}</nav>
     <div id="settings-panel" role="tabpanel" aria-labelledby={'settings-tab-' + tab} className={styles.body}>
+      {tab === 'mini' && <MiniSettingsPanel />}
       {tab === 'general' && <>
         <section className={styles.section}><h3 className={styles.sectionTitle}>Everyday use</h3>
           <Toggle label="Close to the tray" sub="Keep NetMask available in the background." help="Closing the window leaves NetMask in the system tray. Display-name privacy can keep running there; live speed and ping readings pause. Choose Quit in the tray menu to exit." on={settings.minimizeToTray} onChange={value => void state.updateSetting('minimizeToTray', value)} />

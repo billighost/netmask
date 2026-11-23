@@ -21,6 +21,10 @@ flowchart LR
 
 On Windows, closing to the tray schedules three bounded working-set trim passes for the NetMask host and descendant WebView2 processes. Each pass rechecks the native hidden-to-tray state, and reopening cancels the remaining passes. macOS and Linux hide the window without this Windows API. Working-set trimming is an operating-system memory-management request, not proof of a fixed memory result.
 
+Mini mode adds a frameless, transparent, always-on-top `mini` webview while preserving the hidden main renderer and its session. It starts in the monitor's top-right work area, remembers its physical anchor, and clamps placement after DPI or monitor changes. The native visibility checks treat a visible mini window as visible UI, so transfer and latency readings continue. Windows dormant-webview trimming skips the active mini view. Returning to full mode shows the existing main renderer; the Customize action delivers the `mini-settings` intent and opens its settings panel.
+
+Validated `miniWidget` preferences choose one of five designs, a minimal Wi-Fi-link-rate view, opacity, size, and displayed metrics. `miniAnnouncementDismissed` records permanent announcement dismissal. The widget uses existing connection, transfer, and ping data; it does not run an internet speed test in the background. Wi-Fi link rate remains distinct from local live traffic and an explicit internet-capacity test.
+
 The older command handlers live in `commands.rs`; journal, usage, digest, prompt, alert, preset, Going live, and evidence handlers live in `companion_commands.rs`. Slow handlers use `tauri::async_runtime::spawn_blocking` so subprocesses, downloads, locks, SQLite work, and diagnostics do not block the window thread.
 
 The workspace's `netmask-core` crate points to `src-tauri/src/core.rs`. It contains the platform adapters, settings, rename/recovery operations, DNS, transfer measurements, ping, portal detection, QR sharing, identity controls, roaming, streamer automation, updater, observation database, monitoring continuity, robust analysis, and evidence construction. Separating it from the webview permits actual native-engine tests without launching a desktop or changing a real network.
@@ -47,9 +51,17 @@ Access-point alerts require three consecutive observations and a 24-hour cooldow
 
 A network snapshot returns saved profiles, the connected network, and a separate connection error. Stable identities survive display-name changes: Windows Network List GUIDs, macOS network-service UUIDs, and Linux NetworkManager UUIDs. A saved profile's connection parameters remain distinct from its editable local label.
 
+Mini mode and the native active-context worker use `platform::get_active_network_snapshot`. On Windows it retains the WLAN inventory for profile-identity and SSID-ambiguity checks, but reads NLM through `connected_profiles` and its connected adapter associations. The main saved-network list still uses the full snapshot. Both paths finish through the same display/recovery normalization and `observe_connection` generation tracking. Active readings therefore do not enumerate unrelated historical NLM metadata; this is an implementation boundary, not a timing or resource-use claim.
+
 `operations.rs` serializes name changes with a file lock. It refreshes the network, rejects stale expected names, writes the original before changing the OS, and asks the platform adapter to confirm the resulting label. Restore-all retains failed entries and reports partial failure. Backup imports merge records rather than overwriting an existing original.
 
 Windows uses the Network List Manager and WLAN APIs alongside permission-controlled configuration commands. Ambiguous profiles are marked non-editable. macOS changes a service label with `networksetup`; it does not remove and recreate the Wi-Fi network. Linux changes NetworkManager connection names with `nmcli` and uses UUIDs for reconnects.
+
+Windows persisted adapter/SSID links remain authoritative when historical NLM rows lose their adapter association. Duplicate display rows are suppressed only for the same resolved saved-profile identity. Successful user label intent is stored separately in `name-labels.json`; an explicit native worker reconciles the connected nickname under the network-mutation lock, including while the main UI is hidden. Sharing recovery takes precedence. Automatic repairs do not open UAC prompts, and failed permission checks keep the state pending.
+
+The saved-list merge also omits disconnected NLM entries only when their adapter list is empty, no WLAN profile matches, and neither an original-label backup nor a recovery link exists. Other OS metadata and recovery-bearing rows remain available.
+
+A recreated original WLAN profile is removed only after the exact adapter/SSID, complete settings, and accessible credentials compare equal in memory. Managed, enterprise, inaccessible, and differently configured profiles remain untouched. Repair uses rollback for a failed rename after duplicate removal, keeps original-label recovery, and transfers saved label intent when Windows replaces a network GUID. Read-only snapshots and diagnostics do not perform OS mutations.
 
 Windows mapping gives the live row first choice of a WLAN profile and never reuses its recovery identity for a historical row. macOS resolves services within the current network location; an ambiguous active adapter, an inactive location, or a duplicated service label cannot silently select a mutation target.
 
@@ -121,7 +133,7 @@ The updater accepts the repository's stable GitHub releases, chooses the exact p
 
 Windows name recovery keeps original labels in `names.json` and stores NLM-to-WLAN identity links separately in `name-links.json`. Both reach durable storage before protected OS mutation. Post-update audit backfills unambiguous links, never guesses ambiguous profiles, and keeps incomplete recovery records. Private diagnostics expose only safe state and counts, not the identifiers used by these stores.
 
-The production CSP restricts scripts, images, connections, objects, and framing. Capabilities apply to the main window. Website opening accepts HTTP/HTTPS addresses and passes them directly to the OS opener.
+The production CSP restricts scripts, images, connections, objects, and framing. Window capabilities cover the main UI and the mini window's supported commands. Website opening accepts HTTP/HTTPS addresses and passes them directly to the OS opener.
 
 Updater initialization cannot overwrite newer progress/download events. A deleted or changed cached installer can be downloaded again; a failed installer launch clears renderer readiness so retry remains available.
 
@@ -133,6 +145,6 @@ Updater initialization cannot overwrite newer progress/download events. A delete
 
 `npm run test:native` runs the entire Rust workspace, including IPC serialization contracts in the desktop host. `build.rs` embeds the same Common Controls v6, long-path, and non-elevated application manifest into Windows binaries and test hosts. On GNU targets it reads the compiler's endfile specs and omits only the injected default manifest; this avoids resource collisions without changing the installed toolchain. Published Windows builds continue to use MSVC.
 
-`npm run build` produces `dist` from Vite. Tauri compiles the Rust host and installers; the release matrix builds Windows x64, Apple silicon, Intel macOS, and Linux x64. It stages only the expected native package names, requires all six before publishing, and creates a SHA-256 manifest. No second desktop framework is installed or shipped.
+`npm run build` produces `dist` from Vite. Tauri compiles the Rust host and installers; the release matrix builds Windows x64, Apple silicon, Intel macOS, and Linux x64. It stages only the expected native package names and complete package sets for successful platforms, creates a SHA-256 manifest, and records actual availability. Confirmed hosted-runner allocation failures can leave a platform unavailable; test or build failures block publication. All four platforms produce six installers. No second desktop framework is installed or shipped.
 
 See [the audit](AUDIT.md) for fixes and verification boundaries and [the release guide](../RELEASE_GUIDE.md) for the required checks and publication sequence.

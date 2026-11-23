@@ -70,6 +70,8 @@ Review `git diff --cached` first. Do not commit installers, the native target di
 
 Use GitHub CLI or `scripts/github-release.cjs`. The helper authenticates through `GH_TOKEN`, `GITHUB_TOKEN`, or Git Credential Manager without printing or saving credentials.
 
+When the maintainer requests an issue for a reported bug, create it before the PR. Run `node scripts/github-release.cjs user` to verify the stored account, then pass a temporary JSON file containing `title` and a Markdown `body` to `node scripts/github-release.cjs issue-create .tmp/release-issue.json`. The helper checks that issue creation uses the repository owner's account. Keep private network names, addresses, and credentials out of the issue. Add `Closes #<issue-number>` to the PR body so the verified merge closes that report.
+
 Create a temporary JSON file containing `title`, `head`, `base: "main"`, and a Markdown `body` that explains behavior, validation, and platform limits:
 
 ```sh

@@ -410,6 +410,8 @@ pub fn default_settings() -> AppSettings {
         bssid_mask_mode: "partial".into(),
         silent_elevation: true,
         window_bounds: None,
+        mini_widget: crate::types::MiniWidgetPreferences::default(),
+        mini_announcement_dismissed: false,
         shortcuts: default_shortcuts(),
     }
 }
@@ -425,6 +427,33 @@ pub fn validate_display_name(name: &str) -> Result<(), String> {
 }
 
 fn validate_settings(settings: &AppSettings) -> Result<(), String> {
+    let mini = &settings.mini_widget;
+    if !matches!(
+        mini.design.as_str(),
+        "fieldnote" | "ribbon" | "glass" | "dial" | "signal"
+    ) {
+        return Err("Choose one of the five mini window styles".into());
+    }
+    if !(35..=100).contains(&mini.opacity) || !(75..=140).contains(&mini.size) {
+        return Err("Mini opacity must be 35–100% and size must be 75–140%".into());
+    }
+    if mini.metrics.is_empty()
+        || mini.metrics.len() > 5
+        || mini.metrics.iter().any(|metric| {
+            !matches!(
+                metric.as_str(),
+                "download" | "upload" | "link" | "signal" | "latency"
+            )
+        })
+        || mini
+            .metrics
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            != mini.metrics.len()
+    {
+        return Err("Choose at least one distinct mini window reading".into());
+    }
     if !matches!(settings.theme.as_str(), "dark" | "light") {
         return Err("Theme must be dark or light".into());
     }
@@ -578,6 +607,8 @@ pub fn update_settings_value(
             | "bssidMaskMode"
             | "silentElevation"
             | "windowBounds"
+            | "miniWidget"
+            | "miniAnnouncementDismissed"
             | "shortcuts"
     ) {
         return Err(format!("Unknown setting: {key}"));
@@ -728,6 +759,29 @@ pub fn write_name_links(links: &HashMap<String, String>) -> Result<(), String> {
     storage().write("name-links.json", &normalize_name_links(links.clone())?)
 }
 
+/// Successful user labels survive Windows recreating its saved WLAN profile.
+/// Sharing-mode masks are excluded by the mutation layer.
+pub fn read_name_labels() -> Result<HashMap<String, String>, String> {
+    normalize_name_labels(storage().read("name-labels.json")?.unwrap_or_default())
+}
+
+pub fn write_name_labels(labels: &HashMap<String, String>) -> Result<(), String> {
+    storage().write("name-labels.json", &normalize_name_labels(labels.clone())?)
+}
+
+fn normalize_name_labels(
+    labels: HashMap<String, String>,
+) -> Result<HashMap<String, String>, String> {
+    let labels = normalize_backup(labels)?;
+    for (id, label) in &labels {
+        if !crate::platform::is_guid(id) && !id.starts_with("wlan:") {
+            return Err("A saved network label has an invalid identifier".into());
+        }
+        validate_display_name(label)?;
+    }
+    Ok(labels)
+}
+
 fn normalize_name_links(links: HashMap<String, String>) -> Result<HashMap<String, String>, String> {
     let mut normalized = HashMap::new();
     for (id, stable_id) in links {
@@ -774,6 +828,53 @@ pub fn validate_backup_json(json: &str) -> Result<HashMap<String, String>, Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn legacy_settings_gain_all_mini_styles_without_losing_preferences() {
+        let store = test_storage("mini-migration");
+        store
+            .write(
+                "settings.json",
+                &serde_json::json!({"theme":"dark", "showEthernet":false}),
+            )
+            .unwrap();
+        let migrated = load_settings(&store).unwrap();
+        assert_eq!(migrated.theme, "dark");
+        assert!(!migrated.show_ethernet);
+        assert_eq!(migrated.mini_widget.design, "fieldnote");
+        assert_eq!(migrated.mini_widget.metrics.len(), 5);
+        assert!(!migrated.mini_announcement_dismissed);
+        let _ = fs::remove_dir_all(&store.directory);
+    }
+
+    #[test]
+    fn mini_preferences_validate_styles_controls_and_selected_readings() {
+        let defaults = default_settings();
+        for design in ["fieldnote", "ribbon", "glass", "dial", "signal"] {
+            let value = serde_json::json!({"design":design,"minimal":true,"opacity":35,"size":140,"metrics":["link"]});
+            let changed = update_settings_value(&defaults, "miniWidget", value).unwrap();
+            assert!(changed.mini_widget.minimal);
+        }
+        for invalid in [
+            serde_json::json!({"design":"unknown"}),
+            serde_json::json!({"opacity":101}),
+            serde_json::json!({"size":74}),
+            serde_json::json!({"metrics":[]}),
+            serde_json::json!({"metrics":["link","link"]}),
+            serde_json::json!({"metrics":["password"]}),
+        ] {
+            assert!(update_settings_value(&defaults, "miniWidget", invalid).is_err());
+        }
+        assert!(
+            update_settings_value(
+                &defaults,
+                "miniAnnouncementDismissed",
+                serde_json::json!(true)
+            )
+            .unwrap()
+            .mini_announcement_dismissed
+        );
+    }
+
     fn test_storage(label: &str) -> JsonStorage {
         JsonStorage::new(std::env::temp_dir().join(format!(
             "netmask-{label}-{}-{}",

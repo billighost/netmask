@@ -13,12 +13,12 @@ Official packages are published at [billighost/netmask/releases](https://github.
 Compare a download's SHA-256 with the manifest from the same release:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath .\NetMask_2.7.0_x64-setup.exe
+Get-FileHash -Algorithm SHA256 -LiteralPath .\NetMask_2.8.0_x64-setup.exe
 ```
 
 ```sh
-sha256sum NetMask_2.7.0_amd64.deb       # Linux
-shasum -a 256 NetMask_2.7.0_aarch64.dmg # macOS
+sha256sum NetMask_2.8.0_amd64.deb       # Linux
+shasum -a 256 NetMask_2.8.0_aarch64.dmg # macOS
 ```
 
 Checksums detect changed or incomplete files; they do not replace publisher code signing. This project does not currently claim verified Windows publisher signing or macOS notarization. SmartScreen or Gatekeeper may warn about an unrecognized download. Verify the source and file before making your own installation decision; do not disable system protections globally.
@@ -41,8 +41,8 @@ An absolute `NETMASK_DATA_DIR` override exists for isolated diagnostics and test
 
 The directory can contain:
 
-- `settings.json`: themes, window bounds, monitoring choices, retention, alert and prompt choices, display-privacy settings, and validated custom broadcast-app basenames.
-- `names.json` and `name-links.json`: original local labels and Windows identity links needed for safe restoration.
+- `settings.json`: themes, window bounds, mini-mode appearance and announcement dismissal, monitoring choices, retention, alert and prompt choices, display-privacy settings, and validated custom broadcast-app basenames.
+- `names.json`, `name-links.json`, and `name-labels.json`: original local labels, Windows identity links, and successful nickname intent needed for safe restoration and connected-profile reconciliation.
 - `streamer.json`: a recoverable sharing-mode label change or timed session.
 - `ui-state.json`: the last selected view, journal tab, history range, and selected saved network.
 - `presets.json` and `preset-undo.json`: per-network local label/display preferences and the bounded state needed for a safe undo.
@@ -82,11 +82,15 @@ These destinations receive the ordinary source IP address and request metadata a
 
 Transfer counters and observed usage read local operating-system counters and do not inspect packet contents. Broadcast/call-app detection reads a local process snapshot at a bounded interval only when its prompt or automatic mode is enabled; it sends no process list off the machine.
 
-When the window closes to the tray, NetMask keeps the webview intact but hidden so the same renderer state can return immediately. Visible transfer UI and captive-portal polling stop. Opted-in history, observed usage, context detection, and alerts continue through reduced native schedules. On Windows only, NetMask requests a bounded series of working-set trims for its hidden host and WebView2 processes; reopening cancels the remaining passes. Disabling background features removes their corresponding work.
+When the window closes to the tray, NetMask keeps the webview intact but hidden so the same renderer state can return immediately. Visible transfer UI and captive-portal polling stop when no NetMask window is visible. Mini mode is a visible window and uses the existing readings and probes; opening it does not enable retained monitoring or run an internet speed test. Opted-in history, observed usage, context detection, and alerts continue through reduced native schedules when the app is completely hidden. On Windows only, NetMask requests a bounded series of working-set trims for its hidden host and WebView2 processes; reopening cancels the remaining passes, and the active mini view is excluded. Disabling background features removes their corresponding work.
+
+Windows nickname checks use local recovery records and exact saved-profile identities. Automatic repair never opens an administrator prompt and pauses while sharing recovery is active. Removing a recreated original profile requires equal complete configuration and accessible credentials, compared only in memory; passwords are not written to logs, history, reports, or nickname stores. Profiles with different settings, enterprise credentials, managed policy, or inaccessible keys are preserved.
 
 ## Operating-system limits
 
 Name changes and DNS/driver settings may require operating-system permission. Canceled, unsupported, or failed operations report failure. Available Wi-Fi fields, BSSID access, counters, adapter controls, and local-label behavior vary by Windows version, Mac permissions, Linux desktop environment, NetworkManager, adapter, and driver.
+
+Mini mode's always-on-top layering and transparency follow operating-system and desktop-compositor support. Its minimal speed reading is the available Wi-Fi link rate to the router; it is not a measurement of internet capacity.
 
 A different access point behind a familiar name can be normal mesh or managed-network roaming. NetMask requires repeated observations and cooldowns before alerting and describes the measured change; it does not claim that a change proves an attack.
 

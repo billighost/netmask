@@ -10,6 +10,7 @@
 
 ## What stays useful after setup
 
+- **Keep it in view.** Open **Mini mode** beside Overview and Journal for a draggable window that stays on top. Choose Fieldnote, Ribbon, Soft glass, Little dial, or Signal desk in Settings; each has a tiny Wi-Fi-speed mode. Right-click for opacity, size, readings, or **Customize** to return to the full settings.
 - **See what happened.** Review local, bounded history for drops, latency spikes, jitter, and network changes. Paused and unavailable periods stay visibly missing.
 - **Understand observed data use.** Track what this computer counted per saved network across restarts, counter resets, adapter changes, and network switches. Set a personal limit with calm near-limit and over-limit warnings. These totals are not provider billing records.
 - **Prepare for calls.** **Going live** checks the current connection and turns on sharing mode. Supported call or broadcast app detection can offer a prompt; automatic sharing is available only after an explicit user choice.
@@ -21,19 +22,21 @@ Everything stays on the device. Monitoring is off until enabled, can be paused, 
 
 ## Get NetMask
 
-**Latest: v2.7.1** · [Release notes](https://github.com/billighost/netmask/releases/tag/v2.7.1)
+**Latest: v2.8.0** · [Release notes](https://github.com/billighost/netmask/releases/tag/v2.8.0)
 
 | Windows 10 / 11 | macOS 12+ | Linux |
 | --- | --- | --- |
-| **x64**<br>[Setup](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_x64-setup.exe) · [MSI](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_x64_en-US.msi) | [Apple silicon](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_aarch64.dmg)<br>[Intel](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_x64.dmg) | **x64 · NetworkManager**<br>[Debian / Ubuntu](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_amd64.deb) · [AppImage](https://github.com/billighost/netmask/releases/download/v2.7.1/NetMask_2.7.1_amd64.AppImage) |
+| **x64**<br>[Setup](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_x64-setup.exe) · [MSI](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_x64_en-US.msi) | [Apple silicon](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_aarch64.dmg)<br>[Intel](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_x64.dmg) | **x64 · NetworkManager**<br>[Debian / Ubuntu](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_amd64.deb) · [AppImage](https://github.com/billighost/netmask/releases/download/v2.8.0/NetMask_2.8.0_amd64.AppImage) |
 
-[Verify checksums](https://github.com/billighost/netmask/releases/download/v2.7.1/checksums.txt) · [Installation and privacy notes](SECURITY.md) · [All releases](https://github.com/billighost/netmask/releases)
+[Verify checksums](https://github.com/billighost/netmask/releases/download/v2.8.0/checksums.txt) · [Installation and privacy notes](SECURITY.md) · [All releases](https://github.com/billighost/netmask/releases)
 
 ## Small, honest, cross-platform
 
 Paper and Dark themes, keyboard and screen-reader support, and one bounded scroll area keep every action reachable at **320 × 200**. Available readings and controls vary by operating system, adapter, and permissions; unsupported controls are disabled with an explanation.
 
-Windows edits Network List labels, macOS edits network service labels, and Linux edits NetworkManager connection names. The app explains where an operating system cannot provide a reading or control.
+Mini mode keeps selected readings in view while you work. Its tiny speed view shows the Wi-Fi link to the router; live traffic and an explicit internet speed test measure different things. Always-on-top behavior and transparency follow the operating system and desktop compositor.
+
+Windows edits Network List and saved Wi-Fi profile labels, checks existing nicknames on connection, and preserves original recovery values. macOS edits network service labels, and Linux edits NetworkManager connection names. The app explains where an operating system cannot provide a reading or control.
 
 ## Build it
 

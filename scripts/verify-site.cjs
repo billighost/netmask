@@ -1,7 +1,7 @@
 const { chromium } = require('playwright')
 
 const origin = process.argv[2] || 'http://127.0.0.1:4174'
-const expectedVersion = '2.7.1'
+const expectedVersion = require('../package.json').version
 const routes = [
   ['/', false],
   ['/story/', false],
@@ -39,8 +39,14 @@ const routes = [
   }
 
   await page.goto(`${origin}/downloads/`, { waitUntil: 'networkidle' })
-  const releaseLinks = await page.locator('a[href*="releases/download"]').evaluateAll(nodes => nodes.map(node => node.href))
-  if (!releaseLinks.length || releaseLinks.some(href => !href.includes(`/v${expectedVersion}/`))) {
+  const allReleaseLinks = new Set()
+  for (const platform of ['windows', 'macos', 'linux']) {
+    await page.getByRole('button', { name: platform, exact: true }).click()
+    const shown = await page.locator('a[href*="releases/download"]').evaluateAll(nodes => nodes.map(node => node.href))
+    for (const href of shown) allReleaseLinks.add(href)
+  }
+  const releaseLinks = [...allReleaseLinks]
+  if (releaseLinks.length !== 7 || releaseLinks.some(href => !href.includes(`/v${expectedVersion}/`))) {
     throw new Error(`Download URLs are not v${expectedVersion}: ${releaseLinks.join(', ')}`)
   }
 

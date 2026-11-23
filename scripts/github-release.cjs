@@ -28,8 +28,8 @@ function getCredential() {
   return credential
 }
 
-async function api(method, path, body) {
-  const response = await fetch(`https://api.github.com${repository}${path}`, {
+async function githubApi(method, path, body) {
+  const response = await fetch(`https://api.github.com${path}`, {
     method,
     headers: {
       Authorization: `Bearer ${getCredential()}`,
@@ -50,6 +50,10 @@ async function api(method, path, body) {
   return result
 }
 
+async function api(method, path, body) {
+  return githubApi(method, `${repository}${path}`, body)
+}
+
 function prInfo(pr) {
   return {
     number: pr.number, title: pr.title, url: pr.html_url, state: pr.state,
@@ -63,6 +67,18 @@ async function main() {
   const [action, arg, extra] = process.argv.slice(2)
   let result
   switch (action) {
+    case 'user': {
+      const user = await githubApi('GET', '/user')
+      result = { login: user.login, url: user.html_url }
+      break
+    }
+    case 'issue-create': {
+      const user = await githubApi('GET', '/user')
+      if (user.login !== 'billighost') throw new Error('The stored GitHub account does not match the requested NetMask owner account.')
+      const issue = await api('POST', '/issues', JSON.parse(fs.readFileSync(arg, 'utf8')))
+      result = { number: issue.number, title: issue.title, url: issue.html_url, author: issue.user.login }
+      break
+    }
     case 'prs':
       result = (await api('GET', '/pulls?state=open&per_page=30')).map(prInfo)
       break
@@ -184,7 +200,7 @@ async function main() {
       break
     }
     default:
-      throw new Error('Usage: github-release.cjs prs | pr-create <json-file> | pr <number> | checks <sha> | pr-merge <number> <sha> | runs [sha] | run <id> | run-notices <id> | run-rerun-failed <id> | workflow-dispatch <workflow> <json-file> | logs <job-id> | release <tag> | release-edit <tag> <notes-file>')
+      throw new Error('Usage: github-release.cjs user | issue-create <json-file> | prs | pr-create <json-file> | pr <number> | checks <sha> | pr-merge <number> <sha> | runs [sha] | run <id> | run-notices <id> | run-rerun-failed <id> | workflow-dispatch <workflow> <json-file> | logs <job-id> | release <tag> | release-edit <tag> <notes-file>')
   }
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
 }

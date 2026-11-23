@@ -251,7 +251,7 @@ pub fn active_network_context() -> Result<Option<ActiveNetworkContext>, String> 
     }
     #[cfg(windows)]
     {
-        let snapshot = get_network_snapshot(&settings::read_backup()?)?;
+        let snapshot = get_active_network_snapshot(&settings::read_backup()?)?;
         let Some(network) = snapshot.networks.iter().find(|network| network.live) else {
             return Ok(None);
         };
@@ -262,7 +262,7 @@ pub fn active_network_context() -> Result<Option<ActiveNetworkContext>, String> 
         let adapter = connection
             .and_then(|connection| connection.interface_guid.clone())
             .or_else(|| {
-                nlm::profiles().ok()?.into_iter().find_map(|row| {
+                nlm::connected_profiles().ok()?.into_iter().find_map(|row| {
                     (row.live && row.guid.eq_ignore_ascii_case(&network.guid))
                         .then(|| row.adapters.into_iter().next())
                         .flatten()
@@ -315,26 +315,60 @@ pub fn boot_identity() -> String {
     }
 }
 pub fn get_network_snapshot(backup: &HashMap<String, String>) -> Result<NetworkSnapshot, String> {
-    let (mut connection, connection_error) = match raw_connection() {
+    let (connection, connection_error) = match raw_connection() {
         Ok(connection) => (connection, None),
         Err(error) => (None, Some(error)),
     };
     #[cfg(windows)]
-    let mut networks = windows::get_networks(backup, connection.as_ref())?;
+    let networks = windows::get_networks(backup, connection.as_ref())?;
     #[cfg(target_os = "linux")]
-    let mut networks = linux::get_networks(backup, connection.as_ref())?;
+    let networks = linux::get_networks(backup, connection.as_ref())?;
     #[cfg(target_os = "macos")]
-    let mut networks = macos::get_networks(backup, connection.as_ref())?;
+    let networks = macos::get_networks(backup, connection.as_ref())?;
+    Ok(finish_network_snapshot(
+        networks,
+        connection,
+        connection_error,
+    ))
+}
+
+pub fn get_active_network_snapshot(
+    backup: &HashMap<String, String>,
+) -> Result<NetworkSnapshot, String> {
+    #[cfg(windows)]
+    {
+        let (connection, connection_error) = match raw_connection() {
+            Ok(connection) => (connection, None),
+            Err(error) => (None, Some(error)),
+        };
+        let networks = windows::get_active_networks(backup, connection.as_ref())?;
+        Ok(finish_network_snapshot(
+            networks,
+            connection,
+            connection_error,
+        ))
+    }
+    #[cfg(not(windows))]
+    {
+        get_network_snapshot(backup)
+    }
+}
+
+fn finish_network_snapshot(
+    mut networks: Vec<Network>,
+    mut connection: Option<Connection>,
+    connection_error: Option<String>,
+) -> NetworkSnapshot {
     networks.sort_by_cached_key(|network| (!network.live, network.name.to_lowercase()));
     if let Some(current) = connection.as_mut() {
         apply_active_display_network(&networks, current);
     }
     observe_connection(connection.as_ref());
-    Ok(NetworkSnapshot {
+    NetworkSnapshot {
         networks,
         connection,
         connection_error,
-    })
+    }
 }
 
 fn apply_active_display_network(networks: &[Network], current: &mut Connection) {
@@ -374,7 +408,7 @@ fn active_display_network<'a>(
         .or_else(|| second.is_none().then_some(first))
 }
 pub fn get_current_connection() -> Result<Option<Connection>, String> {
-    let snapshot = get_network_snapshot(&settings::read_backup()?)?;
+    let snapshot = get_active_network_snapshot(&settings::read_backup()?)?;
     if let Some(error) = snapshot.connection_error {
         Err(error)
     } else {

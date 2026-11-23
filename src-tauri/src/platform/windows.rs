@@ -236,6 +236,7 @@ pub struct Profile {
     pub id: String,
     pub ssid: String,
     pub can_rename: bool,
+    flags: u32,
 }
 
 fn profile_xml(
@@ -341,7 +342,8 @@ pub fn profiles() -> Result<Vec<Profile>, String> {
                     hex.to_uppercase()
                 ),
                 ssid: String::from_utf8_lossy(&bytes).into_owned(),
-                can_rename: true,
+                can_rename: info.dwFlags & WLAN_PROFILE_GROUP_POLICY == 0,
+                flags: info.dwFlags,
             });
         }
     }
@@ -355,7 +357,64 @@ pub fn get_networks(
     let profiles = profiles()?;
     let rows = super::nlm::profiles()?;
     let links = crate::settings::read_name_links()?;
-    Ok(merge_profiles(profiles, rows, backup, &links, connection))
+    observed_networks(profiles, rows, backup, &links, connection)
+}
+
+/// Mini telemetry needs the active identity, not hundreds of old NLM rows.
+/// Keep the full WLAN inventory for SSID ambiguity and legacy identity checks.
+pub fn get_active_networks(
+    backup: &HashMap<String, String>,
+    connection: Option<&Connection>,
+) -> Result<Vec<Network>, String> {
+    let profiles = profiles()?;
+    let rows = super::nlm::connected_profiles()?;
+    let links = crate::settings::read_name_links()?;
+    let mut networks = observed_networks(profiles, rows, backup, &links, connection)?;
+    networks.retain(|network| network.live);
+    Ok(networks)
+}
+
+fn observed_networks(
+    profiles: Vec<Profile>,
+    rows: Vec<super::nlm::Profile>,
+    backup: &HashMap<String, String>,
+    links: &HashMap<String, String>,
+    connection: Option<&Connection>,
+) -> Result<Vec<Network>, String> {
+    // Display and mutation verification use observed OS state. Desired labels
+    // are repair intent only; overlaying them here would hide a new rename or
+    // a temporary sharing mask before the OS write can be verified.
+    let mut networks = merge_profiles(profiles, rows, backup, links, connection);
+    let sharing = crate::settings::storage().read::<serde_json::Value>("streamer.json")?;
+    show_verified_profile_labels(
+        &mut networks,
+        &crate::settings::read_name_labels()?,
+        sharing.as_ref().is_some_and(|record| !record.is_null()),
+    );
+    Ok(networks)
+}
+
+fn show_verified_profile_labels(
+    networks: &mut [Network],
+    labels: &HashMap<String, String>,
+    sharing_active: bool,
+) {
+    if sharing_active {
+        return;
+    }
+    for network in networks {
+        // A successful WLAN repair can precede a protected NLM label write.
+        // Show only an actually observed saved-profile label. Stale intent
+        // must never override a new rename, restore, or sharing mask.
+        if network.name_sync_pending
+            && network.profile.as_ref().is_some_and(|profile| {
+                labels.get(&network.guid) == Some(profile) && profile != &network.name
+            })
+        {
+            network.name = network.profile.clone().unwrap();
+            network.renamed = network.name != network.original_name;
+        }
+    }
 }
 
 fn merge_profiles(
@@ -385,21 +444,54 @@ fn merge_profiles(
             continue;
         }
         let original = backup.get(guid).cloned().unwrap_or_else(|| name.into());
+        let linked_id = links.get(guid).map(String::as_str);
+        // NLM drops adapter associations from historical rows. A persisted
+        // WLAN link is stronger evidence than that missing association.
         let candidates: Vec<_> = profiles
             .iter()
             .filter(|profile| {
-                if used_profiles.contains(&(profile.id.clone(), profile.name.clone())) {
-                    return false;
-                }
                 row.adapters.contains(&guid_string(&profile.interface))
+                    || linked_id == Some(profile.id.as_str())
             })
             .collect();
-        let profile = select_profile(
+        let matched_profile = select_profile(
             &candidates,
-            links.get(guid).map(String::as_str),
+            linked_id,
             connection.filter(|_| row.live),
             &[name, original.as_str()],
         );
+        // NLM retains old metadata long after a saved connection is gone.
+        // Without an adapter, saved WLAN profile, or NetMask recovery record,
+        // a disconnected row is not a connectable saved network. Showing it
+        // creates original-name ghosts alongside the real nicknamed profile.
+        if !row.live
+            && row.adapters.is_empty()
+            && matched_profile.is_none()
+            && !backup.contains_key(guid)
+            && !links.contains_key(guid)
+        {
+            continue;
+        }
+        // A historical Windows row is another representation of the same
+        // saved profile, not another connectable network. Keep the live row
+        // and any distinct saved profile (including different credentials).
+        if !row.live
+            && matched_profile.is_some_and(|profile| {
+                used_profiles.contains(&(profile.id.clone(), profile.name.clone()))
+                    && (linked_id == Some(profile.id.as_str())
+                        || (row.adapters.contains(&guid_string(&profile.interface))
+                            && (name == profile.name
+                                || name == profile.ssid
+                                || original == profile.ssid)
+                            && backup.get(guid).is_none_or(|original| {
+                                original == &profile.ssid || original == &profile.name
+                            })))
+            })
+        {
+            continue;
+        }
+        let profile = matched_profile
+            .filter(|profile| !used_profiles.contains(&(profile.id.clone(), profile.name.clone())));
         let chosen_guid = profile
             .filter(|profile| {
                 counts.get(&profile.id) == Some(&1) && backup.contains_key(&profile.id)
@@ -567,6 +659,318 @@ fn rename_profile(profile: &Profile, new_name: &str) -> Result<(), String> {
     }
 }
 
+struct ConnectedNamePlan {
+    guid: String,
+    nlm_guid: String,
+    label: String,
+    original: String,
+    profile: Profile,
+}
+
+fn connected_name_plan(
+    profiles: &[Profile],
+    rows: &[super::nlm::Profile],
+    backup: &HashMap<String, String>,
+    links: &HashMap<String, String>,
+    labels: &HashMap<String, String>,
+    connection: &Connection,
+) -> Option<ConnectedNamePlan> {
+    let adapter = connection.interface_guid.as_deref()?;
+    let mut plans = rows.iter().filter_map(|row| {
+        if !row.live || !row.adapters.iter().any(|id| id == adapter) {
+            return None;
+        }
+        let matching: Vec<_> = profiles
+            .iter()
+            .filter(|profile| {
+                guid_string(&profile.interface) == adapter
+                    && profile.ssid == connection.ssid
+                    && links.get(&row.guid).is_none_or(|id| id == &profile.id)
+            })
+            .collect();
+        // Legacy releases persisted SSID-based recovery keys. Only a unique
+        // saved profile can safely inherit that record.
+        let (recovery_guid, original, label) = if let Some(original) = backup.get(&row.guid) {
+            (
+                row.guid.clone(),
+                original.clone(),
+                labels.get(&row.guid).unwrap_or(&row.name).clone(),
+            )
+        } else if matching.first().is_some_and(|first| {
+            backup.contains_key(&first.id)
+                && matching.iter().all(|profile| profile.id == first.id)
+                && (matching.len() == 1 || labels.contains_key(&first.id))
+        }) {
+            let key = &matching[0].id;
+            (
+                key.clone(),
+                backup.get(key)?.clone(),
+                labels.get(key).unwrap_or(&row.name).clone(),
+            )
+        } else {
+            // Windows can recreate its NLM GUID too. Inherit only one
+            // unambiguous saved label for the exact adapter/SSID association.
+            let mut inherited = links.iter().filter_map(|(guid, id)| {
+                if !matching.iter().any(|profile| &profile.id == id) {
+                    return None;
+                }
+                let original = backup.get(guid)?;
+                let label = labels.get(guid)?;
+                (label != original).then_some((original, label))
+            });
+            let (original, label) = inherited.next()?;
+            if inherited.any(|(other_original, other_label)| {
+                other_original != original || other_label != label
+            }) {
+                return None;
+            }
+            (row.guid.clone(), original.clone(), label.clone())
+        };
+        if label == original {
+            return None;
+        }
+        let source = matching
+            .iter()
+            .copied()
+            .find(|profile| profile.name == connection.profile)
+            .or_else(|| {
+                matching
+                    .iter()
+                    .copied()
+                    .find(|profile| profile.name == label)
+            })
+            .or_else(|| (matching.len() == 1).then(|| matching[0]))?;
+        if !source.can_rename {
+            return None;
+        }
+        Some(ConnectedNamePlan {
+            guid: recovery_guid,
+            nlm_guid: row.guid.clone(),
+            label,
+            original,
+            profile: source.clone(),
+        })
+    });
+    let plan = plans.next()?;
+    plans.next().is_none().then_some(plan)
+}
+
+// Compare complete WLAN configuration and plaintext credentials only in
+// memory. Do not discard a profile merely because its SSID matches. Enterprise
+// credentials and any inaccessible key remain ambiguous and are preserved.
+fn comparable_profile_xml(xml: &str) -> Option<String> {
+    let authentication = xml_value(xml, "authentication")?;
+    let encryption = xml_value(xml, "encryption")?;
+    let wep = encryption.to_ascii_lowercase().starts_with("wep");
+    // WEP can use "open" authentication while still requiring a key.
+    if authentication != "open" || wep {
+        if !(matches!(authentication.as_str(), "WPAPSK" | "WPA2PSK" | "WPA3SAE")
+            || (wep && matches!(authentication.as_str(), "open" | "shared")))
+            || xml_value(xml, "protected").as_deref() != Some("false")
+            || xml_value(xml, "keyMaterial").is_none_or(|key| key.is_empty())
+        {
+            return None;
+        }
+    }
+    let start = xml.find("<name>")?;
+    let end = xml[start..].find("</name>")? + start + "</name>".len();
+    if xml[..start].contains("<SSIDConfig>") {
+        return None;
+    }
+    let mut comparable = xml.to_owned();
+    comparable.replace_range(start..end, "<name />");
+    Some(
+        regex::Regex::new(r">\s+<")
+            .ok()?
+            .replace_all(&comparable, "><")
+            .into_owned(),
+    )
+}
+
+fn profiles_equivalent(
+    client: &Client,
+    source: &Profile,
+    duplicate: &Profile,
+) -> Result<bool, String> {
+    if source.id != duplicate.id
+        || source.flags != duplicate.flags
+        || !source.can_rename
+        || !duplicate.can_rename
+    {
+        return Ok(false);
+    }
+    let source_xml = profile_xml(client, &source.interface, &source.name, true)?;
+    let duplicate_xml = profile_xml(client, &duplicate.interface, &duplicate.name, true)?;
+    Ok(comparable_profile_xml(&source_xml)
+        .zip(comparable_profile_xml(&duplicate_xml))
+        .is_some_and(|(source, duplicate)| source == duplicate))
+}
+
+fn delete_profile(client: &Client, profile: &Profile) -> Result<(), String> {
+    let name = wide_argument(&profile.name);
+    let code = unsafe { WlanDeleteProfile(client.0, &profile.interface, name.as_ptr(), null()) };
+    if code == 0 {
+        Ok(())
+    } else {
+        Err(format!(
+            "Windows could not remove the verified duplicate Wi-Fi profile ({code})"
+        ))
+    }
+}
+
+fn restore_profile_xml(client: &Client, profile: &Profile, xml: &str) -> Result<(), String> {
+    let xml = wide_argument(xml);
+    let mut reason = 0;
+    let code = unsafe {
+        WlanSetProfile(
+            client.0,
+            &profile.interface,
+            profile.flags & WLAN_PROFILE_USER,
+            xml.as_ptr(),
+            null(),
+            0,
+            null(),
+            &mut reason,
+        )
+    };
+    if code == 0 {
+        Ok(())
+    } else {
+        Err(format!(
+            "Windows could not restore the duplicate profile after a failed rename ({code})"
+        ))
+    }
+}
+
+fn rename_with_duplicate_rollback<T>(
+    duplicate: Option<T>,
+    mut delete: impl FnMut(&T) -> Result<(), String>,
+    mut rename: impl FnMut() -> Result<(), String>,
+    mut rollback: impl FnMut(&T) -> Result<(), String>,
+) -> Result<(), String> {
+    if let Some(duplicate) = &duplicate {
+        delete(duplicate)?;
+    }
+    if let Err(error) = rename() {
+        if let Some(duplicate) = &duplicate {
+            rollback(duplicate).map_err(|rollback| format!("{error} {rollback}"))?;
+        }
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn target_profile_conflict<'a>(
+    all: &'a [Profile],
+    source: &Profile,
+    label: &str,
+) -> Option<&'a Profile> {
+    all.iter().find(|profile| {
+        guid_string(&profile.interface) == guid_string(&source.interface)
+            && profile.name.eq_ignore_ascii_case(label)
+            && profile.name != source.name
+    })
+}
+
+fn transfer_label_intent(
+    labels: &mut HashMap<String, String>,
+    links: &HashMap<String, String>,
+    plan: &ConnectedNamePlan,
+) -> bool {
+    let before = labels.clone();
+    // One owner for this resolved label prevents a restored migrated GUID
+    // inheriting its old nickname again. Original recovery values remain.
+    labels.retain(|guid, label| {
+        guid == &plan.guid || label != &plan.label || links.get(guid) != Some(&plan.profile.id)
+    });
+    labels.insert(plan.guid.clone(), plan.label.clone());
+    *labels != before
+}
+
+/// Called explicitly by the native worker under the network mutation lock;
+/// snapshots and diagnostics remain read-only and this never invokes UAC.
+pub fn reconcile_connected_name(
+    backup: &mut HashMap<String, String>,
+    links: &mut HashMap<String, String>,
+    labels: &mut HashMap<String, String>,
+) -> Result<bool, String> {
+    let Some(connection) = get_connection()? else {
+        return Ok(false);
+    };
+    let all = profiles()?;
+    let rows = super::nlm::connected_profiles()?;
+    let Some(plan) = connected_name_plan(&all, &rows, backup, links, labels, &connection) else {
+        return Ok(false);
+    };
+    crate::settings::validate_display_name(&plan.label)?;
+    if !backup.contains_key(&plan.guid) {
+        backup.insert(plan.guid.clone(), plan.original.clone());
+        crate::settings::write_backup(backup)?;
+    }
+    // Persist the existing user label and exact SSID association before any
+    // Windows write, so a recreated original can be repaired after restart.
+    if links.get(&plan.nlm_guid) != Some(&plan.profile.id) {
+        links.insert(plan.nlm_guid.clone(), plan.profile.id.clone());
+        crate::settings::write_name_links(links)?;
+    }
+    if transfer_label_intent(labels, links, &plan) {
+        crate::settings::write_name_labels(labels)?;
+    }
+    let current = get_connection()?.ok_or("The Wi-Fi connection changed during label repair")?;
+    if current.profile != connection.profile
+        || current.ssid != connection.ssid
+        || current.interface_guid != connection.interface_guid
+    {
+        return Err("The Wi-Fi connection changed during label repair".into());
+    }
+    let client = client()?;
+    let mut changed = false;
+    if plan.profile.name != plan.label {
+        let conflict = target_profile_conflict(&all, &plan.profile, &plan.label);
+        let rollback = if let Some(conflict) = conflict {
+            if !profiles_equivalent(&client, &plan.profile, conflict)? {
+                return Err("The original and nicknamed Wi-Fi profiles have different settings or credentials. Both have been preserved.".into());
+            }
+            let xml = profile_xml(&client, &conflict.interface, &conflict.name, false)?;
+            Some((conflict, xml))
+        } else {
+            None
+        };
+        rename_with_duplicate_rollback(
+            rollback,
+            |(conflict, _)| delete_profile(&client, conflict),
+            || rename_profile(&plan.profile, &plan.label),
+            |(conflict, xml)| restore_profile_xml(&client, conflict, xml),
+        )?;
+        changed = true;
+    }
+    // If Windows recreated an original after a rename, remove only that
+    // original when the complete configuration is a proven duplicate.
+    let refreshed = profiles()?;
+    let canonical = refreshed
+        .iter()
+        .find(|profile| profile.id == plan.profile.id && profile.name == plan.label)
+        .ok_or("Windows did not confirm the repaired Wi-Fi nickname")?;
+    for duplicate in refreshed.iter().filter(|profile| {
+        profile.id == canonical.id
+            && profile.name != canonical.name
+            && (profile.name == plan.original || profile.name == profile.ssid)
+    }) {
+        if profiles_equivalent(&client, canonical, duplicate)? {
+            delete_profile(&client, duplicate)?;
+            changed = true;
+        }
+    }
+    if rows
+        .iter()
+        .any(|row| row.guid == plan.nlm_guid && row.name != plan.label)
+    {
+        super::nlm::rename(&plan.nlm_guid, &plan.label)?;
+        changed = true;
+    }
+    Ok(changed)
+}
+
 struct ProfileMatch {
     profile: Option<Profile>,
     nlm_available: bool,
@@ -686,7 +1090,10 @@ fn profile_for_network(guid: &str, current_name: Option<&str>) -> Result<Profile
     let connection = get_connection().ok().flatten();
     let candidates: Vec<_> = profiles
         .iter()
-        .filter(|profile| row.adapters.contains(&guid_string(&profile.interface)))
+        .filter(|profile| {
+            row.adapters.contains(&guid_string(&profile.interface))
+                || linked_id.as_deref() == Some(profile.id.as_str())
+        })
         .collect();
     let backup = crate::settings::read_backup()?;
     let names: Vec<_> = [
@@ -930,7 +1337,10 @@ fn matching_nlm_guid(
         .filter(|row| {
             let candidates: Vec<_> = all
                 .iter()
-                .filter(|candidate| row.adapters.contains(&guid_string(&candidate.interface)))
+                .filter(|candidate| {
+                    row.adapters.contains(&guid_string(&candidate.interface))
+                        || links.get(&row.guid) == Some(&candidate.id)
+                })
                 .collect();
             let original = backup
                 .get(&row.guid)
@@ -1114,7 +1524,733 @@ mod tests {
             id: format!("wlan:{}:53534944", guid_string(&interface)),
             ssid: "SSID".into(),
             can_rename: true,
+            flags: 0,
         }
+    }
+
+    #[test]
+    fn historical_link_with_no_adapters_resolves_and_does_not_duplicate_live_profile() {
+        let saved = profile("Studio");
+        let live_guid = "{00112233-4455-6677-8899-aabbccddeeff}";
+        let old_guid = "{11112233-4455-6677-8899-aabbccddeeff}";
+        let rows = vec![
+            super::super::nlm::Profile {
+                guid: old_guid.into(),
+                name: "SSID".into(),
+                live: false,
+                adapters: vec![],
+            },
+            super::super::nlm::Profile {
+                guid: live_guid.into(),
+                name: "Studio".into(),
+                live: true,
+                adapters: vec![guid_string(&saved.interface)],
+            },
+        ];
+        let links = HashMap::from([
+            (old_guid.into(), saved.id.clone()),
+            (live_guid.into(), saved.id.clone()),
+        ]);
+        let networks = merge_profiles(
+            vec![saved.clone()],
+            rows,
+            &HashMap::from([(live_guid.into(), "SSID".into())]),
+            &links,
+            None,
+        );
+        assert_eq!(networks.len(), 1);
+        assert_eq!(networks[0].name, "Studio");
+        let rows = vec![super::super::nlm::Profile {
+            guid: old_guid.into(),
+            name: "Studio".into(),
+            live: false,
+            adapters: vec![],
+        }];
+        let networks = merge_profiles(vec![saved.clone()], rows, &HashMap::new(), &links, None);
+        assert_eq!(networks.len(), 1);
+        assert!(networks[0].can_rename);
+        assert_eq!(networks[0].profile.as_deref(), Some("Studio"));
+        assert_eq!(
+            matching_nlm_guid(
+                &saved,
+                std::slice::from_ref(&saved),
+                &[super::super::nlm::Profile {
+                    guid: old_guid.into(),
+                    name: "Studio".into(),
+                    live: false,
+                    adapters: vec![],
+                }],
+                &HashMap::new(),
+                &links,
+                None
+            )
+            .unwrap()
+            .as_deref(),
+            Some(old_guid)
+        );
+    }
+
+    #[test]
+    fn distinct_saved_profiles_keep_their_nlm_recovery_identities() {
+        let first = profile("Studio");
+        let second = profile("Other credentials");
+        let live_guid = "{00112233-4455-6677-8899-aabbccddeeff}";
+        let old_guid = "{11112233-4455-6677-8899-aabbccddeeff}";
+        let rows = vec![
+            super::super::nlm::Profile {
+                guid: old_guid.into(),
+                name: second.name.clone(),
+                live: false,
+                adapters: vec![],
+            },
+            super::super::nlm::Profile {
+                guid: live_guid.into(),
+                name: first.name.clone(),
+                live: true,
+                adapters: vec![guid_string(&first.interface)],
+            },
+        ];
+        let links = HashMap::from([
+            (old_guid.into(), second.id.clone()),
+            (live_guid.into(), first.id.clone()),
+        ]);
+        let networks = merge_profiles(vec![first, second], rows, &HashMap::new(), &links, None);
+        assert_eq!(networks.len(), 2);
+        assert!(networks.iter().all(|network| network.can_rename));
+        assert!(
+            networks
+                .iter()
+                .any(|network| network.guid == old_guid && network.name == "Other credentials")
+        );
+    }
+
+    #[test]
+    fn unbacked_adapterless_metadata_is_hidden_but_real_networks_and_recovery_remain() {
+        let live_saved = profile("Studio");
+        let mut other_saved = profile("Other saved network");
+        other_saved.ssid = "OTHER".into();
+        other_saved.id = format!("wlan:{}:4F54484552", guid_string(&other_saved.interface));
+        let live_guid = "{00112233-4455-6677-8899-aabbccddeeff}";
+        let ghost_guid = "{11112233-4455-6677-8899-aabbccddeeff}";
+        let backed_guid = "{22222233-4455-6677-8899-aabbccddeeff}";
+        let wired_guid = "{33332233-4455-6677-8899-aabbccddeeff}";
+        let adapter = guid_string(&live_saved.interface);
+        let rows = vec![
+            super::super::nlm::Profile {
+                guid: ghost_guid.into(),
+                name: "SSID".into(),
+                live: false,
+                adapters: vec![],
+            },
+            super::super::nlm::Profile {
+                guid: backed_guid.into(),
+                name: "Kept recovery".into(),
+                live: false,
+                adapters: vec![],
+            },
+            super::super::nlm::Profile {
+                guid: wired_guid.into(),
+                name: "Office Ethernet".into(),
+                live: false,
+                adapters: vec!["other-adapter".into()],
+            },
+            super::super::nlm::Profile {
+                guid: live_guid.into(),
+                name: "Studio".into(),
+                live: true,
+                adapters: vec![adapter],
+            },
+        ];
+        let networks = merge_profiles(
+            vec![live_saved, other_saved],
+            rows,
+            &HashMap::from([(backed_guid.into(), "Recovered original".into())]),
+            &HashMap::new(),
+            None,
+        );
+        assert!(!networks.iter().any(|network| network.guid == ghost_guid));
+        assert!(networks.iter().any(|network| network.guid == backed_guid));
+        assert!(
+            networks
+                .iter()
+                .any(|network| network.guid == wired_guid && network.network_type == "ethernet")
+        );
+        assert!(
+            networks
+                .iter()
+                .any(|network| network.name == "Other saved network" && network.profile.is_some())
+        );
+        assert_eq!(
+            networks
+                .iter()
+                .filter(|network| network.name == "Studio")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn unlinked_historical_original_and_nickname_rows_use_one_exact_saved_profile() {
+        let saved = profile("Studio");
+        let live_guid = "{00112233-4455-6677-8899-aabbccddeeff}";
+        let adapter = guid_string(&saved.interface);
+        let mut rows = vec![super::super::nlm::Profile {
+            guid: live_guid.into(),
+            name: "Studio".into(),
+            live: true,
+            adapters: vec![adapter.clone()],
+        }];
+        for (guid, name) in [
+            ("{11112233-4455-6677-8899-aabbccddeeff}", "SSID"),
+            ("{22222233-4455-6677-8899-aabbccddeeff}", "Studio"),
+        ] {
+            rows.push(super::super::nlm::Profile {
+                guid: guid.into(),
+                name: name.into(),
+                live: false,
+                adapters: vec![adapter.clone()],
+            });
+        }
+        let networks = merge_profiles(vec![saved], rows, &HashMap::new(), &HashMap::new(), None);
+        assert_eq!(networks.len(), 1);
+        assert_eq!(networks[0].name, "Studio");
+        assert_eq!(networks[0].guid, live_guid);
+    }
+
+    #[test]
+    fn recreated_original_is_repaired_to_the_saved_user_label_after_reconnect() {
+        let original = profile("SSID");
+        let guid = "{00112233-4455-6677-8899-aabbccddeeff}";
+        let rows = vec![super::super::nlm::Profile {
+            guid: guid.into(),
+            name: "Studio".into(),
+            live: true,
+            adapters: vec![guid_string(&original.interface)],
+        }];
+        let mut connection =
+            super::super::macos::parse_connection(&serde_json::Value::Null, "adapter", "SSID");
+        connection.profile = "SSID".into();
+        connection.interface_guid = Some(guid_string(&original.interface));
+        let backup = HashMap::from([(guid.into(), "SSID".into())]);
+        let links = HashMap::from([(guid.into(), original.id.clone())]);
+        let plan = connected_name_plan(
+            std::slice::from_ref(&original),
+            &rows,
+            &backup,
+            &links,
+            &HashMap::new(),
+            &connection,
+        )
+        .unwrap();
+        assert_eq!(plan.label, "Studio");
+        assert_eq!(plan.profile.name, "SSID");
+        let reset_rows = vec![super::super::nlm::Profile {
+            guid: guid.into(),
+            name: "SSID".into(),
+            live: true,
+            adapters: vec![guid_string(&original.interface)],
+        }];
+        let labels = HashMap::from([(guid.into(), "Studio".into())]);
+        assert_eq!(
+            connected_name_plan(
+                std::slice::from_ref(&original),
+                &reset_rows,
+                &backup,
+                &links,
+                &labels,
+                &connection
+            )
+            .unwrap()
+            .label,
+            "Studio"
+        );
+        assert!(
+            connected_name_plan(
+                std::slice::from_ref(&original),
+                &reset_rows,
+                &backup,
+                &links,
+                &HashMap::new(),
+                &connection
+            )
+            .is_none()
+        );
+        connection.ssid = "Other SSID".into();
+        assert!(
+            connected_name_plan(&[original], &rows, &backup, &links, &labels, &connection)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn legacy_profile_recovery_can_repair_a_connected_original() {
+        let original = profile("SSID");
+        let guid = "{00112233-4455-6677-8899-aabbccddeeff}";
+        let rows = vec![super::super::nlm::Profile {
+            guid: guid.into(),
+            name: "Studio".into(),
+            live: true,
+            adapters: vec![guid_string(&original.interface)],
+        }];
+        let mut connection =
+            super::super::macos::parse_connection(&serde_json::Value::Null, "adapter", "SSID");
+        connection.profile = original.name.clone();
+        connection.interface_guid = Some(guid_string(&original.interface));
+        let backup = HashMap::from([(original.id.clone(), "SSID".into())]);
+        let plan = connected_name_plan(
+            std::slice::from_ref(&original),
+            &rows,
+            &backup,
+            &HashMap::new(),
+            &HashMap::new(),
+            &connection,
+        )
+        .unwrap();
+        assert_eq!(plan.guid, original.id);
+        assert_eq!(plan.nlm_guid, guid);
+        assert_eq!(plan.label, "Studio");
+        assert!(
+            connected_name_plan(
+                &[original, profile("Other credentials")],
+                &rows,
+                &backup,
+                &HashMap::new(),
+                &HashMap::new(),
+                &connection
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn duplicate_equivalence_preserves_security_settings_keys_and_ssid_case() {
+        let xml = "<WLANProfile><name>Original</name><SSIDConfig><SSID><hex>53534944</hex><name>SSID</name></SSID><nonBroadcast>false</nonBroadcast></SSIDConfig><connectionMode>auto</connectionMode><MSM><security><authentication>WPA2PSK</authentication><encryption>AES</encryption><sharedKey><protected>false</protected><keyMaterial> test &amp; key </keyMaterial></sharedKey></security></MSM></WLANProfile>";
+        let alias = xml.replacen("<name>Original</name>", "<name>Studio</name>", 1);
+        assert_eq!(comparable_profile_xml(xml), comparable_profile_xml(&alias));
+        for different in [
+            alias.replace("false</nonBroadcast>", "true</nonBroadcast>"),
+            alias.replace("test &amp; key", "different key"),
+            alias.replace("<encryption>AES", "<encryption>TKIP"),
+            alias.replace("<connectionMode>auto", "<connectionMode>manual"),
+            alias.replace("<name>SSID", "<name>ssid"),
+        ] {
+            assert_ne!(
+                comparable_profile_xml(xml),
+                comparable_profile_xml(&different)
+            );
+        }
+        assert!(
+            comparable_profile_xml(&xml.replace("<protected>false", "<protected>true")).is_none()
+        );
+        assert!(comparable_profile_xml(&xml.replace("WPA2PSK", "WPA2")).is_none());
+        let wep = xml
+            .replace("WPA2PSK", "open")
+            .replace("<encryption>AES", "<encryption>WEP");
+        assert!(comparable_profile_xml(&wep).is_some());
+        assert!(
+            comparable_profile_xml(&wep.replace("<protected>false", "<protected>true")).is_none()
+        );
+    }
+
+    #[test]
+    fn duplicate_deletion_and_failed_rename_restore_the_original_profile() {
+        use std::cell::RefCell;
+        let events = RefCell::new(Vec::new());
+        let result = rename_with_duplicate_rollback(
+            Some("encrypted original profile"),
+            |xml| {
+                assert_eq!(*xml, "encrypted original profile");
+                events.borrow_mut().push("delete");
+                Ok(())
+            },
+            || {
+                events.borrow_mut().push("rename");
+                Err("rename denied".into())
+            },
+            |xml| {
+                assert_eq!(*xml, "encrypted original profile");
+                events.borrow_mut().push("restore");
+                Ok(())
+            },
+        );
+        assert_eq!(result.unwrap_err(), "rename denied");
+        assert_eq!(*events.borrow(), ["delete", "rename", "restore"]);
+        events.borrow_mut().clear();
+        let result = rename_with_duplicate_rollback(
+            Some("encrypted original profile"),
+            |_| {
+                events.borrow_mut().push("delete");
+                Err("delete denied".into())
+            },
+            || {
+                events.borrow_mut().push("rename");
+                Ok(())
+            },
+            |_| {
+                events.borrow_mut().push("restore");
+                Ok(())
+            },
+        );
+        assert_eq!(result.unwrap_err(), "delete denied");
+        assert_eq!(*events.borrow(), ["delete"]);
+        events.borrow_mut().clear();
+        let result = rename_with_duplicate_rollback::<()>(
+            None,
+            |_| panic!("no duplicate must be deleted"),
+            || {
+                events.borrow_mut().push("rename");
+                Ok(())
+            },
+            |_| panic!("no duplicate must be restored"),
+        );
+        assert!(result.is_ok());
+        assert_eq!(*events.borrow(), ["rename"]);
+    }
+
+    #[test]
+    fn recreated_windows_guid_inherits_only_a_unique_exact_saved_label() {
+        let saved = profile("SSID");
+        let old_guid = "{00112233-4455-6677-8899-aabbccddeeff}";
+        let new_guid = "{11112233-4455-6677-8899-aabbccddeeff}";
+        let other_guid = "{22222233-4455-6677-8899-aabbccddeeff}";
+        let rows = vec![super::super::nlm::Profile {
+            guid: new_guid.into(),
+            name: "SSID".into(),
+            live: true,
+            adapters: vec![guid_string(&saved.interface)],
+        }];
+        let mut connection =
+            super::super::macos::parse_connection(&serde_json::Value::Null, "adapter", "SSID");
+        connection.profile = saved.name.clone();
+        connection.interface_guid = Some(guid_string(&saved.interface));
+        let mut backup = HashMap::from([(old_guid.into(), "SSID".into())]);
+        let mut links = HashMap::from([(old_guid.into(), saved.id.clone())]);
+        let mut labels = HashMap::from([(old_guid.into(), "Studio".into())]);
+        let plan = connected_name_plan(
+            std::slice::from_ref(&saved),
+            &rows,
+            &backup,
+            &links,
+            &labels,
+            &connection,
+        )
+        .unwrap();
+        assert_eq!(plan.guid, new_guid);
+        assert_eq!(plan.label, "Studio");
+        assert!(transfer_label_intent(&mut labels, &links, &plan));
+        assert!(!labels.contains_key(old_guid));
+        assert!(!transfer_label_intent(&mut labels, &links, &plan));
+        // Simulate restoring the migrated live row. Historical originals
+        // survive, but their retired intent cannot nickname it again.
+        let mut restored_backup = backup.clone();
+        restored_backup.remove(new_guid);
+        let mut restored_labels = labels.clone();
+        restored_labels.remove(new_guid);
+        assert!(
+            connected_name_plan(
+                std::slice::from_ref(&saved),
+                &rows,
+                &restored_backup,
+                &links,
+                &restored_labels,
+                &connection
+            )
+            .is_none()
+        );
+        labels.insert(old_guid.into(), "Studio".into());
+        labels.remove(new_guid);
+        backup.insert(other_guid.into(), "SSID".into());
+        links.insert(other_guid.into(), saved.id.clone());
+        labels.insert(other_guid.into(), "Different intent".into());
+        assert!(
+            connected_name_plan(&[saved], &rows, &backup, &links, &labels, &connection).is_none()
+        );
+    }
+
+    #[test]
+    fn case_only_repair_never_deletes_its_source_profile() {
+        let saved = profile("studio");
+        assert!(target_profile_conflict(std::slice::from_ref(&saved), &saved, "Studio").is_none());
+        let original = profile("SSID");
+        assert_eq!(
+            target_profile_conflict(&[saved.clone(), original.clone()], &original, "Studio")
+                .unwrap()
+                .name,
+            "studio"
+        );
+    }
+
+    #[test]
+    fn a_failed_first_rename_cannot_turn_its_partial_nlm_label_into_a_new_nickname() {
+        let saved = profile("SSID");
+        let guid = "{00112233-4455-6677-8899-aabbccddeeff}";
+        let rows = vec![super::super::nlm::Profile {
+            guid: guid.into(),
+            name: "Failed new label".into(),
+            live: true,
+            adapters: vec![guid_string(&saved.interface)],
+        }];
+        let mut connection =
+            super::super::macos::parse_connection(&serde_json::Value::Null, "adapter", "SSID");
+        connection.profile = saved.name.clone();
+        connection.interface_guid = Some(guid_string(&saved.interface));
+        let backup = HashMap::from([(guid.into(), "SSID".into())]);
+        let seeded_labels = HashMap::from([(guid.into(), "SSID".into())]);
+        assert!(
+            connected_name_plan(
+                &[saved],
+                &rows,
+                &backup,
+                &HashMap::new(),
+                &seeded_labels,
+                &connection
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn concurrent_wired_network_cannot_supply_the_active_wifi_nickname() {
+        let saved = profile("SSID");
+        let wifi_guid = "{00112233-4455-6677-8899-aabbccddeeff}";
+        let wired_guid = "{11112233-4455-6677-8899-aabbccddeeff}";
+        let rows = vec![
+            super::super::nlm::Profile {
+                guid: wired_guid.into(),
+                name: "Wired label".into(),
+                live: true,
+                adapters: vec!["wired-only-current-adapter".into()],
+            },
+            super::super::nlm::Profile {
+                guid: wifi_guid.into(),
+                name: "Studio".into(),
+                live: true,
+                adapters: vec![guid_string(&saved.interface)],
+            },
+        ];
+        let mut connection =
+            super::super::macos::parse_connection(&serde_json::Value::Null, "adapter", "SSID");
+        connection.profile = saved.name.clone();
+        connection.interface_guid = Some(guid_string(&saved.interface));
+        let backup = HashMap::from([
+            (wifi_guid.into(), "SSID".into()),
+            (wired_guid.into(), "SSID".into()),
+        ]);
+        let plan = connected_name_plan(
+            &[saved],
+            &rows,
+            &backup,
+            &HashMap::new(),
+            &HashMap::new(),
+            &connection,
+        )
+        .unwrap();
+        assert_eq!(plan.nlm_guid, wifi_guid);
+        assert_eq!(plan.label, "Studio");
+    }
+
+    #[test]
+    fn a_live_wired_snapshot_cannot_consume_the_actual_wifi_saved_profile() {
+        let saved = profile("Cafe");
+        let wifi_guid = "{00112233-4455-6677-8899-aabbccddeeff}";
+        let wired_guid = "{11112233-4455-6677-8899-aabbccddeeff}";
+        let rows = vec![
+            // NLM supplies only connected adapters for live rows, excluding
+            // any historical inactive Wi-Fi association on the wired row.
+            super::super::nlm::Profile {
+                guid: wired_guid.into(),
+                name: "Office".into(),
+                live: true,
+                adapters: vec!["wired-only-current-adapter".into()],
+            },
+            super::super::nlm::Profile {
+                guid: wifi_guid.into(),
+                name: "Cafe".into(),
+                live: true,
+                adapters: vec![guid_string(&saved.interface)],
+            },
+        ];
+        let mut connection =
+            super::super::macos::parse_connection(&serde_json::Value::Null, "adapter", "SSID");
+        connection.profile = saved.name.clone();
+        connection.interface_guid = Some(guid_string(&saved.interface));
+        let networks = merge_profiles(
+            vec![saved],
+            rows,
+            &HashMap::new(),
+            &HashMap::new(),
+            Some(&connection),
+        );
+        let wired = networks
+            .iter()
+            .find(|network| network.guid == wired_guid)
+            .unwrap();
+        assert_eq!(wired.network_type, "ethernet");
+        assert!(wired.profile.is_none());
+        let wifi = networks
+            .iter()
+            .find(|network| network.guid == wifi_guid)
+            .unwrap();
+        assert_eq!(wifi.network_type, "wifi");
+        assert_eq!(wifi.profile.as_deref(), Some("Cafe"));
+        assert!(wifi.live);
+    }
+
+    #[test]
+    fn active_and_full_snapshots_keep_the_same_nickname_legacy_identity_and_sharing_mask() {
+        let wifi_guid = "{00112233-4455-6677-8899-aabbccddeeff}";
+        let old_guid = "{11112233-4455-6677-8899-aabbccddeeff}";
+        for legacy in [false, true] {
+            for (label, sharing) in [("Studio", false), ("Connected", true)] {
+                let saved = profile(label);
+                let mut other = profile("Other saved profile");
+                other.ssid = "OTHER".into();
+                other.id = format!("wlan:{}:4F54484552", guid_string(&other.interface));
+                let inventory = vec![saved.clone(), other];
+                let make_rows = || {
+                    vec![
+                        super::super::nlm::Profile {
+                            guid: old_guid.into(),
+                            name: "Unrelated historical metadata".into(),
+                            live: false,
+                            adapters: vec![],
+                        },
+                        super::super::nlm::Profile {
+                            guid: wifi_guid.into(),
+                            name: label.into(),
+                            live: true,
+                            adapters: vec![guid_string(&saved.interface)],
+                        },
+                    ]
+                };
+                let recovery_guid = if legacy {
+                    saved.id.clone()
+                } else {
+                    wifi_guid.into()
+                };
+                let backup = HashMap::from([(recovery_guid.clone(), "SSID".into())]);
+                let links = HashMap::from([(wifi_guid.into(), saved.id.clone())]);
+                let labels = HashMap::from([(recovery_guid.clone(), "Studio".into())]);
+                let mut connection = super::super::macos::parse_connection(
+                    &serde_json::Value::Null,
+                    "adapter",
+                    "SSID",
+                );
+                // Windows may still report the old profile after renaming.
+                connection.profile = "SSID".into();
+                connection.interface_guid = Some(guid_string(&saved.interface));
+                let mut full = merge_profiles(
+                    inventory.clone(),
+                    make_rows(),
+                    &backup,
+                    &links,
+                    Some(&connection),
+                );
+                show_verified_profile_labels(&mut full, &labels, sharing);
+                let mut active = merge_profiles(
+                    inventory,
+                    make_rows().into_iter().filter(|row| row.live).collect(),
+                    &backup,
+                    &links,
+                    Some(&connection),
+                );
+                show_verified_profile_labels(&mut active, &labels, sharing);
+                active.retain(|network| network.live);
+                let full =
+                    super::super::finish_network_snapshot(full, Some(connection.clone()), None);
+                let active = super::super::finish_network_snapshot(active, Some(connection), None);
+                assert_eq!(
+                    serde_json::to_value(&active.connection).unwrap(),
+                    serde_json::to_value(&full.connection).unwrap()
+                );
+                let current = active.connection.unwrap();
+                assert_eq!(
+                    current.network_guid.as_deref(),
+                    Some(recovery_guid.as_str())
+                );
+                assert_eq!(current.name, label);
+                assert_eq!(
+                    current.profile, label,
+                    "the mini path cannot leak a stale original profile name or override a sharing mask"
+                );
+                assert_eq!(active.networks.len(), 1);
+            }
+        }
+    }
+
+    #[test]
+    fn active_offline_snapshot_keeps_missing_readings_and_does_not_invent_a_connection() {
+        let mut networks = merge_profiles(
+            vec![profile("Saved offline")],
+            vec![],
+            &HashMap::new(),
+            &HashMap::new(),
+            None,
+        );
+        networks.retain(|network| network.live);
+        let snapshot = super::super::finish_network_snapshot(
+            networks,
+            None,
+            Some("Wi-Fi details unavailable".into()),
+        );
+        assert!(snapshot.networks.is_empty());
+        assert!(snapshot.connection.is_none());
+        assert_eq!(
+            snapshot.connection_error.as_deref(),
+            Some("Wi-Fi details unavailable")
+        );
+    }
+
+    #[test]
+    fn actual_profile_label_can_show_pending_repair_without_hiding_new_os_names() {
+        let saved = profile("Studio");
+        let guid = "{00112233-4455-6677-8899-aabbccddeeff}";
+        let make_networks = |name: &str, profile_name: &str| {
+            let mut saved = saved.clone();
+            saved.name = profile_name.into();
+            let adapter = guid_string(&saved.interface);
+            merge_profiles(
+                vec![saved],
+                vec![super::super::nlm::Profile {
+                    guid: guid.into(),
+                    name: name.into(),
+                    live: true,
+                    adapters: vec![adapter],
+                }],
+                &HashMap::from([(guid.into(), "SSID".into())]),
+                &HashMap::new(),
+                None,
+            )
+        };
+        let labels = HashMap::from([(guid.into(), "Studio".into())]);
+        let mut pending = make_networks("SSID", "Studio");
+        show_verified_profile_labels(&mut pending, &labels, false);
+        assert_eq!(pending[0].name, "Studio");
+        assert!(pending[0].name_sync_pending);
+        // Mutation verification sees B before saved intent A is replaced.
+        let mut renamed = make_networks("Reading room", "Reading room");
+        show_verified_profile_labels(&mut renamed, &labels, false);
+        assert_eq!(renamed[0].name, "Reading room");
+        assert!(!renamed[0].name_sync_pending);
+        let mut restored = make_networks("SSID", "SSID");
+        show_verified_profile_labels(&mut restored, &labels, false);
+        assert_eq!(restored[0].name, "SSID");
+        assert!(!restored[0].renamed);
+        let mut shared = make_networks("Connected", "Connected");
+        show_verified_profile_labels(&mut shared, &labels, true);
+        assert_eq!(shared[0].name, "Connected");
+        assert!(!shared[0].name_sync_pending);
+        let mut unshared = make_networks("Studio", "Studio");
+        show_verified_profile_labels(&mut unshared, &labels, true);
+        assert_eq!(unshared[0].name, "Studio");
+        // A failed sharing write must remain visible to recovery logic.
+        let mut partial_mask = make_networks("Connected", "Studio");
+        show_verified_profile_labels(&mut partial_mask, &labels, true);
+        assert_eq!(partial_mask[0].name, "Connected");
+        assert!(partial_mask[0].name_sync_pending);
+        let mut before_sharing_write = make_networks("SSID", "Studio");
+        show_verified_profile_labels(&mut before_sharing_write, &labels, true);
+        assert_eq!(before_sharing_write[0].name, "SSID");
     }
     #[test]
     fn live_profile_mapping_uses_the_adapter_even_after_display_names_change() {
@@ -1562,12 +2698,9 @@ mod tests {
         assert_eq!(live.guid, profile.id);
         assert_eq!(live.original_name, "Original profile");
         assert_eq!(
-            networks
-                .iter()
-                .find(|network| !network.live)
-                .unwrap()
-                .original_name,
-            "SSID"
+            networks.len(),
+            1,
+            "the historic representation must not duplicate the saved profile"
         );
         let restored_rows = vec![super::super::nlm::Profile {
             guid: "{11112233-4455-6677-8899-aabbccddeeff}".into(),
@@ -1586,6 +2719,6 @@ mod tests {
         );
         assert_eq!(restored[0].guid, live.guid);
         assert!(restored[0].can_rename);
-        assert_ne!(networks[0].guid, networks[1].guid);
+        assert_eq!(networks.len(), 1);
     }
 }

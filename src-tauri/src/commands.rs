@@ -195,6 +195,11 @@ pub async fn nm_get_network_snapshot() -> Result<NetworkSnapshot, String> {
 }
 
 #[tauri::command]
+pub async fn nm_get_active_network_snapshot() -> Result<NetworkSnapshot, String> {
+    blocking(|| platform::get_active_network_snapshot(&settings::read_backup()?)).await
+}
+
+#[tauri::command]
 pub async fn nm_get_networks() -> Result<Vec<Network>, String> {
     blocking(|| platform::get_networks(&settings::read_backup()?)).await
 }
@@ -291,6 +296,7 @@ pub async fn nm_get_settings() -> Result<AppSettings, String> {
 
 #[tauri::command]
 pub async fn nm_set_setting(
+    app: AppHandle,
     runtime: State<'_, CompanionRuntime>,
     key: String,
     value: serde_json::Value,
@@ -335,13 +341,44 @@ pub async fn nm_set_setting(
     })
     .await;
     runtime.set_monitor_error(result.as_ref().err().cloned());
+    if result.is_ok() {
+        let preferences = settings::get_settings();
+        if let Err(error) = crate::mini::resize(&app) {
+            log::warn!("The mini window size could not be updated: {error}");
+        }
+        let _ = app.emit("nm:settings-changed", preferences);
+    }
     result
+}
+
+#[tauri::command]
+pub async fn nm_show_mini(app: AppHandle) -> Result<(), String> {
+    crate::mini::show(&app)
+}
+
+#[tauri::command]
+pub async fn nm_restore_main(app: AppHandle, customize: bool) -> Result<(), String> {
+    crate::mini::restore_main(&app, customize);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn nm_set_mini_menu_open(app: AppHandle, open: bool) -> Result<(), String> {
+    crate::mini::set_menu_open(&app, open)
+}
+
+#[tauri::command]
+pub fn nm_start_mini_drag(window: WebviewWindow) -> Result<(), String> {
+    if window.label() != "mini" {
+        return Err("Drag the mini window from mini mode".into());
+    }
+    window.start_dragging().map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub fn nm_minimize(window: WebviewWindow) -> Result<(), String> {
     window.minimize().map_err(|error| error.to_string())?;
-    let _ = window.emit("nm:visibility", false);
+    let _ = window.emit_to(window.label(), "nm:visibility", false);
     Ok(())
 }
 
@@ -368,8 +405,16 @@ pub fn nm_close(window: WebviewWindow) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn nm_renderer_ready(app: AppHandle) -> Option<String> {
-    crate::renderer_ready(&app)
+pub async fn nm_renderer_ready(
+    app: AppHandle,
+    window: WebviewWindow,
+) -> Result<Option<String>, String> {
+    if window.label() == "mini" {
+        crate::mini::ready(&app)?;
+        Ok(None)
+    } else {
+        Ok(crate::renderer_ready(&app))
+    }
 }
 
 #[tauri::command]

@@ -1,7 +1,7 @@
 {
   "name": "NetMask",
   "short_name": "NetMask",
-  "description": "Know your connection. Control what you show.",
+  "description": "Local connection history, measured evidence, and customizable Mini mode.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f3ebd8",
